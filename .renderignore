@@ -1,0 +1,11 @@
+# Ignore files that shouldn't be in the build
+requirements_enhanced.txt
+requirements_observability.txt
+requirements_browser.txt
+requirements-production.txt
+*.pyc
+__pycache__/
+.git/
+.vscode/
+.env
+*.log

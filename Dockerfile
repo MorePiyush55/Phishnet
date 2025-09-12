@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y \
 # Create app directory
 WORKDIR /app
 
-# Copy requirements first for better caching
+# Copy requirements first for better caching (updated)
 COPY requirements.txt ./
 
 # Development stage
