@@ -1,5 +1,4 @@
 services:
-  # FastAPI Backend Web Service
   - type: web
     name: phishnet-api
     env: python
@@ -11,19 +10,7 @@ services:
         value: production
       - key: SECRET_KEY
         generateValue: true
-      - key: JWT_SECRET_KEY
+      - key: JWT_SECRET_KEY  
         generateValue: true
       - key: CORS_ORIGINS
-        value: https://your-vercel-app.vercel.app,http://localhost:3000
-
-  # PostgreSQL Database
-  - type: pserv
-    name: phishnet-db
-    plan: starter
-    databaseName: phishnet
-    user: phishnet
-
-  # Redis Cache
-  - type: redis
-    name: phishnet-redis
-    plan: starter
+        value: "*"
