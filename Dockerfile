@@ -21,14 +21,14 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copy requirements first for better caching
-COPY requirements.txt requirements_enhanced.txt ./
+COPY requirements.txt ./
 
 # Development stage
 FROM base as development
 
 # Install all dependencies including dev tools
 RUN pip install --upgrade pip && \
-    pip install -r requirements_enhanced.txt
+    pip install -r requirements.txt
 
 # Copy application code
 COPY . .
