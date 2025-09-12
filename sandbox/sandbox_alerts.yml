@@ -1,0 +1,82 @@
+groups:
+  - name: sandbox_alerts
+    rules:
+      # High queue size
+      - alert: SandboxHighQueueSize
+        expr: sandbox_queue_size > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of jobs in sandbox queue"
+          description: "Sandbox queue has {{ $value }} jobs pending for more than 5 minutes"
+
+      # Worker down
+      - alert: SandboxWorkerDown
+        expr: up{job="sandbox-workers"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Sandbox worker is down"
+          description: "Sandbox worker {{ $labels.instance }} has been down for more than 2 minutes"
+
+      # High memory usage
+      - alert: SandboxHighMemoryUsage
+        expr: sandbox_memory_usage_bytes / (1024*1024*1024) > 0.8
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage in sandbox worker"
+          description: "Sandbox worker {{ $labels.instance }} memory usage is {{ $value }}GB"
+
+      # High CPU usage
+      - alert: SandboxHighCPUUsage
+        expr: sandbox_cpu_usage_percent > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage in sandbox worker"
+          description: "Sandbox worker {{ $labels.instance }} CPU usage is {{ $value }}%"
+
+      # Security events
+      - alert: SandboxSecurityEvents
+        expr: increase(sandbox_security_events_total[5m]) > 10
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High number of security events"
+          description: "{{ $value }} security events detected in the last 5 minutes"
+
+      # Failed jobs
+      - alert: SandboxHighFailureRate
+        expr: rate(sandbox_jobs_total{status="failed"}[5m]) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High job failure rate"
+          description: "Sandbox job failure rate is {{ $value }} jobs/second"
+
+      # Redis down
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis is down"
+          description: "Redis service has been down for more than 1 minute"
+
+      # Long running jobs
+      - alert: SandboxLongRunningJobs
+        expr: sandbox_duration_seconds > 300
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sandbox job running too long"
+          description: "Job has been running for {{ $value }} seconds"

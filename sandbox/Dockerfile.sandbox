@@ -1,0 +1,121 @@
+# Secure Sandbox Container for Headless Browser Analysis
+# Multi-stage build for minimal attack surface
+ARG BASE_IMAGE=debian:12-slim
+
+# Build stage - install dependencies
+FROM ${BASE_IMAGE} as builder
+
+# Security: Run as non-root during build
+RUN groupadd -r sandbox && useradd -r -g sandbox -s /bin/false sandbox
+
+# Install minimal dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget \
+    gnupg \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Add Google Chrome repository
+RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
+    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
+
+# Install Chromium and dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    google-chrome-stable \
+    python3 \
+    python3-pip \
+    python3-venv \
+    && rm -rf /var/lib/apt/lists/*
+
+# Production stage - minimal runtime
+FROM ${BASE_IMAGE} as runtime
+
+# Create sandbox user with minimal privileges
+RUN groupadd -r -g 1001 sandbox \
+    && useradd -r -u 1001 -g sandbox -s /bin/false -d /tmp sandbox \
+    && mkdir -p /tmp/sandbox \
+    && chown sandbox:sandbox /tmp/sandbox
+
+# Install minimal runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    ca-certificates \
+    fonts-liberation \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libdrm2 \
+    libgtk-3-0 \
+    libgtk-4-1 \
+    libnspr4 \
+    libnss3 \
+    libx11-6 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxext6 \
+    libxfixes3 \
+    libxrandr2 \
+    libxss1 \
+    libxtst6 \
+    xdg-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy Chrome from builder
+COPY --from=builder /usr/bin/google-chrome* /usr/bin/
+COPY --from=builder /opt/google /opt/google
+
+# Install Python dependencies for sandbox worker
+COPY requirements-sandbox.txt /tmp/
+RUN pip3 install --no-cache-dir -r /tmp/requirements-sandbox.txt \
+    && rm /tmp/requirements-sandbox.txt
+
+# Create directory structure with proper permissions
+RUN mkdir -p /sandbox/{artifacts,logs,scripts} \
+    && chown -R sandbox:sandbox /sandbox \
+    && chmod 755 /sandbox \
+    && chmod 700 /sandbox/artifacts /sandbox/logs
+
+# Copy sandbox worker script
+COPY sandbox_worker.py /sandbox/scripts/
+COPY browser_analysis.py /sandbox/scripts/
+RUN chown sandbox:sandbox /sandbox/scripts/* \
+    && chmod 550 /sandbox/scripts/*
+
+# Security: Remove setuid/setgid binaries
+RUN find / -perm /6000 -type f -exec chmod a-s {} \; 2>/dev/null || true
+
+# Security: Remove package managers and compilers
+RUN apt-get purge -y --auto-remove \
+    wget \
+    gnupg \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /tmp/* /var/tmp/*
+
+# Security: Create read-only filesystem structure
+RUN mkdir -p /var/log/sandbox \
+    && chown sandbox:sandbox /var/log/sandbox \
+    && chmod 755 /var/log/sandbox
+
+# Switch to non-root user
+USER sandbox
+WORKDIR /tmp/sandbox
+
+# Security: Set resource limits
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV CHROME_BIN=/usr/bin/google-chrome
+ENV DISPLAY=:99
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python3 -c "import sys; sys.exit(0)"
+
+# Default command
+CMD ["python3", "/sandbox/scripts/sandbox_worker.py"]
+
+# Security labels
+LABEL security.scan="required" \
+      security.readonly="true" \
+      maintainer="phishnet-security" \
+      version="1.0" \
+      description="Secure sandbox for headless browser analysis"

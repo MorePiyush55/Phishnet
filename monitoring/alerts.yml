@@ -1,0 +1,126 @@
+groups:
+  - name: phishnet.alerts
+    rules:
+      # API Server Health
+      - alert: PhishNetAPIDown
+        expr: up{job="phishnet-api"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PhishNet API server is down"
+          description: "PhishNet API server has been down for more than 5 minutes."
+
+      - alert: PhishNetAPIHighLatency
+        expr: histogram_quantile(0.95, http_request_duration_seconds_bucket{job="phishnet-api"}) > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PhishNet API high latency"
+          description: "95th percentile latency is above 2 seconds for {{ $labels.instance }}"
+
+      # Database Health
+      - alert: PostgreSQLDown
+        expr: up{job="postgres"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL database has been down for more than 2 minutes."
+
+      - alert: PostgreSQLHighConnections
+        expr: pg_stat_database_numbackends / pg_settings_max_connections * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL high connection usage"
+          description: "PostgreSQL connection usage is above 80%"
+
+      # Redis Health
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis is down"
+          description: "Redis server has been down for more than 2 minutes."
+
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis high memory usage"
+          description: "Redis memory usage is above 90%"
+
+      # Worker Health
+      - alert: WorkerDown
+        expr: up{job="phishnet-workers"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PhishNet worker is down"
+          description: "Worker {{ $labels.instance }} has been down for more than 5 minutes."
+
+      # Email Processing Alerts
+      - alert: EmailQueueBacklog
+        expr: phishnet_email_queue_size > 1000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Large email queue backlog"
+          description: "Email queue has more than 1000 pending emails"
+
+      - alert: HighThreatDetectionRate
+        expr: rate(phishnet_threats_detected_total[5m]) > 0.1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High threat detection rate"
+          description: "Threat detection rate is unusually high ({{ $value }} threats/second)"
+
+      # Gmail API Quota
+      - alert: GmailAPIQuotaLow
+        expr: phishnet_gmail_api_quota_remaining < 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Gmail API quota running low"
+          description: "Gmail API quota remaining: {{ $value }}"
+
+      # System Resources
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is above 80% on {{ $labels.instance }}"
+
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is above 85% on {{ $labels.instance }}"
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100 < 10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space is below 10% on {{ $labels.instance }}"

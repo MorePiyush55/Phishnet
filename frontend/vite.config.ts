@@ -1,0 +1,1 @@
+// Vite config for frontend

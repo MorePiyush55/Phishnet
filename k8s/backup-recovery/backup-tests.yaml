@@ -1,0 +1,407 @@
+# Backup and Recovery Testing Framework
+
+# Test Job for Backup System Validation
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: backup-recovery-test
+  namespace: phishnet
+  labels:
+    app.kubernetes.io/name: phishnet
+    app.kubernetes.io/component: test
+    test.type: backup-recovery
+spec:
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: phishnet
+        app.kubernetes.io/component: test
+    spec:
+      restartPolicy: Never
+      serviceAccountName: backup-test-runner
+      containers:
+      - name: backup-test
+        image: postgres:15-alpine
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -euo pipefail
+          
+          # Test configuration
+          TEST_DB="phishnet_test_$(date +%s)"
+          TEST_TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+          BACKUP_FILE="/backups/test_backup_${TEST_TIMESTAMP}.sql.gz"
+          TEST_RESULTS="/tmp/test_results.json"
+          
+          echo "=== Backup and Recovery Test Suite ==="
+          echo "Test Database: $TEST_DB"
+          echo "Test Timestamp: $TEST_TIMESTAMP"
+          
+          # Initialize test results
+          cat > $TEST_RESULTS <<EOF
+          {
+            "test_suite": "backup_recovery",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "tests": []
+          }
+          EOF
+          
+          # Helper function to record test results
+          record_test() {
+            local test_name=$1
+            local status=$2
+            local details=$3
+            
+            jq --arg name "$test_name" --arg status "$status" --arg details "$details" \
+              '.tests += [{"name": $name, "status": $status, "details": $details, "timestamp": now | strftime("%Y-%m-%dT%H:%M:%SZ")}]' \
+              $TEST_RESULTS > ${TEST_RESULTS}.tmp && mv ${TEST_RESULTS}.tmp $TEST_RESULTS
+          }
+          
+          export PGPASSWORD="${POSTGRES_PASSWORD}"
+          
+          # Test 1: Database Connection
+          echo "Test 1: Database connectivity..."
+          if pg_isready -h postgres -p 5432; then
+            record_test "database_connectivity" "PASS" "Successfully connected to PostgreSQL"
+            echo "✓ Database connectivity test passed"
+          else
+            record_test "database_connectivity" "FAIL" "Failed to connect to PostgreSQL"
+            echo "✗ Database connectivity test failed"
+          fi
+          
+          # Test 2: Create Test Database and Data
+          echo "Test 2: Creating test database and sample data..."
+          if psql -h postgres -p 5432 -U phishnet_user -d postgres -c "CREATE DATABASE $TEST_DB;" && \
+             psql -h postgres -p 5432 -U phishnet_user -d $TEST_DB -c "
+               CREATE TABLE test_data (
+                 id SERIAL PRIMARY KEY,
+                 test_value VARCHAR(100),
+                 created_at TIMESTAMP DEFAULT NOW()
+               );
+               INSERT INTO test_data (test_value) VALUES 
+                 ('test_value_1'), 
+                 ('test_value_2'), 
+                 ('test_value_3');
+               CREATE INDEX idx_test_data_value ON test_data(test_value);
+             "; then
+            record_test "test_data_creation" "PASS" "Test database and data created successfully"
+            echo "✓ Test data creation passed"
+          else
+            record_test "test_data_creation" "FAIL" "Failed to create test database or data"
+            echo "✗ Test data creation failed"
+          fi
+          
+          # Test 3: Create Backup
+          echo "Test 3: Creating database backup..."
+          if pg_dump -h postgres -p 5432 -U phishnet_user -d $TEST_DB \
+               --verbose --format=custom --compress=9 \
+               --file="$BACKUP_FILE"; then
+            
+            # Verify backup file exists and has content
+            if [ -f "$BACKUP_FILE" ] && [ -s "$BACKUP_FILE" ]; then
+              BACKUP_SIZE=$(stat -c%s "$BACKUP_FILE")
+              record_test "backup_creation" "PASS" "Backup created successfully, size: $BACKUP_SIZE bytes"
+              echo "✓ Backup creation passed (Size: $BACKUP_SIZE bytes)"
+            else
+              record_test "backup_creation" "FAIL" "Backup file is empty or missing"
+              echo "✗ Backup creation failed - file is empty or missing"
+            fi
+          else
+            record_test "backup_creation" "FAIL" "pg_dump command failed"
+            echo "✗ Backup creation failed - pg_dump error"
+          fi
+          
+          # Test 4: Verify Backup Integrity
+          echo "Test 4: Verifying backup integrity..."
+          if pg_restore --list "$BACKUP_FILE" > /dev/null 2>&1; then
+            record_test "backup_verification" "PASS" "Backup integrity verification successful"
+            echo "✓ Backup verification passed"
+          else
+            record_test "backup_verification" "FAIL" "Backup integrity verification failed"
+            echo "✗ Backup verification failed"
+          fi
+          
+          # Test 5: Drop Test Database
+          echo "Test 5: Dropping test database..."
+          if psql -h postgres -p 5432 -U phishnet_user -d postgres -c "DROP DATABASE $TEST_DB;"; then
+            record_test "database_drop" "PASS" "Test database dropped successfully"
+            echo "✓ Database drop passed"
+          else
+            record_test "database_drop" "FAIL" "Failed to drop test database"
+            echo "✗ Database drop failed"
+          fi
+          
+          # Test 6: Restore from Backup
+          echo "Test 6: Restoring from backup..."
+          if psql -h postgres -p 5432 -U phishnet_user -d postgres -c "CREATE DATABASE $TEST_DB;" && \
+             pg_restore -h postgres -p 5432 -U phishnet_user -d $TEST_DB \
+               --verbose --single-transaction "$BACKUP_FILE"; then
+            record_test "backup_restore" "PASS" "Database restore successful"
+            echo "✓ Backup restore passed"
+          else
+            record_test "backup_restore" "FAIL" "Database restore failed"
+            echo "✗ Backup restore failed"
+          fi
+          
+          # Test 7: Verify Restored Data
+          echo "Test 7: Verifying restored data..."
+          RESTORED_COUNT=$(psql -h postgres -p 5432 -U phishnet_user -d $TEST_DB -t -c "SELECT COUNT(*) FROM test_data;")
+          if [ "$RESTORED_COUNT" -eq 3 ]; then
+            record_test "data_verification" "PASS" "All test data restored correctly ($RESTORED_COUNT rows)"
+            echo "✓ Data verification passed ($RESTORED_COUNT rows)"
+          else
+            record_test "data_verification" "FAIL" "Data count mismatch: expected 3, got $RESTORED_COUNT"
+            echo "✗ Data verification failed: expected 3, got $RESTORED_COUNT"
+          fi
+          
+          # Test 8: Backup Compression Test
+          echo "Test 8: Testing backup compression..."
+          UNCOMPRESSED_BACKUP="/tmp/uncompressed_backup.sql"
+          COMPRESSED_BACKUP="/tmp/compressed_backup.sql.gz"
+          
+          # Create uncompressed backup
+          pg_dump -h postgres -p 5432 -U phishnet_user -d $TEST_DB \
+            --format=plain --file="$UNCOMPRESSED_BACKUP"
+          
+          # Create compressed backup
+          pg_dump -h postgres -p 5432 -U phishnet_user -d $TEST_DB \
+            --format=plain | gzip > "$COMPRESSED_BACKUP"
+          
+          if [ -f "$UNCOMPRESSED_BACKUP" ] && [ -f "$COMPRESSED_BACKUP" ]; then
+            UNCOMPRESSED_SIZE=$(stat -c%s "$UNCOMPRESSED_BACKUP")
+            COMPRESSED_SIZE=$(stat -c%s "$COMPRESSED_BACKUP")
+            COMPRESSION_RATIO=$(( 100 - (COMPRESSED_SIZE * 100 / UNCOMPRESSED_SIZE) ))
+            
+            record_test "compression_test" "PASS" "Compression ratio: ${COMPRESSION_RATIO}% (${UNCOMPRESSED_SIZE} -> ${COMPRESSED_SIZE} bytes)"
+            echo "✓ Compression test passed: ${COMPRESSION_RATIO}% reduction"
+          else
+            record_test "compression_test" "FAIL" "Failed to create compressed or uncompressed backup"
+            echo "✗ Compression test failed"
+          fi
+          
+          # Cleanup test database
+          echo "Cleanup: Removing test database..."
+          psql -h postgres -p 5432 -U phishnet_user -d postgres -c "DROP DATABASE IF EXISTS $TEST_DB;" || true
+          
+          # Generate test summary
+          TOTAL_TESTS=$(jq '.tests | length' $TEST_RESULTS)
+          PASSED_TESTS=$(jq '[.tests[] | select(.status == "PASS")] | length' $TEST_RESULTS)
+          FAILED_TESTS=$(jq '[.tests[] | select(.status == "FAIL")] | length' $TEST_RESULTS)
+          
+          echo ""
+          echo "=== Test Summary ==="
+          echo "Total tests: $TOTAL_TESTS"
+          echo "Passed: $PASSED_TESTS"
+          echo "Failed: $FAILED_TESTS"
+          
+          # Update test results with summary
+          jq --arg total "$TOTAL_TESTS" --arg passed "$PASSED_TESTS" --arg failed "$FAILED_TESTS" \
+            '.summary = {"total": ($total | tonumber), "passed": ($passed | tonumber), "failed": ($failed | tonumber)}' \
+            $TEST_RESULTS > ${TEST_RESULTS}.tmp && mv ${TEST_RESULTS}.tmp $TEST_RESULTS
+          
+          # Copy results to backup storage for persistence
+          cp $TEST_RESULTS "/backups/test_results_${TEST_TIMESTAMP}.json"
+          
+          # Display detailed results
+          echo ""
+          echo "=== Detailed Results ==="
+          jq -r '.tests[] | "Test: \(.name) - Status: \(.status) - Details: \(.details)"' $TEST_RESULTS
+          
+          # Exit with error if any tests failed
+          if [ "$FAILED_TESTS" -gt 0 ]; then
+            echo ""
+            echo "❌ Test suite failed with $FAILED_TESTS failed tests"
+            exit 1
+          else
+            echo ""
+            echo "✅ All tests passed successfully!"
+            exit 0
+          fi
+        env:
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: phishnet-database-secrets
+              key: postgres-password
+        volumeMounts:
+        - name: backup-storage
+          mountPath: /backups
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: backup-storage
+        persistentVolumeClaim:
+          claimName: backup-storage
+
+---
+# Redis Backup Test Job
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: redis-backup-test
+  namespace: phishnet
+  labels:
+    app.kubernetes.io/name: phishnet
+    app.kubernetes.io/component: test
+    test.type: redis-backup
+spec:
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: phishnet
+        app.kubernetes.io/component: test
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: redis-test
+        image: redis:7-alpine
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+          
+          TEST_TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+          TEST_KEY="test:backup:${TEST_TIMESTAMP}"
+          BACKUP_FILE="/backups/redis_test_${TEST_TIMESTAMP}.rdb"
+          
+          echo "=== Redis Backup Test ==="
+          echo "Test Key: $TEST_KEY"
+          echo "Backup File: $BACKUP_FILE"
+          
+          # Test Redis connectivity
+          echo "Testing Redis connectivity..."
+          redis-cli -h redis -a "${REDIS_PASSWORD}" ping
+          
+          # Set test data
+          echo "Setting test data..."
+          redis-cli -h redis -a "${REDIS_PASSWORD}" set "$TEST_KEY" "test_value_$(date +%s)"
+          redis-cli -h redis -a "${REDIS_PASSWORD}" expire "$TEST_KEY" 3600
+          
+          # Verify test data
+          TEST_VALUE=$(redis-cli -h redis -a "${REDIS_PASSWORD}" get "$TEST_KEY")
+          echo "Test data set: $TEST_VALUE"
+          
+          # Create backup
+          echo "Creating Redis backup..."
+          redis-cli -h redis -a "${REDIS_PASSWORD}" BGSAVE
+          
+          # Wait for backup to complete
+          while [ "$(redis-cli -h redis -a "${REDIS_PASSWORD}" LASTSAVE)" = "$(redis-cli -h redis -a "${REDIS_PASSWORD}" LASTSAVE)" ]; do
+            sleep 2
+          done
+          
+          # Copy backup file
+          redis-cli -h redis -a "${REDIS_PASSWORD}" --rdb "$BACKUP_FILE"
+          
+          if [ -f "$BACKUP_FILE" ]; then
+            BACKUP_SIZE=$(stat -c%s "$BACKUP_FILE")
+            echo "✓ Redis backup created successfully (Size: $BACKUP_SIZE bytes)"
+          else
+            echo "✗ Redis backup failed"
+            exit 1
+          fi
+          
+          # Cleanup
+          redis-cli -h redis -a "${REDIS_PASSWORD}" del "$TEST_KEY"
+          
+          echo "✅ Redis backup test completed successfully"
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: phishnet-database-secrets
+              key: redis-password
+        volumeMounts:
+        - name: backup-storage
+          mountPath: /backups
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+      volumes:
+      - name: backup-storage
+        persistentVolumeClaim:
+          claimName: backup-storage
+
+---
+# ServiceAccount for Test Runner
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backup-test-runner
+  namespace: phishnet
+  labels:
+    app.kubernetes.io/name: phishnet
+    app.kubernetes.io/component: test
+
+---
+# Test CronJob to run backup tests weekly
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: weekly-backup-test
+  namespace: phishnet
+  labels:
+    app.kubernetes.io/name: phishnet
+    app.kubernetes.io/component: test
+spec:
+  schedule: "0 4 * * 0"  # Weekly on Sunday at 4 AM UTC
+  timeZone: "UTC"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: phishnet
+            app.kubernetes.io/component: test
+        spec:
+          serviceAccountName: backup-test-runner
+          restartPolicy: OnFailure
+          containers:
+          - name: test-runner
+            image: bitnami/kubectl:latest
+            command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              
+              echo "Starting weekly backup test suite..."
+              
+              # Run PostgreSQL backup test
+              kubectl create job postgres-backup-test-$(date +%s) --from=job/backup-recovery-test -n phishnet
+              
+              # Wait for PostgreSQL test to complete
+              POSTGRES_JOB=$(kubectl get jobs -n phishnet -l test.type=backup-recovery --sort-by=.metadata.creationTimestamp -o name | tail -1)
+              kubectl wait --for=condition=complete $POSTGRES_JOB -n phishnet --timeout=1800s
+              
+              # Run Redis backup test
+              kubectl create job redis-backup-test-$(date +%s) --from=job/redis-backup-test -n phishnet
+              
+              # Wait for Redis test to complete
+              REDIS_JOB=$(kubectl get jobs -n phishnet -l test.type=redis-backup --sort-by=.metadata.creationTimestamp -o name | tail -1)
+              kubectl wait --for=condition=complete $REDIS_JOB -n phishnet --timeout=600s
+              
+              echo "Weekly backup test suite completed"
+            resources:
+              requests:
+                memory: "64Mi"
+                cpu: "50m"
+              limits:
+                memory: "128Mi"
+                cpu: "100m"

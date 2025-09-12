@@ -1,0 +1,356 @@
+# Kubernetes Namespace for Sandbox Infrastructure
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: phishnet-sandbox
+  labels:
+    name: phishnet-sandbox
+    security-tier: "high"
+
+---
+# NetworkPolicy for network isolation
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sandbox-network-policy
+  namespace: phishnet-sandbox
+spec:
+  podSelector:
+    matchLabels:
+      app: sandbox-worker
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  egress:
+  # Allow DNS
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow HTTPS to internet (controlled)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 80
+  # Allow Redis access
+  - to:
+    - podSelector:
+        matchLabels:
+          app: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+
+---
+# PodSecurityPolicy for enhanced security
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: sandbox-psp
+  namespace: phishnet-sandbox
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  requiredDropCapabilities:
+    - ALL
+  allowedCapabilities:
+    - SYS_ADMIN  # Required for Chromium
+  volumes:
+    - 'configMap'
+    - 'emptyDir'
+    - 'projected'
+    - 'secret'
+    - 'downwardAPI'
+    - 'persistentVolumeClaim'
+    - 'hostPath'
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  runAsUser:
+    rule: 'MustRunAsNonRoot'
+  seLinux:
+    rule: 'RunAsAny'
+  fsGroup:
+    rule: 'RunAsAny'
+
+---
+# Redis Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: phishnet-sandbox
+  labels:
+    app: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        fsGroup: 999
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        args:
+          - redis-server
+          - --appendonly
+          - "yes"
+          - --maxmemory
+          - "256mb"
+          - --maxmemory-policy
+          - "allkeys-lru"
+        ports:
+        - containerPort: 6379
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: redis-data
+        emptyDir: {}
+
+---
+# Redis Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: phishnet-sandbox
+  labels:
+    app: redis
+spec:
+  selector:
+    app: redis
+  ports:
+  - port: 6379
+    targetPort: 6379
+  type: ClusterIP
+
+---
+# ConfigMap for sandbox worker configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sandbox-config
+  namespace: phishnet-sandbox
+data:
+  MAX_EXECUTION_TIME: "120"
+  MAX_MEMORY_MB: "512"
+  ARTIFACTS_RETENTION_DAYS: "7"
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONUNBUFFERED: "1"
+
+---
+# Secret for cloud storage credentials
+apiVersion: v1
+kind: Secret
+metadata:
+  name: storage-credentials
+  namespace: phishnet-sandbox
+type: Opaque
+data:
+  # Base64 encoded credentials
+  # aws-access-key-id: <base64-encoded-key>
+  # aws-secret-access-key: <base64-encoded-secret>
+  # gcs-service-account: <base64-encoded-json>
+
+---
+# Job template for sandbox workers
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: sandbox-worker
+  namespace: phishnet-sandbox
+spec:
+  template:
+    metadata:
+      labels:
+        app: sandbox-worker
+        security-tier: "high"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: sandbox-worker
+        image: phishnet/sandbox-worker:latest
+        imagePullPolicy: Always
+        
+        env:
+        - name: REDIS_URL
+          value: "redis://redis:6379/0"
+        - name: WORKER_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        
+        envFrom:
+        - configMapRef:
+            name: sandbox-config
+        - secretRef:
+            name: storage-credentials
+            optional: true
+        
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+            ephemeral-storage: "1Gi"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+            ephemeral-storage: "2Gi"
+        
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+            add:
+            - SYS_ADMIN  # Required for Chromium sandbox
+        
+        volumeMounts:
+        - name: tmp-sandbox
+          mountPath: /tmp/sandbox
+        - name: tmp
+          mountPath: /tmp
+        - name: var-log
+          mountPath: /var/log
+        
+        livenessProbe:
+          exec:
+            command:
+            - python3
+            - -c
+            - "import sys; sys.exit(0)"
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          failureThreshold: 3
+        
+        readinessProbe:
+          exec:
+            command:
+            - python3
+            - -c
+            - "import sys; sys.exit(0)"
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      
+      volumes:
+      - name: tmp-sandbox
+        emptyDir:
+          sizeLimit: 100Mi
+      - name: tmp
+        emptyDir:
+          sizeLimit: 100Mi
+      - name: var-log
+        emptyDir:
+          sizeLimit: 10Mi
+      
+      restartPolicy: OnFailure
+      activeDeadlineSeconds: 300  # 5 minutes max execution time
+      backoffLimit: 1  # Don't retry failed jobs
+
+---
+# CronJob for cleanup
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: sandbox-cleanup
+  namespace: phishnet-sandbox
+spec:
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: cleanup
+            image: alpine:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Cleaning up old sandbox artifacts..."
+              # Cleanup logic would go here
+              echo "Cleanup completed"
+          restartPolicy: OnFailure
+
+---
+# HorizontalPodAutoscaler for scaling
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: sandbox-worker-hpa
+  namespace: phishnet-sandbox
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: sandbox-worker
+  minReplicas: 1
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80

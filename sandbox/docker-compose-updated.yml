@@ -1,0 +1,279 @@
+# Complete Sandbox Infrastructure
+# Docker Compose for production-ready sandbox environment
+
+version: '3.8'
+
+services:
+  # Redis for job queue and caching
+  redis:
+    image: redis:7-alpine
+    container_name: phishnet-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - sandbox_network
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+
+  # Threat Orchestrator API
+  orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile.sandbox
+      target: runtime
+    container_name: phishnet-orchestrator
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+      - "9090:9090"  # Prometheus metrics
+      - "8080:8080"  # Monitoring dashboard
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - ARTIFACTS_BUCKET=phishnet-sandbox-artifacts
+      - ARTIFACTS_RETENTION_DAYS=7
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/gcs-key.json
+      - PROMETHEUS_PORT=9090
+      - DASHBOARD_PORT=8080
+      - WORKER_ID=orchestrator-main
+      - ALERT_WEBHOOK_URL=${ALERT_WEBHOOK_URL}
+      - SETUP_NETWORK_SECURITY=false
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./credentials:/app/credentials:ro
+      - sandbox_logs:/var/log/sandbox
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: python orchestrator.py
+    networks:
+      - sandbox_network
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/log/sandbox
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/queue/stats"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Sandbox Workers (scalable)
+  sandbox-worker-1:
+    build:
+      context: .
+      dockerfile: Dockerfile.sandbox
+      target: runtime
+    container_name: phishnet-sandbox-worker-1
+    restart: unless-stopped
+    ports:
+      - "9091:9090"  # Prometheus metrics
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - ARTIFACTS_BUCKET=phishnet-sandbox-artifacts
+      - ARTIFACTS_RETENTION_DAYS=7
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/gcs-key.json
+      - PROMETHEUS_PORT=9090
+      - WORKER_ID=sandbox-worker-1
+      - SETUP_NETWORK_SECURITY=true
+      - DISPLAY=:99
+    volumes:
+      - ./credentials:/app/credentials:ro
+      - sandbox_logs:/var/log/sandbox
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: python sandbox_worker.py
+    networks:
+      - sandbox_network
+    security_opt:
+      - no-new-privileges:true
+      - seccomp:./seccomp-profile.json
+      - apparmor:sandbox-profile
+    cap_drop:
+      - ALL
+    cap_add:
+      - SYS_ADMIN  # Required for Chrome sandboxing
+      - NET_RAW    # Required for network monitoring
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/log/sandbox
+      - /dev/shm:size=2g
+    mem_limit: 1g
+    cpus: 1.0
+    ulimits:
+      nofile:
+        soft: 1024
+        hard: 1024
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  sandbox-worker-2:
+    build:
+      context: .
+      dockerfile: Dockerfile.sandbox
+      target: runtime
+    container_name: phishnet-sandbox-worker-2
+    restart: unless-stopped
+    ports:
+      - "9092:9090"  # Prometheus metrics
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - ARTIFACTS_BUCKET=phishnet-sandbox-artifacts
+      - ARTIFACTS_RETENTION_DAYS=7
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/gcs-key.json
+      - PROMETHEUS_PORT=9090
+      - WORKER_ID=sandbox-worker-2
+      - SETUP_NETWORK_SECURITY=true
+      - DISPLAY=:99
+    volumes:
+      - ./credentials:/app/credentials:ro
+      - sandbox_logs:/var/log/sandbox
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: python sandbox_worker.py
+    networks:
+      - sandbox_network
+    security_opt:
+      - no-new-privileges:true
+      - seccomp:./seccomp-profile.json
+      - apparmor:sandbox-profile
+    cap_drop:
+      - ALL
+    cap_add:
+      - SYS_ADMIN  # Required for Chrome sandboxing
+      - NET_RAW    # Required for network monitoring
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/log/sandbox
+      - /dev/shm:size=2g
+    mem_limit: 1g
+    cpus: 1.0
+    ulimits:
+      nofile:
+        soft: 1024
+        hard: 1024
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Prometheus for monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: phishnet-prometheus
+    restart: unless-stopped
+    ports:
+      - "9000:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=7d'
+      - '--web.enable-lifecycle'
+    networks:
+      - sandbox_network
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: phishnet-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_INSTALL_PLUGINS=redis-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - sandbox_network
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+
+  # Log aggregation with Fluentd
+  fluentd:
+    image: fluent/fluentd:v1.16-debian-1
+    container_name: phishnet-fluentd
+    restart: unless-stopped
+    ports:
+      - "24224:24224"
+      - "24224:24224/udp"
+    volumes:
+      - ./fluentd/fluent.conf:/fluentd/etc/fluent.conf:ro
+      - sandbox_logs:/var/log/sandbox
+    networks:
+      - sandbox_network
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+
+networks:
+  sandbox_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+    driver_opts:
+      com.docker.network.bridge.name: sandbox-br0
+      com.docker.network.bridge.enable_icc: "false"
+      com.docker.network.bridge.enable_ip_masquerade: "true"
+
+volumes:
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  sandbox_logs:
+    driver: local

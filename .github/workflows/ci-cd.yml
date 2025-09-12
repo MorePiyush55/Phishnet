@@ -1,0 +1,525 @@
+name: PhishNet CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Security and dependency scanning
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  # Code quality and testing
+  test:
+    name: Test and Quality
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_USER: testuser
+          POSTGRES_DB: testdb
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements_enhanced.txt
+        pip install pytest pytest-cov pytest-asyncio black flake8 mypy
+
+    - name: Code formatting check
+      run: black --check --diff .
+
+    - name: Lint with flake8
+      run: |
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+    - name: Type checking with mypy
+      run: mypy app/ --ignore-missing-imports
+
+    - name: Run tests
+      env:
+        DATABASE_URL: postgresql+asyncpg://testuser:testpass@localhost:5432/testdb
+        REDIS_URL: redis://localhost:6379/0
+        SECRET_KEY: test-secret-key
+        ENCRYPTION_KEY: test-encryption-key-32-chars-long
+      run: |
+        pytest tests/ -v --cov=app --cov-report=xml --cov-report=html
+
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+
+  # Build and push Docker images
+  build:
+    name: Build Images
+    runs-on: ubuntu-latest
+    needs: [test, security-scan]
+    permissions:
+      contents: read
+      packages: write
+    
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      image-tag: ${{ steps.meta.outputs.tags }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push API image
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: true
+        target: production
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        build-args: |
+          BUILDTIME=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+          VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
+          REVISION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.revision'] }}
+
+    - name: Build and push worker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: true
+        target: worker
+        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/worker:${{ steps.meta.outputs.version }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Sign container images
+      env:
+        COSIGN_EXPERIMENTAL: 1
+      run: |
+        # Install cosign
+        curl -sLO https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64
+        chmod +x cosign-linux-amd64
+        sudo mv cosign-linux-amd64 /usr/local/bin/cosign
+        
+        # Sign images
+        cosign sign --yes ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+
+  # Vulnerability scanning
+  vulnerability-scan:
+    name: Vulnerability Scan
+    runs-on: ubuntu-latest
+    needs: [build]
+    permissions:
+      contents: read
+      security-events: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+      
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+      
+      - name: Run Snyk vulnerability scan
+        uses: snyk/actions/docker@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          image: '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}'
+          args: --severity-threshold=high --file=Dockerfile
+      
+      - name: Generate security report
+        if: always()
+        run: |
+          echo "# Security Scan Report" > security-report.md
+          echo "## Trivy Results" >> security-report.md
+          trivy image --format table ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} >> security-report.md
+          echo "## Build Information" >> security-report.md
+          echo "- Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}" >> security-report.md
+          echo "- Scan Date: $(date)" >> security-report.md
+          echo "- Commit: ${{ github.sha }}" >> security-report.md
+      
+      - name: Upload security report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-report
+          path: security-report.md
+          retention-days: 30
+
+  # Deploy to staging environment
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [build, vulnerability-scan]
+    if: github.ref == 'refs/heads/develop' || github.event_name == 'pull_request'
+    environment:
+      name: staging
+      url: https://staging.phishnet.example.com
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure kubectl
+      uses: azure/k8s-set-context@v3
+      with:
+        method: kubeconfig
+        kubeconfig: ${{ secrets.KUBE_CONFIG_STAGING }}
+
+    - name: Install Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: '3.12.0'
+
+    - name: Pre-deployment backup
+      run: |
+        kubectl create job backup-pre-deploy-$(date +%s) \
+          --from=cronjob/phishnet-backup -n phishnet-staging || true
+
+    - name: Deploy to staging
+      run: |
+        helm upgrade --install phishnet-staging ./helm/phishnet \
+          --namespace phishnet-staging \
+          --create-namespace \
+          --values ./helm/phishnet/values-staging.yaml \
+          --set image.tag=${{ needs.build.outputs.image-tag }} \
+          --set app.secretKey=${{ secrets.SECRET_KEY_STAGING }} \
+          --set app.encryptionKey=${{ secrets.ENCRYPTION_KEY_STAGING }} \
+          --set app.webhookSecret=${{ secrets.WEBHOOK_SECRET_STAGING }} \
+          --set app.gmail.clientId=${{ secrets.GMAIL_CLIENT_ID_STAGING }} \
+          --set app.gmail.clientSecret=${{ secrets.GMAIL_CLIENT_SECRET_STAGING }} \
+          --set app.externalApis.virustotal=${{ secrets.VIRUSTOTAL_API_KEY_STAGING }} \
+          --set app.externalApis.abuseipdb=${{ secrets.ABUSEIPDB_API_KEY_STAGING }} \
+          --set app.externalApis.gemini=${{ secrets.GEMINI_API_KEY_STAGING }} \
+          --wait --timeout=600s
+
+    - name: Run smoke tests
+      run: |
+        # Wait for deployment to be ready
+        kubectl wait --for=condition=available --timeout=300s deployment/phishnet-staging-api -n phishnet-staging
+        
+        # Run basic health checks
+        kubectl run smoke-test --rm -i --restart=Never --image=curlimages/curl -- \
+          curl -f http://phishnet-staging-api.phishnet-staging.svc.cluster.local/health
+        
+        # Run API integration tests
+        python tests/integration/test_staging_api.py
+
+    - name: Performance baseline test
+      run: |
+        kubectl apply -f k8s/tests/load-test-job.yaml -n phishnet-staging
+        kubectl wait --for=condition=complete job/load-test -n phishnet-staging --timeout=600s
+        
+        # Extract performance metrics
+        kubectl logs job/load-test -n phishnet-staging > performance-results.txt
+        
+        # Validate performance thresholds
+        python tests/performance/validate_baseline.py performance-results.txt
+
+    - name: Security validation
+      run: |
+        # Run security tests against staging
+        python tests/security/test_deployed_security.py --environment=staging
+        
+        # Network policy validation
+        kubectl apply -f k8s/tests/network-policy-test.yaml -n phishnet-staging
+        kubectl wait --for=condition=complete job/network-policy-test -n phishnet-staging --timeout=300s
+
+  # Deploy to production
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build, deploy-staging, vulnerability-scan]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment:
+      name: production
+      url: https://phishnet.example.com
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure kubectl
+      uses: azure/k8s-set-context@v3
+      with:
+        method: kubeconfig
+        kubeconfig: ${{ secrets.KUBE_CONFIG_PRODUCTION }}
+
+    - name: Install Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: '3.12.0'
+
+    - name: Pre-deployment backup
+      run: |
+        kubectl create job backup-pre-deploy-$(date +%s) \
+          --from=cronjob/phishnet-backup -n phishnet || true
+        kubectl wait --for=condition=complete job/backup-pre-deploy-$(date +%s) -n phishnet --timeout=600s
+
+    - name: Blue-Green deployment preparation
+      run: |
+        # Label current deployment as blue
+        kubectl label deployment phishnet-api version=blue -n phishnet --overwrite || true
+        
+        # Create green environment
+        helm upgrade --install phishnet-green ./helm/phishnet \
+          --namespace phishnet \
+          --values ./helm/phishnet/values-production.yaml \
+          --set image.tag=${{ needs.build.outputs.image-tag }} \
+          --set nameOverride=phishnet-green \
+          --set app.secretKey=${{ secrets.SECRET_KEY_PRODUCTION }} \
+          --set app.encryptionKey=${{ secrets.ENCRYPTION_KEY_PRODUCTION }} \
+          --set app.webhookSecret=${{ secrets.WEBHOOK_SECRET_PRODUCTION }} \
+          --set app.gmail.clientId=${{ secrets.GMAIL_CLIENT_ID_PRODUCTION }} \
+          --set app.gmail.clientSecret=${{ secrets.GMAIL_CLIENT_SECRET_PRODUCTION }} \
+          --set app.externalApis.virustotal=${{ secrets.VIRUSTOTAL_API_KEY_PRODUCTION }} \
+          --set app.externalApis.abuseipdb=${{ secrets.ABUSEIPDB_API_KEY_PRODUCTION }} \
+          --set app.externalApis.gemini=${{ secrets.GEMINI_API_KEY_PRODUCTION }} \
+          --wait --timeout=900s
+
+    - name: Health check green environment
+      run: |
+        kubectl wait --for=condition=available --timeout=600s deployment/phishnet-green-api -n phishnet
+        
+        # Comprehensive health checks
+        python tests/integration/test_production_health.py --target=green
+        
+        # Database migration check
+        kubectl exec -n phishnet deployment/phishnet-green-api -- python -m alembic current
+        
+        # API functionality validation
+        kubectl exec -n phishnet deployment/phishnet-green-api -- python -m pytest tests/e2e/ -v
+
+    - name: Canary traffic routing
+      run: |
+        # Route 10% traffic to green environment
+        kubectl apply -f k8s/production/canary-service.yaml -n phishnet
+        sleep 180  # 3 minute canary period
+
+    - name: Monitor canary deployment
+      run: |
+        # Check error rates and response times for canary
+        python scripts/monitor_canary.py --duration=300 --threshold=0.01
+        
+        # Validate metrics are within acceptable bounds
+        kubectl exec -n phishnet deployment/monitoring-prometheus -- \
+          promtool query instant 'rate(http_requests_total{service="phishnet-green",status=~"5.."}[5m])'
+
+    - name: Full traffic switch to green
+      if: success()
+      run: |
+        kubectl patch service phishnet-api -n phishnet \
+          -p '{"spec":{"selector":{"app.kubernetes.io/name":"phishnet-green"}}}'
+        
+        # Update ingress to point to green
+        kubectl patch ingress phishnet -n phishnet \
+          -p '{"spec":{"rules":[{"host":"phishnet.example.com","http":{"paths":[{"path":"/","pathType":"Prefix","backend":{"service":{"name":"phishnet-green-api","port":{"number":8000}}}}]}}]}}'
+
+    - name: Final monitoring period
+      if: success()
+      run: |
+        sleep 600  # 10 minute monitoring period
+        
+        # Final validation of error rates
+        python scripts/validate_production_health.py --duration=600
+
+    - name: Cleanup blue environment
+      if: success()
+      run: |
+        # Scale down blue deployment
+        kubectl scale deployment phishnet-api --replicas=0 -n phishnet || true
+        
+        # Remove blue deployment after successful monitoring
+        sleep 300
+        kubectl delete deployment phishnet-api -n phishnet || true
+        
+        # Rename green to main
+        kubectl patch deployment phishnet-green-api -n phishnet \
+          -p '{"metadata":{"name":"phishnet-api"}}'
+
+    - name: Rollback on failure
+      if: failure()
+      run: |
+        # Immediate rollback to blue
+        kubectl patch service phishnet-api -n phishnet \
+          -p '{"spec":{"selector":{"app.kubernetes.io/name":"phishnet"}}}'
+        
+        # Remove green deployment
+        helm uninstall phishnet-green -n phishnet || true
+        
+        # Scale up blue if scaled down
+        kubectl scale deployment phishnet-api --replicas=3 -n phishnet || true
+        
+        # Notify of rollback
+        curl -X POST -H 'Content-type: application/json' \
+          --data '{"text":"🚨 Production deployment failed and rolled back"}' \
+          ${{ secrets.SLACK_WEBHOOK }}
+
+    - name: Update monitoring and alerts
+      if: success()
+      run: |
+        kubectl apply -f k8s/monitoring/alerts-production.yaml -n phishnet
+        kubectl apply -f k8s/monitoring/dashboards/ -n phishnet
+
+    - name: Post-deployment security scan
+      if: success()
+      run: |
+        # Runtime security validation
+        python tests/security/test_runtime_security.py --environment=production
+        
+        # Network policy validation
+        kubectl apply -f k8s/tests/network-policy-production-test.yaml -n phishnet
+
+    - name: Notify deployment success
+      uses: 8398a7/action-slack@v3
+      with:
+        status: success
+        text: "✅ PhishNet deployed successfully to production"
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+      if: success()
+
+    - name: Notify deployment failure
+      uses: 8398a7/action-slack@v3
+      with:
+        status: failure
+        text: "❌ PhishNet deployment to production failed"
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+      if: failure()
+
+  # Rollback capability
+  rollback:
+    name: Rollback Production
+    runs-on: ubuntu-latest
+    if: failure() && github.ref == 'refs/heads/main'
+    needs: deploy-production
+    environment:
+      name: production
+    
+    steps:
+    - name: Configure kubectl
+      uses: azure/k8s-set-context@v3
+      with:
+        method: kubeconfig
+        kubeconfig: ${{ secrets.KUBE_CONFIG_PRODUCTION }}
+
+    - name: Install Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: '3.12.0'
+
+    - name: Rollback deployment
+      run: |
+        helm rollback phishnet --namespace phishnet
+        kubectl wait --for=condition=available --timeout=600s deployment/phishnet-api -n phishnet
+
+    - name: Notify rollback
+      uses: 8398a7/action-slack@v3
+      with:
+        status: custom
+        custom_payload: |
+          {
+            "text": "🔄 PhishNet production deployment rolled back due to failure",
+            "color": "warning"
+          }
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
