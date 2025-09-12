@@ -1,9 +1,47 @@
-# Production requirements for Render.com deployment
-gunicorn==21.2.0
+# Minimal Production Requirements for Render.com deployment
+
+# Core FastAPI and Server
+fastapi==0.104.1
 uvicorn[standard]==0.24.0
+gunicorn==21.2.0
 
-# Include all main requirements
--r requirements.txt
-
-# Production optimizations
+# Database & ORM
+sqlalchemy[asyncio]==2.0.23
+asyncpg==0.29.0
+alembic==1.13.1
 psycopg2-binary==2.9.9
+
+# Redis & Caching
+redis==5.0.1
+aioredis==2.0.1
+
+# Data Models & Validation
+pydantic[email]==2.5.0
+pydantic-settings==2.1.0
+
+# Authentication & Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+bcrypt==4.1.2
+
+# Background Tasks
+celery==5.3.4
+
+# Configuration & Utilities
+python-dotenv==1.0.0
+httpx==0.25.2
+requests==2.31.0
+
+# Web Content Processing (Essential only)
+beautifulsoup4==4.12.2
+bleach==6.1.0
+tldextract==5.1.1
+
+# Google API Integration (Core only)
+google-auth==2.23.4
+google-auth-oauthlib==1.1.0
+google-api-python-client==2.108.0
+
+# Production Monitoring
+sentry-sdk==1.38.0
