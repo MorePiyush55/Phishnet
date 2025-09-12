@@ -1,0 +1,9 @@
+# Production requirements for Render.com deployment
+gunicorn==21.2.0
+uvicorn[standard]==0.24.0
+
+# Include all main requirements
+-r requirements.txt
+
+# Production optimizations
+psycopg2-binary==2.9.9

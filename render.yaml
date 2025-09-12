@@ -1,0 +1,36 @@
+version: "1"
+services:
+  - type: web
+    name: phishnet-api
+    env: python
+    plan: starter
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: phishnet-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: phishnet-redis
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: "https://your-vercel-app.vercel.app,http://localhost:3000"
+
+  - type: postgres
+    name: phishnet-db
+    plan: starter
+    databaseName: phishnet
+    user: phishnet
+
+  - type: redis
+    name: phishnet-redis
+    plan: starter

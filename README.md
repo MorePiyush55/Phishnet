@@ -42,11 +42,12 @@
 - 📈 **Trend Analysis**: Historical threat patterns and emerging attack vectors
 - 🎯 **SLA Monitoring**: Response time tracking and availability metrics
 
-## 🚀 Quick Start
+## 🚀 Quick Start & Deployment
 
+### 🔧 Local Development
 ```bash
 # Clone and setup
-git clone <your-repo>
+git clone https://github.com/MorePiyush55/Phishnet.git
 cd Phishnet
 python -m venv phishnet_env
 phishnet_env\Scripts\activate  # Windows
@@ -63,10 +64,23 @@ python scripts/init_db.py
 python run.py
 ```
 
+### ☁️ **Live Demo - Production Deployment**
+- **🌐 Frontend Dashboard**: [Deploy on Vercel](https://vercel.com/new/clone?repository-url=https://github.com/MorePiyush55/Phishnet)
+- **🔗 Backend API**: [Deploy on Render](https://render.com/deploy?repo=https://github.com/MorePiyush55/Phishnet)
+- **📚 Full Deployment Guide**: [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)
+
+### 🚀 **One-Click Deployment**
+
+#### **Frontend (Vercel)**
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/MorePiyush55/Phishnet&project-name=phishnet-frontend&framework=vite)
+
+#### **Backend (Render.com)**
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/MorePiyush55/Phishnet)
+
 **🌐 Access:** 
-- Dashboard: http://localhost:8080
-- API Docs: http://localhost:8000/docs
-- Health: http://localhost:8000/health
+- Local Dashboard: http://localhost:3000
+- Local API: http://localhost:8000/docs
+- Local Health: http://localhost:8000/health
 
 ## 📋 Table of Contents
 
