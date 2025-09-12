@@ -39,11 +39,7 @@ export function useWebSocket() {
     }
 
     // Connect with authorization header
-    webSocketService.connect({
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-    });
+    webSocketService.connect();
   }, []);
 
   // Validate message authentication

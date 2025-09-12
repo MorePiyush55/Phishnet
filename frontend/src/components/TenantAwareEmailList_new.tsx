@@ -73,7 +73,7 @@ export const TenantAwareEmailList: React.FC<TenantAwareEmailListProps> = ({
 
   // Filter emails by tenant (extra safety check)
   const filteredEmails = useMemo(() => {
-    if (!emailsArray) return [];
+    if (!emailsArray || !Array.isArray(emailsArray)) return [];
     return filterByTenant(emailsArray);
   }, [emailsArray, currentTenant]);
 
@@ -97,13 +97,14 @@ export const TenantAwareEmailList: React.FC<TenantAwareEmailListProps> = ({
     }
 
     try {
-      const result = await bulkAction.execute(() =>
-        apiManager.emails.bulkAction({
+      const result = await bulkAction.mutate(
+        () => apiManager.emails.bulkAction({
           email_ids: emailIds,
           action: action as any,
           reason,
           notify_users: true
-        })
+        }),
+        { emailIds, action, reason }
       );
 
       // Refresh the email list after successful action
@@ -213,9 +214,7 @@ export const TenantAwareEmailList: React.FC<TenantAwareEmailListProps> = ({
         <>
           <VirtualEmailList
             emails={filteredEmails}
-            onEmailClick={onEmailClick}
-            onSelectionChange={onSelectionChange}
-            onBulkAction={handleBulkAction}
+            onEmailSelect={onEmailClick ? (email) => onEmailClick(email as any) : undefined}
             loading={emailsLoading}
             className="min-h-96"
           />
@@ -223,6 +222,7 @@ export const TenantAwareEmailList: React.FC<TenantAwareEmailListProps> = ({
           <div className="flex justify-center">
             <Pagination
               currentPage={currentPage}
+              totalPages={Math.ceil(filteredEmails.length / itemsPerPage)}
               totalItems={filteredEmails.length}
               itemsPerPage={itemsPerPage}
               onPageChange={setCurrentPage}

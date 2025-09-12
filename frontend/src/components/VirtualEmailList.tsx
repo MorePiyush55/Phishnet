@@ -240,14 +240,10 @@ export const VirtualEmailList: React.FC<VirtualEmailListProps> = ({
     }
   }, []);
 
-  // Expose scroll methods
-  React.useImperativeHandle(listRef, () => ({
-    scrollToEmail,
-    scrollToTop,
-    scrollToItem: (index: number, align?: 'auto' | 'smart' | 'center' | 'end' | 'start') => {
-      listRef.current?.scrollToItem(index, align);
-    }
-  }));
+  // Expose scroll methods (simplified)
+  const scrollToItem = useCallback((index: number, align?: 'auto' | 'smart' | 'center' | 'end' | 'start') => {
+    listRef.current?.scrollToItem(index, align);
+  }, []);
 
   if (error) {
     return (
@@ -291,7 +287,7 @@ export const VirtualEmailList: React.FC<VirtualEmailListProps> = ({
         width={width}
         className="bg-gray-900 border border-gray-700 rounded-lg"
       >
-        {({ index, style }) => {
+        {({ index, style }: { index: number; style: React.CSSProperties }) => {
           // Show loading indicator for the last item when loading next page
           if (index >= emails.length) {
             return (
