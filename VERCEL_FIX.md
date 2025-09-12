@@ -1,48 +1,49 @@
 # 🚀 **Quick Fix for Vercel Deployment**
 
-## ❌ **Error**: `cd: frontend: No such directory`
+## ❌ **Common Errors & Solutions**
 
-The error occurs because Vercel is trying to build from the root directory but needs to build from the `frontend` subdirectory.
+### **Error 1**: `cd: frontend: No such directory`
+### **Error 2**: `Deployment has been canceled as a result of running the command defined in the "Ignored Build Step" setting`
+### **Error 3**: `404: NOT_FOUND - DEPLOYMENT_NOT_FOUND`
 
-## ✅ **Solution**: Configure Root Directory in Vercel
+## ✅ **Root Cause & Solutions**
 
-### **Method 1: Via Vercel Dashboard (Recommended)**
+### **Issue**: Monorepo Configuration Problems
+The errors occur because:
+1. Vercel is trying to build from the root directory 
+2. The `ignoreCommand` is canceling deployments
+3. Root directory is not properly configured
 
-1. Go to your Vercel project settings
-2. Navigate to **Settings** → **General**
-3. Set **Root Directory** to: `frontend`
-4. Set **Framework Preset** to: `Vite`
-5. Set **Build Command** to: `npm run build`
-6. Set **Output Directory** to: `dist`
-7. Set **Install Command** to: `npm install`
-8. **Redeploy** the project
+## 🔧 **Step-by-Step Fix**
 
-### **Method 2: Deploy Frontend Directory Directly**
+### **Step 1: Configure Root Directory in Vercel Dashboard**
 
-```bash
-# Clone your repo
-git clone https://github.com/MorePiyush55/Phishnet.git
-cd Phishnet/frontend
-
-# Install Vercel CLI
-npm install -g vercel
-
-# Deploy from frontend directory
-vercel --prod
-```
-
-### **Method 3: Update Deployment URL**
-
-Instead of deploying the entire monorepo, deploy just the frontend:
-
-1. Go to Vercel Dashboard
-2. Click **"New Project"**
-3. Import: `https://github.com/MorePiyush55/Phishnet`
+1. **Go to your Vercel project**: https://vercel.com/dashboard
+2. **Find your project** (`phishnet-frontend` or similar)
+3. **Go to Settings → General**
 4. **Configure these settings**:
-   - **Root Directory**: `frontend`
-   - **Framework**: Vite
+   - **Root Directory**: `frontend` ⚠️ **CRITICAL**
+   - **Framework Preset**: `Vite`
    - **Build Command**: `npm run build`
    - **Output Directory**: `dist`
+   - **Install Command**: `npm install`
+5. **Save settings**
+
+### **Step 2: Force Redeploy**
+
+1. **Go to Deployments tab**
+2. **Click "Redeploy" on the latest deployment**
+3. **OR trigger a new deployment by pushing a commit**
+
+### **Step 3: Alternative - Delete & Recreate Project**
+
+If the above doesn't work:
+
+1. **Delete the current Vercel project**
+2. **Create new project**:
+   - Import: `https://github.com/MorePiyush55/Phishnet`
+   - **Root Directory**: `frontend` ⚠️ **Set this during import**
+   - **Framework**: `Vite`
 
 ## 🔧 **Environment Variables for Vercel**
 
