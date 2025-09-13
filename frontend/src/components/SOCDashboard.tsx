@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Shield, 
   AlertTriangle, 
@@ -24,7 +25,8 @@ import {
   RefreshCw,
   Settings,
   LogOut,
-  Bell
+  Bell,
+  CheckCircle
 } from 'lucide-react';
 
 // Import hooks and services
@@ -32,6 +34,7 @@ import { useEmails, useSystemStats, useUpdateEmailStatus, useDeleteEmail, useBul
 import { useUIStore } from '../stores/uiStore';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { useAuth, usePermissions } from '../hooks/useAuth';
+import { OAuthService, UserStatus } from '../services/oauthService';
 
 // Types
 interface Email {
@@ -56,6 +59,10 @@ const SOCDashboard = () => {
   const { user, logout } = useAuth();
   const { canDeleteEmails, canViewAudits } = usePermissions();
   const { isConnected: wsConnected } = useWebSocket();
+  const [searchParams, setSearchParams] = useSearchParams();
+  
+  // OAuth Status
+  const [oauthStatus, setOauthStatus] = useState<UserStatus | null>(null);
   
   // UI State
   const {
@@ -184,6 +191,51 @@ const SOCDashboard = () => {
     setShowBulkActions(selectedEmails.length > 0);
   }, [selectedEmails]);
 
+  // Check OAuth status on component mount
+  useEffect(() => {
+    const checkOAuthStatus = async () => {
+      try {
+        const status = await OAuthService.getUserStatus();
+        setOauthStatus(status);
+      } catch (error) {
+        console.log('OAuth status check failed:', error);
+        setOauthStatus(null);
+      }
+    };
+
+    checkOAuthStatus();
+  }, []);
+
+  // Handle OAuth success from URL parameters
+  useEffect(() => {
+    const oauthSuccess = searchParams.get('oauth_success');
+    const email = searchParams.get('email');
+    
+    if (oauthSuccess === 'true') {
+      // Show success notification
+      const { addNotification } = useUIStore.getState();
+      addNotification({
+        type: 'success',
+        message: `Gmail account ${email} successfully connected! Real-time protection is now active.`,
+        autoHide: false // Keep the success message visible
+      });
+      
+      // Clean up URL parameters
+      setSearchParams({});
+      
+      // Refresh OAuth status
+      const checkOAuthStatus = async () => {
+        try {
+          const status = await OAuthService.getUserStatus();
+          setOauthStatus(status);
+        } catch (error) {
+          console.log('OAuth status refresh failed:', error);
+        }
+      };
+      checkOAuthStatus();
+    }
+  }, [searchParams, setSearchParams]);
+
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100">
       {/* Notifications */}
@@ -223,6 +275,16 @@ const SOCDashboard = () => {
               <Activity className="w-4 h-4" />
               <span>Real-time Feed</span>
               <div className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+            </div>
+            <div className="flex items-center space-x-2 text-sm text-gray-300">
+              <Mail className="w-4 h-4" />
+              <span>Gmail</span>
+              <div className={`w-2 h-2 rounded-full ${
+                oauthStatus?.status === 'connected' ? 'bg-green-500 animate-pulse' : 'bg-orange-500'
+              }`}></div>
+              {oauthStatus?.status === 'connected' && (
+                <CheckCircle className="w-4 h-4 text-green-400" />
+              )}
             </div>
             <div className="flex items-center space-x-2 text-sm text-gray-300">
               <Users className="w-4 h-4" />
