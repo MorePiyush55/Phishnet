@@ -2,17 +2,17 @@
   "version": 2,
   "name": "phishnet-frontend",
   "framework": "vite",
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist",
-  "installCommand": "npm install",
+  "buildCommand": "cd frontend && npm run build",
+  "outputDirectory": "frontend/dist",
+  "installCommand": "cd frontend && npm install",
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "https://phishnet-api.onrender.com/api/$1",
+      "dest": "https://phishnet-backend.onrender.com/$1",
       "headers": {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization"
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-CSRF-Token"
       }
     },
     {
@@ -21,7 +21,7 @@
     }
   ],
   "env": {
-    "VITE_API_URL": "https://phishnet-api.onrender.com",
-    "VITE_WS_URL": "wss://phishnet-api.onrender.com"
+    "VITE_API_BASE_URL": "https://phishnet-backend.onrender.com",
+    "VITE_WS_BASE_URL": "wss://phishnet-backend.onrender.com"
   }
 }

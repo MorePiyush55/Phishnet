@@ -1,387 +1,425 @@
-"""Email processing orchestrator - single source of truth pipeline."""
+"""Enhanced email analysis orchestrator integrating all analysis services."""
 
 import asyncio
+import time
+from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
-from typing import Dict, Any, Optional
 import json
 
 from sqlalchemy.orm import Session
+from sqlalchemy import and_
 
-from app.core.database import get_db
-from app.models.email import Email, EmailStatus
-from app.models.detection import Detection
-from src.common.constants import ThreatLevel
-from app.services.sanitizer import content_sanitizer
-from app.services.analyzers.ai import ai_analyzer
-from app.services.analyzers.url_chain import url_analyzer
-from app.services.analyzers.intel import intel_service
-from app.services.response import response_service
-from app.services.ws import websocket_manager
 from app.config.logging import get_logger
+from app.core.database import SessionLocal
+from app.models.core.email import Email, EmailStatus
+from app.models.analysis.detection import Detection
+from app.models.analysis.link_analysis import LinkAnalysis, EmailAIResults, EmailIndicators
+from app.services.sanitizer import ContentSanitizer
+from app.services.link_analyzer import analyze_email_links
+from app.services.ai_analyzer import analyze_email_with_ai
+from app.services.threat_intel import analyze_email_threat_intel
+from app.schemas.analysis import EmailAnalysisSummary
 
 logger = get_logger(__name__)
 
 
-class EmailOrchestrator:
-    """Orchestrates the complete email analysis pipeline."""
+class EnhancedEmailOrchestrator:
+    """Enhanced orchestrator for comprehensive email analysis."""
     
     def __init__(self):
-        """Initialize orchestrator."""
-        self.processing_queue = asyncio.Queue()
-        self.is_running = False
-    
-    async def start(self):
-        """Start the orchestrator background task."""
-        if self.is_running:
-            return
+        self.sanitizer = ContentSanitizer()
         
-        self.is_running = True
-        asyncio.create_task(self._process_queue())
-        logger.info("Email orchestrator started")
+        # Analysis weights for final score calculation
+        self.analysis_weights = {
+            'content_sanitization': 0.2,
+            'link_analysis': 0.3,
+            'ai_analysis': 0.3,
+            'threat_intelligence': 0.2
+        }
+        
+        # Risk thresholds
+        self.risk_thresholds = {
+            'low': 0.3,
+            'medium': 0.6,
+            'high': 0.8,
+            'critical': 0.9
+        }
     
-    async def stop(self):
-        """Stop the orchestrator."""
-        self.is_running = False
-        logger.info("Email orchestrator stopped")
-    
-    async def process_email(self, email_id: int):
-        """Add email to processing queue."""
-        await self.processing_queue.put(email_id)
-        logger.debug(f"Email {email_id} added to processing queue")
-    
-    async def _process_queue(self):
-        """Process emails from the queue."""
-        while self.is_running:
-            try:
-                # Get next email ID with timeout
-                email_id = await asyncio.wait_for(
-                    self.processing_queue.get(), 
-                    timeout=1.0
-                )
-                
-                # Process the email
-                await self._process_single_email(email_id)
-                
-            except asyncio.TimeoutError:
-                # No emails to process, continue
-                continue
-            except Exception as e:
-                logger.error(f"Error in processing queue: {e}")
-                await asyncio.sleep(1)
-    
-    async def _process_single_email(self, email_id: int):
-        """Process a single email through the complete pipeline."""
-        with next(get_db()) as db:
-            try:
-                # Get email record
-                email = db.query(Email).filter(Email.id == email_id).first()
-                if not email:
-                    logger.error(f"Email {email_id} not found")
-                    return
-                
-                logger.info(f"Processing email {email_id} from {email.sender}")
-                
-                # Update status to processing
-                email.status = EmailStatus.PROCESSING
-                db.commit()
-                
-                # Step 1: Content Sanitization
-                await self._sanitize_content(email, db)
-                
-                # Step 2: URL Analysis
-                url_analysis = await self._analyze_urls(email)
-                
-                # Step 3: AI Analysis
-                ai_analysis = await self._ai_analysis(email)
-                
-                # Step 4: Threat Intelligence
-                intel_analysis = await self._intel_analysis(email)
-                
-                # Step 5: Combine Analysis Results
-                final_detection = await self._combine_analysis_results(
-                    email, url_analysis, ai_analysis, intel_analysis, db
-                )
-                
-                # Step 6: Response Actions
-                await self._execute_response_actions(email, final_detection, db)
-                
-                # Step 7: Real-time Notifications
-                await self._send_notifications(email, final_detection)
-                
-                # Update final status
-                email.status = EmailStatus.ANALYZED
-                email.analyzed_at = datetime.utcnow()
-                email.score = final_detection.confidence_score
-                db.commit()
-                
-                logger.info(
-                    f"Email {email_id} processing complete. "
-                    f"Phishing: {final_detection.is_phishing}, "
-                    f"Score: {final_detection.confidence_score:.3f}"
-                )
-                
-            except Exception as e:
-                logger.error(f"Failed to process email {email_id}: {e}")
-                
-                # Update status to error
-                email.status = EmailStatus.ERROR
-                db.commit()
-    
-    async def _sanitize_content(self, email: Email, db: Session):
-        """Step 1: Sanitize email content."""
+    async def process_email_comprehensive(self, email_id: int) -> EmailAnalysisSummary:
+        """Perform comprehensive analysis of an email."""
+        start_time = time.time()
+        
+        db = SessionLocal()
         try:
-            if email.raw_html:
-                # Sanitize HTML content
-                email.sanitized_html = content_sanitizer.sanitize_html(email.raw_html)
+            # Get email from database
+            email = db.query(Email).filter(Email.id == email_id).first()
+            if not email:
+                raise ValueError(f"Email {email_id} not found")
             
-            # Sanitize text content
-            if email.raw_text:
-                email.raw_text = content_sanitizer.sanitize_text(email.raw_text)
-            
+            # Update status to processing
+            email.status = EmailStatus.PROCESSING
             db.commit()
-            logger.debug(f"Content sanitized for email {email.id}")
             
-        except Exception as e:
-            logger.error(f"Content sanitization failed for email {email.id}: {e}")
-            raise
-    
-    async def _analyze_urls(self, email: Email) -> Dict[str, Any]:
-        """Step 2: Analyze URLs in email content."""
-        try:
-            content = email.raw_text or email.raw_html or ""
+            logger.info(f"Starting comprehensive analysis for email {email_id}")
             
-            # Extract URLs
-            urls = content_sanitizer.extract_urls(content)
+            # Step 1: Content sanitization and URL extraction
+            sanitization_results = await self._perform_content_sanitization(email, db)
             
-            if not urls:
-                return {"urls": [], "risk_score": 0.0, "threats": []}
+            # Step 2: Link redirection analysis (parallel)
+            link_analysis_task = self._perform_link_analysis(email, sanitization_results.get('urls', []))
             
-            # Analyze each URL
-            url_results = []
-            total_risk = 0.0
-            threats = []
+            # Step 3: AI content analysis (parallel)
+            ai_analysis_task = self._perform_ai_analysis(email, sanitization_results)
             
-            for url_info in urls[:10]:  # Limit to 10 URLs to avoid quota issues
-                try:
-                    analysis = await url_analyzer.analyze_url(url_info['url'])
-                    url_results.append(analysis)
-                    total_risk += analysis.get('risk_score', 0.0)
-                    
-                    if analysis.get('is_malicious'):
-                        threats.append(analysis)
-                        
-                except Exception as e:
-                    logger.error(f"URL analysis failed for {url_info['url']}: {e}")
+            # Step 4: Threat intelligence analysis (parallel)
+            threat_intel_task = self._perform_threat_intelligence_analysis(email, sanitization_results)
             
-            avg_risk = total_risk / len(url_results) if url_results else 0.0
-            
-            return {
-                "urls": url_results,
-                "risk_score": avg_risk,
-                "threats": threats,
-                "total_urls": len(urls)
-            }
-            
-        except Exception as e:
-            logger.error(f"URL analysis failed for email {email.id}: {e}")
-            return {"urls": [], "risk_score": 0.0, "threats": []}
-    
-    async def _ai_analysis(self, email: Email) -> Dict[str, Any]:
-        """Step 3: AI-based phishing analysis."""
-        try:
-            # Prepare content for AI analysis
-            content = email.raw_text or email.raw_html or ""
-            
-            # Analyze with AI
-            analysis = await ai_analyzer.analyze_email_content(
-                subject=email.subject or "",
-                content=content,
-                sender=email.sender,
-                headers=json.loads(email.raw_headers or "{}")
+            # Wait for all parallel analyses to complete
+            link_results, ai_results, threat_results = await asyncio.gather(
+                link_analysis_task,
+                ai_analysis_task,
+                threat_intel_task,
+                return_exceptions=True
             )
             
-            return analysis
+            # Handle any exceptions
+            if isinstance(link_results, Exception):
+                logger.error(f"Link analysis failed: {link_results}")
+                link_results = []
             
-        except Exception as e:
-            logger.error(f"AI analysis failed for email {email.id}: {e}")
-            return {
-                "phishing_probability": 0.0,
-                "confidence": 0.0,
-                "indicators": [],
-                "explanation": "AI analysis failed"
-            }
-    
-    async def _intel_analysis(self, email: Email) -> Dict[str, Any]:
-        """Step 4: Threat intelligence analysis."""
-        try:
-            # Extract sender domain
-            sender_domain = email.sender.split('@')[-1] if '@' in email.sender else ""
+            if isinstance(ai_results, Exception):
+                logger.error(f"AI analysis failed: {ai_results}")
+                ai_results = None
             
-            # Get intel on sender domain
-            domain_intel = await intel_service.check_domain(sender_domain)
+            if isinstance(threat_results, Exception):
+                logger.error(f"Threat intel analysis failed: {threat_results}")
+                threat_results = []
             
-            # Get intel on URLs (if any)
-            content = email.raw_text or email.raw_html or ""
-            urls = content_sanitizer.extract_urls(content)
-            
-            url_intel = []
-            for url_info in urls[:5]:  # Limit to avoid quota
-                try:
-                    intel = await intel_service.check_url(url_info['url'])
-                    url_intel.append(intel)
-                except Exception as e:
-                    logger.error(f"Intel check failed for URL {url_info['url']}: {e}")
-            
-            return {
-                "domain_intel": domain_intel,
-                "url_intel": url_intel,
-                "risk_indicators": self._extract_intel_indicators(domain_intel, url_intel)
-            }
-            
-        except Exception as e:
-            logger.error(f"Threat intel analysis failed for email {email.id}: {e}")
-            return {
-                "domain_intel": {},
-                "url_intel": [],
-                "risk_indicators": []
-            }
-    
-    def _extract_intel_indicators(self, domain_intel: Dict, url_intel: List[Dict]) -> List[str]:
-        """Extract risk indicators from threat intelligence."""
-        indicators = []
-        
-        # Check domain reputation
-        if domain_intel.get('is_malicious'):
-            indicators.append("Sender domain flagged as malicious")
-        
-        if domain_intel.get('reputation_score', 0) < 30:
-            indicators.append("Sender domain has poor reputation")
-        
-        # Check URL reputation
-        for url_info in url_intel:
-            if url_info.get('is_malicious'):
-                indicators.append(f"Malicious URL detected: {url_info.get('url', '')}")
-        
-        return indicators
-    
-    async def _combine_analysis_results(
-        self, 
-        email: Email, 
-        url_analysis: Dict[str, Any],
-        ai_analysis: Dict[str, Any], 
-        intel_analysis: Dict[str, Any],
-        db: Session
-    ) -> Detection:
-        """Step 5: Combine all analysis results into final detection."""
-        try:
-            # Calculate combined confidence score
-            url_score = url_analysis.get('risk_score', 0.0)
-            ai_score = ai_analysis.get('phishing_probability', 0.0)
-            
-            # Weight the scores
-            combined_score = (
-                url_score * 0.3 +  # URL analysis weight
-                ai_score * 0.6 +   # AI analysis weight (highest)
-                (1.0 if intel_analysis.get('risk_indicators') else 0.0) * 0.1  # Intel weight
+            # Step 5: Combine all results and calculate final score
+            analysis_summary = await self._combine_analysis_results(
+                email, sanitization_results, link_results, ai_results, threat_results, db
             )
             
-            # Determine if phishing
-            is_phishing = combined_score > 0.7
-            
-            # Determine threat level
-            if combined_score >= 0.9:
-                threat_level = ThreatLevel.CRITICAL
-            elif combined_score >= 0.7:
-                threat_level = ThreatLevel.HIGH
-            elif combined_score >= 0.4:
-                threat_level = ThreatLevel.MEDIUM
-            elif combined_score >= 0.2:
-                threat_level = ThreatLevel.LOW
-            else:
-                threat_level = ThreatLevel.SAFE
-            
-            # Combine indicators
-            all_indicators = []
-            all_indicators.extend(ai_analysis.get('indicators', []))
-            all_indicators.extend(intel_analysis.get('risk_indicators', []))
-            
-            if url_analysis.get('threats'):
-                all_indicators.append(f"Malicious URLs detected: {len(url_analysis['threats'])}")
+            # Step 6: Update email status and final score
+            email.score = analysis_summary.overall_risk_score
+            email.status = EmailStatus.ANALYZED if analysis_summary.overall_risk_score < 0.7 else EmailStatus.QUARANTINED
+            email.analyzed_at = datetime.utcnow()
             
             # Create detection record
             detection = Detection(
-                email_id=email.id,
-                user_id=email.user_id,
-                is_phishing=is_phishing,
-                confidence_score=combined_score,
-                threat_level=threat_level,
-                indicators=json.dumps(all_indicators),
-                model_version="orchestrator_v1.0",
-                analysis_metadata=json.dumps({
-                    "url_analysis": url_analysis,
-                    "ai_analysis": ai_analysis,
-                    "intel_analysis": intel_analysis
-                })
+                email_id=email_id,
+                model_name="enhanced_orchestrator",
+                confidence=analysis_summary.overall_risk_score,
+                is_phishing=analysis_summary.overall_risk_score > 0.6,
+                details={
+                    'analysis_summary': analysis_summary.dict(),
+                    'risk_factors': analysis_summary.risk_factors,
+                    'recommendations': analysis_summary.recommendations
+                }
             )
-            
             db.add(detection)
             db.commit()
-            db.refresh(detection)
             
-            return detection
+            analysis_summary.analysis_duration = time.time() - start_time
+            analysis_summary.analysis_status = "completed"
+            
+            logger.info(f"Comprehensive analysis completed for email {email_id} in {analysis_summary.analysis_duration:.2f}s")
+            
+            return analysis_summary
             
         except Exception as e:
-            logger.error(f"Failed to combine analysis results: {e}")
-            raise
+            logger.error(f"Email analysis failed for email {email_id}: {str(e)}")
+            
+            # Update email status to error
+            if 'email' in locals():
+                email.status = EmailStatus.ERROR
+                db.commit()
+            
+            # Return error summary
+            return EmailAnalysisSummary(
+                email_id=email_id,
+                overall_risk_score=0.5,  # Neutral score for errors
+                risk_level="unknown",
+                analysis_status="failed",
+                risk_factors=[f"Analysis failed: {str(e)}"],
+                recommendations=["Manual review required due to analysis failure"],
+                analysis_duration=time.time() - start_time
+            )
+        
+        finally:
+            db.close()
     
-    async def _execute_response_actions(self, email: Email, detection: Detection, db: Session):
-        """Step 6: Execute response actions based on detection."""
+    async def _perform_content_sanitization(self, email: Email, db: Session) -> Dict[str, Any]:
+        """Perform content sanitization and extract metadata."""
         try:
-            if detection.is_phishing:
-                # Execute automated response
-                await response_service.handle_phishing_detection(email, detection)
-                
-                # Update email status
-                if detection.threat_level in [ThreatLevel.HIGH, ThreatLevel.CRITICAL]:
-                    email.status = EmailStatus.QUARANTINED
-                
-                logger.warning(
-                    f"Phishing email detected and quarantined: {email.id}",
-                    extra={
-                        "email_id": email.id,
-                        "sender": email.sender,
-                        "confidence": detection.confidence_score,
-                        "threat_level": detection.threat_level.value
-                    }
-                )
-            else:
-                email.status = EmailStatus.SAFE
+            # Sanitize HTML content
+            if email.raw_html:
+                sanitized_html = self.sanitizer.sanitize_html(email.raw_html)
+                email.sanitized_html = sanitized_html
+            
+            # Extract URLs from content
+            content_to_analyze = f"{email.raw_html or ''} {email.raw_text or ''}"
+            urls = self.sanitizer.extract_urls(content_to_analyze)
+            
+            # Extract domains
+            domains = []
+            for url in urls:
+                try:
+                    from urllib.parse import urlparse
+                    domain = urlparse(url).netloc.lower()
+                    if domain:
+                        domains.append(domain)
+                except:
+                    continue
+            
+            # Security analysis
+            security_issues = []
+            if email.raw_html:
+                if '<script' in email.raw_html.lower():
+                    security_issues.append("Contains JavaScript")
+                if 'javascript:' in email.raw_html.lower():
+                    security_issues.append("Contains JavaScript URLs")
+                if any(event in email.raw_html.lower() for event in ['onclick', 'onload', 'onerror']):
+                    security_issues.append("Contains event handlers")
             
             db.commit()
             
-        except Exception as e:
-            logger.error(f"Response action execution failed: {e}")
-    
-    async def _send_notifications(self, email: Email, detection: Detection):
-        """Step 7: Send real-time notifications."""
-        try:
-            if detection.is_phishing:
-                # Send WebSocket notification
-                await websocket_manager.send_phishing_alert(
-                    email.user_id,
-                    {
-                        "email_id": email.id,
-                        "sender": email.sender,
-                        "subject": email.subject,
-                        "confidence_score": detection.confidence_score,
-                        "threat_level": detection.threat_level.value,
-                        "timestamp": datetime.utcnow().isoformat()
-                    }
-                )
+            return {
+                'urls': urls,
+                'domains': list(set(domains)),
+                'security_issues': security_issues,
+                'sanitized_successfully': email.sanitized_html is not None
+            }
             
         except Exception as e:
-            logger.error(f"Notification sending failed: {e}")
+            logger.error(f"Content sanitization failed: {str(e)}")
+            return {
+                'urls': [],
+                'domains': [],
+                'security_issues': [f"Sanitization failed: {str(e)}"],
+                'sanitized_successfully': False
+            }
+    
+    async def _perform_link_analysis(self, email: Email, urls: List[str]) -> List[LinkAnalysis]:
+        """Perform link redirection analysis."""
+        try:
+            if not urls:
+                return []
+            
+            # Limit to first 10 URLs to avoid excessive processing
+            limited_urls = urls[:10]
+            
+            # Analyze each URL
+            results = await analyze_email_links(email.id, limited_urls)
+            
+            logger.info(f"Analyzed {len(results)} links for email {email.id}")
+            return results
+            
+        except Exception as e:
+            logger.error(f"Link analysis failed for email {email.id}: {str(e)}")
+            return []
+    
+    async def _perform_ai_analysis(self, email: Email, sanitization_results: Dict[str, Any]) -> Optional[EmailAIResults]:
+        """Perform AI content analysis."""
+        try:
+            # Prepare content for AI analysis
+            content_text = email.raw_text or ""
+            if not content_text and email.sanitized_html:
+                # Extract text from HTML if no plain text available
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(email.sanitized_html, 'html.parser')
+                content_text = soup.get_text()
+            
+            if len(content_text.strip()) < 10:
+                logger.warning(f"Email {email.id} has insufficient content for AI analysis")
+                return None
+            
+            # Perform AI analysis
+            result = await analyze_email_with_ai(
+                email_id=email.id,
+                subject=email.subject or "",
+                sender=email.sender,
+                content_text=content_text,
+                content_html=email.sanitized_html,
+                link_domains=sanitization_results.get('domains', [])
+            )
+            
+            logger.info(f"AI analysis completed for email {email.id}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"AI analysis failed for email {email.id}: {str(e)}")
+            return None
+    
+    async def _perform_threat_intelligence_analysis(self, email: Email, sanitization_results: Dict[str, Any]) -> List[EmailIndicators]:
+        """Perform threat intelligence analysis."""
+        try:
+            # Combine all content for indicator extraction
+            content = f"{email.raw_html or ''} {email.raw_text or ''}"
+            headers = email.raw_headers or ""
+            
+            # Analyze threat intelligence
+            results = await analyze_email_threat_intel(
+                email_id=email.id,
+                content=content,
+                headers=headers
+            )
+            
+            logger.info(f"Threat intelligence analysis completed for email {email.id}")
+            return results
+            
+        except Exception as e:
+            logger.error(f"Threat intelligence analysis failed for email {email.id}: {str(e)}")
+            return []
+    
+    async def _combine_analysis_results(self, email: Email, sanitization_results: Dict[str, Any],
+                                      link_results: List[LinkAnalysis], ai_results: Optional[EmailAIResults],
+                                      threat_results: List[EmailIndicators], db: Session) -> EmailAnalysisSummary:
+        """Combine all analysis results into a comprehensive summary."""
+        
+        # Calculate component scores
+        sanitization_score = self._calculate_sanitization_score(sanitization_results)
+        link_score = self._calculate_link_score(link_results)
+        ai_score = ai_results.ai_score if ai_results else 0.5  # Neutral score if no AI analysis
+        threat_score = self._calculate_threat_score(threat_results)
+        
+        # Calculate weighted overall score
+        overall_score = (
+            sanitization_score * self.analysis_weights['content_sanitization'] +
+            link_score * self.analysis_weights['link_analysis'] +
+            ai_score * self.analysis_weights['ai_analysis'] +
+            threat_score * self.analysis_weights['threat_intelligence']
+        )
+        
+        # Determine risk level
+        risk_level = self._determine_risk_level(overall_score)
+        
+        # Collect risk factors and recommendations
+        risk_factors = []
+        recommendations = []
+        
+        # Add sanitization risks
+        if sanitization_results.get('security_issues'):
+            risk_factors.extend(sanitization_results['security_issues'])
+            recommendations.append("Content contains potentially dangerous elements")
+        
+        # Add link analysis risks
+        high_risk_links = [link for link in link_results if link.risk_score > 0.7]
+        if high_risk_links:
+            risk_factors.append(f"Contains {len(high_risk_links)} high-risk links")
+            recommendations.append("Review suspicious links before clicking")
+        
+        # Add AI analysis insights
+        if ai_results and ai_results.ai_score > 0.6:
+            risk_factors.append(f"AI detected phishing indicators: {ai_results.summary}")
+            recommendations.append("High probability of phishing - exercise caution")
+        
+        # Add threat intelligence risks
+        malicious_indicators = [indicator for indicator in threat_results if indicator.reputation_score > 0.7]
+        if malicious_indicators:
+            risk_factors.append(f"Contains {len(malicious_indicators)} known malicious indicators")
+            recommendations.append("Contains known threats - avoid interaction")
+        
+        # Count statistics
+        total_links = len(link_results)
+        suspicious_links = len([link for link in link_results if link.risk_score > 0.5])
+        malicious_indicator_count = len(malicious_indicators)
+        
+        # Create summary
+        summary = EmailAnalysisSummary(
+            email_id=email.id,
+            overall_risk_score=overall_score,
+            risk_level=risk_level,
+            analysis_status="completed",
+            ai_analysis=ai_results,
+            total_links=total_links,
+            suspicious_links=suspicious_links,
+            malicious_indicators=malicious_indicator_count,
+            risk_factors=risk_factors,
+            recommendations=recommendations
+        )
+        
+        # Add link and threat intel results to summary (convert to response models)
+        try:
+            from app.schemas.analysis import LinkAnalysisResponse, EmailIndicatorsResponse
+            
+            summary.link_analysis = [
+                LinkAnalysisResponse.from_orm(link) for link in link_results
+            ]
+            summary.threat_intel = [
+                EmailIndicatorsResponse.from_orm(indicator) for indicator in threat_results
+            ]
+        except Exception as e:
+            logger.warning(f"Failed to convert analysis results to response models: {str(e)}")
+        
+        return summary
+    
+    def _calculate_sanitization_score(self, results: Dict[str, Any]) -> float:
+        """Calculate risk score from sanitization results."""
+        score = 0.0
+        
+        security_issues = results.get('security_issues', [])
+        for issue in security_issues:
+            if 'JavaScript' in issue:
+                score += 0.4
+            elif 'event handlers' in issue:
+                score += 0.3
+            else:
+                score += 0.1
+        
+        return min(score, 1.0)
+    
+    def _calculate_link_score(self, link_results: List[LinkAnalysis]) -> float:
+        """Calculate average risk score from link analysis."""
+        if not link_results:
+            return 0.0
+        
+        total_score = sum(link.risk_score for link in link_results)
+        avg_score = total_score / len(link_results)
+        
+        # Boost score if multiple high-risk links
+        high_risk_count = len([link for link in link_results if link.risk_score > 0.7])
+        if high_risk_count > 1:
+            avg_score = min(avg_score + (high_risk_count * 0.1), 1.0)
+        
+        return avg_score
+    
+    def _calculate_threat_score(self, threat_results: List[EmailIndicators]) -> float:
+        """Calculate risk score from threat intelligence."""
+        if not threat_results:
+            return 0.0
+        
+        # Find highest reputation score
+        max_score = max(indicator.reputation_score or 0.0 for indicator in threat_results)
+        
+        # Count malicious indicators
+        malicious_count = len([
+            indicator for indicator in threat_results 
+            if (indicator.reputation_score or 0.0) > 0.7
+        ])
+        
+        # Boost score based on number of malicious indicators
+        if malicious_count > 0:
+            max_score = min(max_score + (malicious_count * 0.1), 1.0)
+        
+        return max_score
+    
+    def _determine_risk_level(self, score: float) -> str:
+        """Determine risk level from overall score."""
+        if score >= self.risk_thresholds['critical']:
+            return 'critical'
+        elif score >= self.risk_thresholds['high']:
+            return 'high'
+        elif score >= self.risk_thresholds['medium']:
+            return 'medium'
+        else:
+            return 'low'
 
 
-# Global orchestrator instance
-email_orchestrator = EmailOrchestrator()
+# Singleton instance
+orchestrator = EnhancedEmailOrchestrator()
+
+
+async def process_email_comprehensive(email_id: int) -> EmailAnalysisSummary:
+    """Process email with comprehensive analysis."""
+    return await orchestrator.process_email_comprehensive(email_id)

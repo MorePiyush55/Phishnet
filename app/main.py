@@ -21,9 +21,10 @@ from app.core.error_tracking import (
     RequestLoggingMiddleware
 )
 from app.middleware.security import add_security_middleware
+from app.middleware.oauth_security import create_oauth_security_middleware
 from app.observability.tracing import setup_observability
 from app.observability.correlation import CorrelationIDMiddleware as NewCorrelationIDMiddleware, StructuredLoggingMiddleware
-from app.api import auth, dashboard, email_analysis, analysis, scoring, health
+from app.api import auth, dashboard, email_analysis, analysis, scoring, health, gmail_oauth
 from app.api.v1 import v1_router
 from app.api.v1.websocket import router as websocket_router
 from app.api.v1.health import router as health_v1_router
@@ -106,6 +107,10 @@ security_config = {
 }
 add_security_middleware(app, security_config)
 
+# Add OAuth-specific security middleware
+oauth_security_middleware = create_oauth_security_middleware()
+app.add_middleware(type(oauth_security_middleware), **oauth_security_middleware.__dict__)
+
 # Include API v1 routes (standardized contracts)
 app.include_router(v1_router, tags=["API v1"])
 
@@ -118,6 +123,7 @@ app.include_router(health_v1_router, prefix="/api/v1", tags=["Health v1"])
 # Include legacy API routers (for backward compatibility)
 app.include_router(health.router, tags=["Health"])
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+app.include_router(gmail_oauth.router, tags=["Gmail OAuth"])
 app.include_router(email_analysis.router, prefix="/api/email", tags=["Email Analysis"])
 from app.api import federated
 app.include_router(federated.router, prefix="/api/federated", tags=["Federated Learning"])

@@ -338,6 +338,56 @@ class ApiService {
     return response.data;
   }
 
+  // Gmail OAuth API methods
+  async getGmailStatus(): Promise<any> {
+    const response = await axios.get('/auth/gmail/status');
+    return response.data;
+  }
+
+  async getGmailScopes(): Promise<any> {
+    const response = await axios.get('/auth/gmail/scopes');
+    return response.data;
+  }
+
+  async startGmailOAuth(): Promise<any> {
+    const response = await axios.post('/auth/gmail/start', {});
+    return response.data;
+  }
+
+  async revokeGmailOAuth(): Promise<any> {
+    const response = await axios.post('/auth/gmail/revoke', {});
+    return response.data;
+  }
+
+  async triggerGmailScan(options: { force_scan?: boolean; days_back?: number }): Promise<any> {
+    const response = await axios.post('/auth/gmail/scan', options);
+    return response.data;
+  }
+
+  async setupGmailWatch(): Promise<any> {
+    const response = await axios.post('/auth/gmail/watch/setup', {});
+    return response.data;
+  }
+
+  async stopGmailWatch(): Promise<any> {
+    const response = await axios.post('/auth/gmail/watch/stop', {});
+    return response.data;
+  }
+
+  async getGmailMessages(query?: string, maxResults?: number): Promise<any> {
+    const params = new URLSearchParams();
+    if (query) params.append('query', query);
+    if (maxResults) params.append('max_results', maxResults.toString());
+    
+    const response = await axios.get(`/auth/gmail/messages?${params.toString()}`);
+    return response.data;
+  }
+
+  async getGmailHealthCheck(): Promise<any> {
+    const response = await axios.get('/auth/gmail/health');
+    return response.data;
+  }
+
   // Utility methods
   isAuthenticated(): boolean {
     return !!this.accessToken;
