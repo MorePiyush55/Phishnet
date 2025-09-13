@@ -14,8 +14,7 @@ alembic==1.13.1
 redis==5.0.1
 
 # Data Models & Validation
-pydantic[email]==2.5.0
-pydantic-settings==2.1.0
+pydantic[email]==1.10.14
 
 # Authentication & Security
 python-jose[cryptography]==3.3.0
