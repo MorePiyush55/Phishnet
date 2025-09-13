@@ -9,7 +9,7 @@
   "trailingSlash": false,
   "rewrites": [
     {
-      "source": "/((?!_next|favicon.ico|sw.js|manifest.json|assets).*)",
+      "source": "/((?!_next|favicon.ico|sw.js|manifest.json).*)",
       "destination": "/index.html"
     }
   ],
