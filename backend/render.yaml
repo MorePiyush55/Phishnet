@@ -2,14 +2,28 @@ services:
   - type: web
     name: phishnet-backend
     env: python
-    plan: free
+    plan: starter
     buildCommand: pip install --no-cache-dir -r requirements.txt
-    startCommand: python -m app.main
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
         value: 3.13
       - key: PORT
         generateValue: true
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        value: https://phishnet-backend.onrender.com/auth/oauth2callback
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: FRONTEND_URL
+        value: https://phishnet-frontend.vercel.app
+      - key: ENVIRONMENT
+        value: production
+      - key: CORS_ORIGINS
+        value: https://phishnet-frontend.vercel.app,https://localhost:3000
       - key: DATABASE_URL
         fromDatabase:
           name: phishnet-db
