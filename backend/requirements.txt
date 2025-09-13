@@ -35,6 +35,9 @@ bleach==6.1.0
 # Email validation
 email-validator==2.1.0.post1
 
+# Logging
+structlog==24.4.0
+
 # Monitoring and Metrics
 prometheus_client==0.17.1
 

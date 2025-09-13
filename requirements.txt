@@ -34,3 +34,6 @@ bleach==6.1.0
 
 # Email validation
 email-validator==2.1.0
+
+# Logging
+structlog==24.4.0
