@@ -9,7 +9,7 @@
   "trailingSlash": false,
   "rewrites": [
     {
-      "source": "/((?!_next|favicon.ico|sw.js|manifest.json|assets).*)",
+      "source": "/((?!api|_next|favicon.ico|sw.js|manifest.json|assets|static).*)",
       "destination": "/index.html"
     }
   ],
@@ -49,7 +49,7 @@
       ]
     },
     {
-      "source": "/(.*\\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot))",
+      "source": "/assets/(.*)",
       "headers": [
         {
           "key": "Cache-Control",
