@@ -13,8 +13,9 @@ alembic==1.12.1
 # Redis & Caching
 redis==4.6.0
 
-# Data Models & Validation (Rust-free versions)
-pydantic==1.10.14
+# Data Models & Validation (Python 3.13 compatible)
+pydantic==2.9.2
+pydantic-settings==2.5.2
 
 # Authentication & Security
 python-jose[cryptography]==3.3.0

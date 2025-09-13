@@ -5,7 +5,8 @@ import secrets
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseSettings, EmailStr, Field, validator
+from pydantic_settings import BaseSettings
+from pydantic import EmailStr, Field, field_validator
 
 
 class Environment(str, Enum):
@@ -185,7 +186,7 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str = "redis://localhost:6379/1"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
     
-    @validator("SECRET_KEY")
+    @field_validator("SECRET_KEY")
     @classmethod
     def validate_secret_key(cls, v: str) -> str:
         """Validate secret key length."""
@@ -193,7 +194,7 @@ class Settings(BaseSettings):
             raise ValueError("SECRET_KEY must be at least 32 characters long")
         return v
     
-    @validator("DATABASE_URL")
+    @field_validator("DATABASE_URL")
     @classmethod
     def validate_database_url(cls, v: str) -> str:
         """Validate database URL format."""
@@ -201,7 +202,7 @@ class Settings(BaseSettings):
             raise ValueError("DATABASE_URL must be a PostgreSQL or SQLite URL")
         return v
     
-    @validator("ENVIRONMENT")
+    @field_validator("ENVIRONMENT")
     @classmethod
     def validate_environment(cls, v: Environment) -> Environment:
         """Validate environment setting."""
@@ -260,10 +261,11 @@ class Settings(BaseSettings):
                 'database': True  # Database password is optional for SQLite
             }
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-        extra = "ignore"  # Ignore extra environment variables
+    model_config = {
+        "env_file": ".env", 
+        "case_sensitive": True,
+        "extra": "ignore"  # Ignore extra environment variables
+    }
 
 
 # Global settings instance
