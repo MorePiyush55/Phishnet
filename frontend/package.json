@@ -2,6 +2,7 @@
   "name": "phishnet-dashboard",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "dependencies": {
     "@tanstack/react-query": "^5.0.0",
     "@tanstack/react-query-devtools": "^5.0.0",

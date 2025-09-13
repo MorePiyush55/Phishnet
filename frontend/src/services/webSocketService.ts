@@ -237,9 +237,8 @@ class WebSocketService {
 }
 
 // Create singleton instance
-const WS_URL = (typeof window !== 'undefined' && window.location.protocol === 'https:') 
-  ? 'wss://localhost:8000/api/v1/ws' 
-  : 'ws://localhost:8000/api/v1/ws';
+const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || import.meta.env.VITE_API_URL || 'https://phishnet-1ed1.onrender.com';
+const WS_URL = WS_BASE_URL.replace('https://', 'wss://').replace('http://', 'ws://') + '/api/v1/ws';
 
 export const webSocketService = new WebSocketService(
   WS_URL,

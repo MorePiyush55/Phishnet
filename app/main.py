@@ -25,6 +25,7 @@ from app.middleware.oauth_security import create_oauth_security_middleware
 from app.observability.tracing import setup_observability
 from app.observability.correlation import CorrelationIDMiddleware as NewCorrelationIDMiddleware, StructuredLoggingMiddleware
 from app.api import auth, dashboard, email_analysis, analysis, scoring, health, gmail_oauth
+from app.api.google_oauth import router as google_oauth_router
 from app.api.v1 import v1_router
 from app.api.v1.websocket import router as websocket_router
 from app.api.v1.health import router as health_v1_router
@@ -124,6 +125,7 @@ app.include_router(health_v1_router, prefix="/api/v1", tags=["Health v1"])
 app.include_router(health.router, tags=["Health"])
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(gmail_oauth.router, tags=["Gmail OAuth"])
+app.include_router(google_oauth_router, tags=["Google OAuth"])
 app.include_router(email_analysis.router, prefix="/api/email", tags=["Email Analysis"])
 from app.api import federated
 app.include_router(federated.router, prefix="/api/federated", tags=["Federated Learning"])
