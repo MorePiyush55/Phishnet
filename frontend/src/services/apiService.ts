@@ -295,6 +295,30 @@ class ApiService {
     return response.data;
   }
 
+  // Email Analysis API
+  async analyzeEmail(emailData: {
+    subject: string;
+    sender: string;
+    content: string;
+    headers?: Record<string, string>;
+  }): Promise<{
+    is_phishing: boolean;
+    confidence: number;
+    risk_level: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+    threats_detected: string[];
+    analysis_details: {
+      sender_analysis: any;
+      content_analysis: any;
+      link_analysis: any;
+      attachment_analysis: any;
+    };
+    recommendations: string[];
+    timestamp: string;
+  }> {
+    const response = await axios.post('/api/analyze/email', emailData);
+    return response.data;
+  }
+
   async getLinkScreenshot(linkId: number): Promise<string> {
     const response: AxiosResponse<{ screenshot_url: string }> = await axios.post(`/links/${linkId}/screenshot`);
     return response.data.screenshot_url;

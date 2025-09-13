@@ -269,6 +269,22 @@ const SOCDashboard = () => {
           <div className="flex items-center space-x-4">
             <Shield className="w-8 h-8 text-blue-400" />
             <h1 className="text-2xl font-bold text-white">PhishNet SOC Dashboard</h1>
+            
+            {/* Navigation */}
+            <nav className="flex items-center space-x-4 ml-8">
+              <a 
+                href="/dashboard" 
+                className="px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-gray-700 rounded-md transition-colors"
+              >
+                Dashboard
+              </a>
+              <a 
+                href="/test" 
+                className="px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-gray-700 rounded-md transition-colors"
+              >
+                Email Test
+              </a>
+            </nav>
           </div>
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2 text-sm text-gray-300">

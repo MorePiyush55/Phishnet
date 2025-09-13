@@ -6,6 +6,7 @@ import { RequireAuth } from './hooks/useAuth';
 import SOCDashboard from './components/SOCDashboard';
 import LoginPage from './components/LoginPage';
 import ConnectedPage from './pages/ConnectedPage';
+import { EmailAnalysisTest } from './components/EmailAnalysisTest';
 import { ErrorProvider } from './components/ErrorHandling';
 
 // Create a client
@@ -49,6 +50,16 @@ function App() {
                 element={
                   <RequireAuth>
                     <SOCDashboard />
+                  </RequireAuth>
+                } 
+              />
+              
+              {/* Email Analysis Test */}
+              <Route 
+                path="/test" 
+                element={
+                  <RequireAuth>
+                    <EmailAnalysisTest />
                   </RequireAuth>
                 } 
               />

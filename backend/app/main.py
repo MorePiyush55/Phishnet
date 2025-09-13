@@ -125,8 +125,9 @@ app.include_router(health.router, tags=["Health"])
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(gmail_oauth.router, tags=["Gmail OAuth"])
 app.include_router(email_analysis.router, prefix="/api/email", tags=["Email Analysis"])
-from app.api import federated
+from app.api import federated, simple_analysis
 app.include_router(federated.router, prefix="/api/federated", tags=["Federated Learning"])
+app.include_router(simple_analysis.router, tags=["Simple Analysis"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["Dashboard"])
 app.include_router(analysis.router, prefix="/api", tags=["Advanced Analysis"])
 app.include_router(scoring.router, prefix="/api", tags=["Scoring & Response"])
