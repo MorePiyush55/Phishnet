@@ -8,12 +8,12 @@ from sqlalchemy import (
     Column, Integer, String, Text, Boolean, DateTime, Numeric, 
     ForeignKey, JSON, Index, UniqueConstraint
 )
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, Session
+from app.core.database import Base
 from sqlalchemy.sql import func
 import enum
 
-Base = declarative_base()
+ 
 
 class UserRole(str, enum.Enum):
     ADMIN = "admin"
@@ -50,6 +50,7 @@ class IndicatorType(str, enum.Enum):
 class User(Base):
     """User accounts with role-based access control"""
     __tablename__ = "users"
+    __table_args__ = {"extend_existing": True}
     
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
@@ -108,6 +109,7 @@ class Email(Base):
         Index('idx_emails_status_received', 'status', 'received_at'),
         Index('idx_emails_from_received', 'from_addr', 'received_at'),
         Index('idx_emails_score_status', 'score', 'status'),
+        {"extend_existing": True},
     )
     
     def __repr__(self):
@@ -139,6 +141,7 @@ class Link(Base):
     __table_args__ = (
         Index('idx_links_email_risk', 'email_id', 'risk'),
         Index('idx_links_analyzed_risk', 'analyzed_at', 'risk'),
+        {"extend_existing": True},
     )
     
     def __repr__(self):
@@ -169,6 +172,7 @@ class EmailAIResult(Base):
     __table_args__ = (
         Index('idx_ai_results_email_model', 'email_id', 'model'),
         Index('idx_ai_results_score_created', 'score', 'created_at'),
+        {"extend_existing": True},
     )
     
     def __repr__(self):
@@ -199,6 +203,7 @@ class EmailIndicator(Base):
         Index('idx_indicators_indicator_type', 'indicator', 'type'),
         Index('idx_indicators_reputation_created', 'reputation', 'created_at'),
         Index('idx_indicators_source_type', 'source', 'type'),
+        {"extend_existing": True},
     )
     
     def __repr__(self):
@@ -230,6 +235,7 @@ class Action(Base):
         Index('idx_actions_email_type', 'email_id', 'type'),
         Index('idx_actions_created_by_type', 'created_by', 'type'),
         Index('idx_actions_created_success', 'created_at', 'success'),
+        {"extend_existing": True},
     )
     
     def __repr__(self):
@@ -264,6 +270,7 @@ class Audit(Base):
         Index('idx_audits_actor_action', 'actor_id', 'action'),
         Index('idx_audits_resource_ts', 'resource', 'ts'),
         Index('idx_audits_request_id', 'request_id'),
+        {"extend_existing": True},
     )
     
     def __repr__(self):
@@ -291,6 +298,7 @@ class RefreshToken(Base):
     __table_args__ = (
         Index('idx_refresh_tokens_user_exp', 'user_id', 'exp'),
         Index('idx_refresh_tokens_revoked_exp', 'revoked', 'exp'),
+        {"extend_existing": True},
     )
     
     def __repr__(self):

@@ -13,7 +13,6 @@ from enum import Enum
 from dataclasses import dataclass, asdict
 from contextlib import contextmanager
 from sqlalchemy import Column, String, DateTime, Text, Integer, Boolean, Index
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -105,7 +104,7 @@ class AuditEvent:
     affected_resources: Optional[List[str]] = None
 
 # Database model for audit logs
-Base = declarative_base()
+from backend.app.core.database import Base
 
 class AuditLog(Base):
     """Database model for audit logs"""

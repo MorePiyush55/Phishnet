@@ -215,7 +215,7 @@ class JobLog(Base):
     
     # Message content
     message = Column(Text, nullable=False)
-    metadata = Column(JSON, nullable=True)  # Additional structured data
+    entry_metadata = Column(JSON, nullable=True)  # Additional structured data (renamed from metadata)
     
     # Error tracking
     exception_type = Column(String(255), nullable=True)
@@ -258,7 +258,7 @@ class WorkerHealth(Base):
     # Metadata
     version = Column(String(50), nullable=True)
     hostname = Column(String(255), nullable=True)
-    metadata = Column(JSON, nullable=True)
+    entry_metadata = Column(JSON, nullable=True)
     
     @property
     def is_healthy(self) -> bool:

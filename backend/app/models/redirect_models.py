@@ -6,12 +6,11 @@ browser results, and cloaking detection data.
 """
 
 from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Text, JSON, ForeignKey
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import uuid
 
-Base = declarative_base()
+from backend.app.core.database import Base
 
 
 class RedirectAnalysis(Base):

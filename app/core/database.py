@@ -33,6 +33,11 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
+def get_db_session() -> Generator[Session, None, None]:
+    """Alias for get_db to preserve historic import name used by parts of the codebase/tests."""
+    yield from get_db()
+
+
 def init_db() -> None:
     """Initialize database tables."""
     Base.metadata.create_all(bind=engine)

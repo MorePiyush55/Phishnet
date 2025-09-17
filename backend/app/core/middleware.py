@@ -90,20 +90,41 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
 def setup_middleware(app: FastAPI, redis_client: Optional[redis.Redis] = None) -> None:
     """Setup all middleware for the FastAPI application."""
-    
-    # CORS middleware
+    # CORS middleware - ensure CORS_ORIGINS is a list and not a wildcard in production
+    cors_origins = settings.CORS_ORIGINS
+    # Accept comma-separated env var strings as well
+    if isinstance(cors_origins, str):
+        cors_origins = [o.strip() for o in cors_origins.split(',') if o.strip()]
+
+    # In production, do not allow '*' for origins
+    if not settings.DEBUG and any(o == '*' for o in cors_origins):
+        logger.warning('CORS_ORIGINS contains wildcard "*" in production; this will be ignored for safety')
+        cors_origins = [o for o in cors_origins if o != '*']
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.CORS_ORIGINS,
+        allow_origins=cors_origins,
         allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
         allow_methods=settings.CORS_ALLOW_METHODS,
         allow_headers=settings.CORS_ALLOW_HEADERS,
     )
-    
-    # Trusted host middleware
+
+    # Trusted host middleware - include FRONTEND_URL when provided and not DEBUG
+    trusted = ["localhost", "127.0.0.1"] if not settings.DEBUG else ["*"]
+    try:
+        frontend = settings.FRONTEND_URL
+        if frontend and not settings.DEBUG:
+            # extract hostname
+            from urllib.parse import urlparse
+            host = urlparse(frontend).hostname
+            if host:
+                trusted.append(host)
+    except Exception:
+        logger.debug('Unable to parse FRONTEND_URL for TrustedHostMiddleware')
+
     app.add_middleware(
         TrustedHostMiddleware,
-        allowed_hosts=["*"] if settings.DEBUG else ["localhost", "127.0.0.1"],
+        allowed_hosts=trusted,
     )
     
     # Custom middleware

@@ -13,8 +13,8 @@ from enum import Enum
 from dataclasses import dataclass, asdict
 from contextlib import contextmanager
 from sqlalchemy import Column, String, DateTime, Text, Integer, Boolean, Index
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session
+from app.core.database import Base
 
 from app.core.database import get_db
 from app.core.encryption import EncryptedAudit, get_encryption_manager
@@ -104,12 +104,12 @@ class AuditEvent:
     result: Optional[str] = None  # success, failure, partial
     affected_resources: Optional[List[str]] = None
 
-# Database model for audit logs
-Base = declarative_base()
+# Database model for audit logs (Base imported from app.core.database)
 
 class AuditLog(Base):
     """Database model for audit logs"""
     __tablename__ = "audit_logs"
+    __table_args__ = {"extend_existing": True}
     
     id = Column(Integer, primary_key=True, index=True)
     event_id = Column(String(36), unique=True, index=True)
@@ -145,6 +145,7 @@ class AuditLog(Base):
         Index('idx_audit_request_id', 'request_id'),
         Index('idx_audit_type_severity', 'event_type', 'severity'),
         Index('idx_audit_expires', 'expires_at'),
+        {"extend_existing": True},
     )
 
 class AuditLogger:

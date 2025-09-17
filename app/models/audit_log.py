@@ -31,6 +31,8 @@ class AuditLog(Base):
     """
     
     __tablename__ = "audit_logs"
+    # allow re-definition when multiple model files are imported during tests
+    __table_args__ = {"extend_existing": True}
     
     # Primary fields
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -76,6 +78,7 @@ class AuditLog(Base):
     compliance_tags = Column(JSON, nullable=True)  # Compliance-related tags
     
     # Database indexes for performance
+    # allow re-definition when multiple model files are imported during tests
     __table_args__ = (
         Index('idx_audit_user_action_time', 'user_id', 'action', 'created_at'),
         Index('idx_audit_category_severity_time', 'category', 'severity', 'created_at'),
@@ -84,6 +87,9 @@ class AuditLog(Base):
         Index('idx_audit_trace_time', 'trace_id', 'created_at'),
         Index('idx_audit_security_flags', 'is_suspicious', 'security_violation', 'created_at'),
         Index('idx_audit_resource', 'resource_type', 'resource_id', 'created_at'),
+        {
+            "extend_existing": True
+        }
     )
     
     def __repr__(self):

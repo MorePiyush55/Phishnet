@@ -400,6 +400,40 @@ class AuthService:
         return decorator
 
 
+# --- Compatibility helpers used by older modules ---
+from app.config.settings import settings as _settings
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """Create a JWT access token quickly for tests/imports.
+
+    This is a lightweight convenience wrapper. For production use, prefer
+    JWTService.create_token_pair or AuthService.create_user_tokens.
+    """
+    import jwt as _jwt
+    now = datetime.utcnow()
+    payload = data.copy()
+    if expires_delta is None:
+        expires_delta = timedelta(minutes=getattr(_settings, 'ACCESS_TOKEN_EXPIRE_MINUTES', 30))
+    payload.update({
+        "exp": int((now + expires_delta).timestamp()),
+        "iat": int(now.timestamp())
+    })
+    return _jwt.encode(payload, _settings.SECRET_KEY, algorithm=getattr(_settings, 'ALGORITHM', 'HS256'))
+
+
+def create_refresh_token(data: dict) -> str:
+    """Create a JWT refresh token (conservative helper)."""
+    import jwt as _jwt
+    now = datetime.utcnow()
+    payload = data.copy()
+    payload.update({
+        "exp": int((now + timedelta(days=getattr(_settings, 'REFRESH_TOKEN_EXPIRE_DAYS', 30))).timestamp()),
+        "iat": int(now.timestamp())
+    })
+    return _jwt.encode(payload, _settings.SECRET_KEY, algorithm=getattr(_settings, 'ALGORITHM', 'HS256'))
+
+
+
 # Global auth service instance
 _auth_service: Optional[AuthService] = None
 

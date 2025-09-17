@@ -202,3 +202,13 @@ class DetectionListResponse(BaseModel):
     has_next: bool
     has_prev: bool
 
+
+class EmailCreate(BaseModel):
+    """Minimal EmailCreate schema expected by some tests."""
+    sender: str
+    subject: str
+    content: str
+
+    class Config:
+        orm_mode = True
+

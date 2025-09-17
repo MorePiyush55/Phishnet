@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text, JSON
+from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text, JSON, ForeignKey
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -15,7 +15,7 @@ class FederatedClient(Base):
     __tablename__ = "federated_clients"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     client_id = Column(String(100), unique=True, index=True, nullable=False)
     name = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
@@ -56,7 +56,7 @@ class FederatedTrainingRound(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     round_number = Column(Integer, nullable=False, index=True)
-    client_id = Column(Integer, nullable=False, index=True)
+    client_id = Column(Integer, ForeignKey("federated_clients.id"), nullable=False, index=True)
     
     # Training results
     local_accuracy = Column(Float, nullable=True)

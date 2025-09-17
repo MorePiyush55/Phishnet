@@ -186,6 +186,7 @@ class CacheKeyBuilder:
 def cached(
     ttl_seconds: Optional[int] = None,
     service: str = None,
+    ttl: Optional[int] = None,
     resource_type: str = 'auto',
     key_builder: Callable = None,
     cache_on_error: bool = False,
@@ -206,13 +207,16 @@ def cached(
     def decorator(func: Callable[P, T]) -> Callable[P, T]:
         cache_manager = get_cache_manager()
         
-        # Determine TTL
-        if ttl_seconds is not None:
-            ttl = ttl_seconds
+        # Determine TTL (accept legacy 'ttl' kw)
+        # Allow callers to pass ttl=... as shorthand or ttl_seconds
+        if ttl is not None:
+            ttl_value = ttl
+        elif ttl_seconds is not None:
+            ttl_value = ttl_seconds
         elif service and service in CACHE_TTL_CONFIG:
-            ttl = CACHE_TTL_CONFIG[service]
+            ttl_value = CACHE_TTL_CONFIG[service]
         else:
-            ttl = CACHE_TTL_CONFIG['default']
+            ttl_value = CACHE_TTL_CONFIG['default']
         
         @functools.wraps(func)
         def sync_wrapper(*args: P.args, **kwargs: P.kwargs) -> T:

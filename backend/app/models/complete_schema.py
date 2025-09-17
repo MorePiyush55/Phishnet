@@ -8,12 +8,11 @@ from sqlalchemy import (
     Column, Integer, String, Text, Boolean, DateTime, Numeric, 
     ForeignKey, JSON, Index, UniqueConstraint
 )
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, Session
 from sqlalchemy.sql import func
 import enum
 
-Base = declarative_base()
+from backend.app.core.database import Base
 
 class UserRole(str, enum.Enum):
     ADMIN = "admin"

@@ -1,39 +1,12 @@
-"""Database configuration and session management."""
+"""Backend database shim that re-uses the canonical application database
+configuration from `app.core.database` to avoid duplicate SQLAlchemy Base
+and MetaData registrations when both `app` and `backend.app` modules are
+imported during tests or runtime.
 
-from typing import Generator
+This file intentionally re-exports objects from `app.core.database`.
+"""
 
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from app.core.database import engine, SessionLocal, Base, get_db, init_db
 
-from app.config.settings import settings
-
-# Create database engine
-engine = create_engine(
-    settings.DATABASE_URL,
-    pool_size=settings.DATABASE_POOL_SIZE,
-    max_overflow=settings.DATABASE_MAX_OVERFLOW,
-    pool_pre_ping=True,
-    echo=settings.DEBUG,
-)
-
-# Create session factory
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Create base class for models
-Base = declarative_base()
-
-
-def get_db() -> Generator[Session, None, None]:
-    """Get database session."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-def init_db() -> None:
-    """Initialize database tables."""
-    Base.metadata.create_all(bind=engine)
+__all__ = ["engine", "SessionLocal", "Base", "get_db", "init_db"]
 

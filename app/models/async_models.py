@@ -111,6 +111,7 @@ class AsyncUser(AsyncBase, TimestampMixin):
     __table_args__ = (
         Index('ix_users_email_active', 'email', 'is_active'),
         Index('ix_users_role_active', 'role', 'is_active'),
+        {"extend_existing": True},
     )
 
     def __repr__(self) -> str:
@@ -157,6 +158,7 @@ class AsyncEmail(AsyncBase, TimestampMixin):
         Index('ix_emails_status_created', 'status', 'created_at'),
         Index('ix_emails_user_created', 'user_id', 'created_at'),
         Index('ix_emails_hash', 'file_hash'),
+        {"extend_existing": True},
     )
 
     def __repr__(self) -> str:
@@ -198,6 +200,7 @@ class AsyncThreatResult(AsyncBase, TimestampMixin):
         Index('ix_threat_results_source_level', 'source', 'threat_level'),
         Index('ix_threat_results_email_source', 'email_id', 'source'),
         Index('ix_threat_results_confidence', 'confidence_score'),
+        {"extend_existing": True},
     )
 
     def __repr__(self) -> str:
@@ -238,6 +241,7 @@ class AsyncAuditLog(AsyncBase, TimestampMixin):
         Index('ix_audit_logs_user_action', 'user_id', 'action'),
         Index('ix_audit_logs_ip_created', 'ip_address', 'created_at'),
         Index('ix_audit_logs_resource', 'resource_type', 'resource_id'),
+        {"extend_existing": True},
     )
 
     def __repr__(self) -> str:
@@ -273,6 +277,7 @@ class AsyncFeatureFlag(AsyncBase, TimestampMixin):
     __table_args__ = (
         CheckConstraint('percentage >= 0 AND percentage <= 100', name='ck_feature_flags_percentage'),
         Index('ix_feature_flags_enabled_name', 'is_enabled', 'name'),
+        {"extend_existing": True},
     )
 
     def __repr__(self) -> str:
@@ -309,6 +314,7 @@ class AsyncOAuthToken(AsyncBase, TimestampMixin):
         UniqueConstraint('provider', 'provider_user_id', name='uq_oauth_tokens_provider_user'),
         Index('ix_oauth_tokens_user_provider', 'user_id', 'provider'),
         Index('ix_oauth_tokens_expires', 'expires_at'),
+        {"extend_existing": True},
     )
 
     def __repr__(self) -> str:
@@ -346,6 +352,7 @@ class AsyncRevokedToken(AsyncBase):
     __table_args__ = (
         Index('ix_revoked_tokens_expires', 'expires_at'),
         Index('ix_revoked_tokens_user_type', 'user_id', 'token_type'),
+        {"extend_existing": True},
     )
 
     def __repr__(self) -> str:
@@ -379,6 +386,7 @@ class AsyncCacheEntry(AsyncBase):
     __table_args__ = (
         Index('ix_cache_entries_expires', 'expires_at'),
         Index('ix_cache_entries_tags', 'tags', postgresql_using='gin'),
+        {"extend_existing": True},
     )
 
     def __repr__(self) -> str:

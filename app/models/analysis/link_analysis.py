@@ -42,6 +42,39 @@ class LinkAnalysis(Base):
     # Relationships
     email = relationship("Email", back_populates="link_analyses")
 
+    # Backwards-compatible property aliases expected by tests/legacy code
+    @property
+    def total_redirects(self) -> int:
+        return self.redirect_count if hasattr(self, 'redirect_count') else 0
+
+    @total_redirects.setter
+    def total_redirects(self, value: int) -> None:
+        self.redirect_count = value
+
+    @property
+    def threat_score(self) -> float:
+        return float(self.risk_score or 0.0)
+
+    @threat_score.setter
+    def threat_score(self, value: float) -> None:
+        self.risk_score = value
+
+    @property
+    def threat_indicators(self):
+        return self.risk_reasons or []
+
+    @threat_indicators.setter
+    def threat_indicators(self, value):
+        self.risk_reasons = value
+
+    @property
+    def error(self) -> str:
+        return self.error_message
+
+    @error.setter
+    def error(self, value: str) -> None:
+        self.error_message = value
+
 
 class EmailAIResults(Base):
     """AI analysis results for emails."""

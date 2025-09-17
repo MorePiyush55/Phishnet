@@ -498,7 +498,18 @@ class LinkRedirectAnalyzer(IAnalyzer):
                     ]
                 )
             return self._browser
-    
+
+
+# Backwards-compatible alias: some modules import LinkAnalyzer or
+# LinkRedirectAnalyzer from different paths. Provide thin wrappers at module
+# scope so they are importable by tests and other modules.
+class LinkAnalyzer(LinkRedirectAnalyzer):
+    pass
+
+
+class LinkAnalysisResult(dict):
+    """Lightweight compatibility type for tests expecting LinkAnalysisResult."""
+    pass
     def _analyze_js_behavior(self, user_agent_results: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze JavaScript behavior for suspicious patterns."""
         js_analysis = {

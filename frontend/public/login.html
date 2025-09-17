@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhishNet - Secure Email Analysis</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Animated background elements */
+        .bg-decoration {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: 0;
+        }
+
+        .floating-icon {
+            position: absolute;
+            font-size: 2rem;
+            color: rgba(255, 255, 255, 0.1);
+            animation: float 6s ease-in-out infinite;
+        }
+
+        .floating-icon:nth-child(1) { top: 10%; left: 10%; animation-delay: -0.5s; }
+        .floating-icon:nth-child(2) { top: 20%; right: 15%; animation-delay: -2s; }
+        .floating-icon:nth-child(3) { bottom: 20%; left: 15%; animation-delay: -3.5s; }
+        .floating-icon:nth-child(4) { bottom: 15%; right: 10%; animation-delay: -1s; }
+        .floating-icon:nth-child(5) { top: 50%; left: 5%; animation-delay: -4s; }
+        .floating-icon:nth-child(6) { top: 60%; right: 5%; animation-delay: -2.5s; }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            33% { transform: translateY(-20px) rotate(10deg); }
+            66% { transform: translateY(-10px) rotate(-10deg); }
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 450px;
+            width: 90%;
+            margin: 0 auto;
+        }
+
+        .login-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+            padding: 3rem 2.5rem;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .login-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 25px 70px rgba(0, 0, 0, 0.3);
+        }
+
+        .logo-section {
+            margin-bottom: 2rem;
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #4285f4, #0f9d58);
+            border-radius: 20px;
+            margin: 0 auto 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            color: white;
+            box-shadow: 0 10px 30px rgba(66, 133, 244, 0.3);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 10px 30px rgba(66, 133, 244, 0.3); }
+            50% { box-shadow: 0 15px 40px rgba(66, 133, 244, 0.5); }
+            100% { box-shadow: 0 10px 30px rgba(66, 133, 244, 0.3); }
+        }
+
+        .app-title {
+            font-size: 2.2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #4285f4, #0f9d58);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        .app-subtitle {
+            color: #666;
+            font-size: 1rem;
+            margin-bottom: 2rem;
+            font-weight: 500;
+        }
+
+        .auth-section h2 {
+            font-size: 1.5rem;
+            color: #333;
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+
+        .auth-description {
+            color: #666;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+            font-size: 0.95rem;
+        }
+
+        .google-login-btn {
+            width: 100%;
+            padding: 1rem 1.5rem;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #333;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .google-login-btn:hover {
+            border-color: #4285f4;
+            box-shadow: 0 5px 20px rgba(66, 133, 244, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .google-login-btn:active {
+            transform: translateY(0);
+        }
+
+        .google-login-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(66, 133, 244, 0.1), transparent);
+            transition: left 0.5s;
+        }
+
+        .google-login-btn:hover::before {
+            left: 100%;
+        }
+
+        .google-icon {
+            width: 20px;
+            height: 20px;
+        }
+
+        .loading {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+
+        .loading .google-icon {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .features {
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 1px solid #eee;
+        }
+
+        .features h3 {
+            font-size: 1.1rem;
+            color: #333;
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+
+        .feature-list {
+            display: grid;
+            gap: 0.75rem;
+            text-align: left;
+        }
+
+        .feature-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .feature-icon {
+            width: 20px;
+            height: 20px;
+            background: linear-gradient(135deg, #4285f4, #0f9d58);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 0.7rem;
+            flex-shrink: 0;
+        }
+
+        .privacy-note {
+            margin-top: 1.5rem;
+            padding: 1rem;
+            background: rgba(66, 133, 244, 0.05);
+            border-radius: 8px;
+            border-left: 4px solid #4285f4;
+        }
+
+        .privacy-note p {
+            font-size: 0.85rem;
+            color: #555;
+            line-height: 1.5;
+            margin: 0;
+        }
+
+        /* Responsive design */
+        @media (max-width: 480px) {
+            .login-card {
+                padding: 2rem 1.5rem;
+                margin: 1rem;
+            }
+
+            .app-title {
+                font-size: 1.8rem;
+            }
+
+            .logo {
+                width: 60px;
+                height: 60px;
+                font-size: 1.5rem;
+            }
+        }
+
+        /* Success animation */
+        .success-animation {
+            animation: successPulse 0.6s ease-out;
+        }
+
+        @keyframes successPulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Animated background -->
+    <div class="bg-decoration">
+        <div class="floating-icon"><i class="fas fa-shield-alt"></i></div>
+        <div class="floating-icon"><i class="fas fa-envelope"></i></div>
+        <div class="floating-icon"><i class="fas fa-lock"></i></div>
+        <div class="floating-icon"><i class="fas fa-search"></i></div>
+        <div class="floating-icon"><i class="fas fa-bug"></i></div>
+        <div class="floating-icon"><i class="fas fa-eye"></i></div>
+    </div>
+
+    <div class="container">
+        <div class="login-card" id="loginCard">
+            <!-- Logo and branding -->
+            <div class="logo-section">
+                <div class="logo">
+                    <i class="fas fa-shield-alt"></i>
+                </div>
+                <h1 class="app-title">PhishNet</h1>
+                <p class="app-subtitle">Advanced Phishing Email Analysis</p>
+            </div>
+
+            <!-- Authentication section -->
+            <div class="auth-section">
+                <h2>Secure Access Required</h2>
+                <p class="auth-description">
+                    Sign in with your Google account to access your emails and begin phishing analysis. 
+                    We use secure OAuth authentication to protect your data.
+                </p>
+
+                <button class="google-login-btn" id="googleLoginBtn" onclick="handleGoogleLogin()">
+                    <svg class="google-icon" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                    </svg>
+                    <span id="loginText">Continue with Google</span>
+                </button>
+            </div>
+
+            <!-- Features section -->
+            <div class="features">
+                <h3>What you get:</h3>
+                <div class="feature-list">
+                    <div class="feature-item">
+                        <div class="feature-icon"><i class="fas fa-search"></i></div>
+                        <span>Advanced phishing email detection</span>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon"><i class="fas fa-shield-alt"></i></div>
+                        <span>Secure email analysis</span>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon"><i class="fas fa-chart-line"></i></div>
+                        <span>Detailed threat reports</span>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon"><i class="fas fa-clock"></i></div>
+                        <span>Real-time protection alerts</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Privacy note -->
+            <div class="privacy-note">
+                <p>
+                    <i class="fas fa-lock icon"></i>
+                    <strong>Privacy Protected:</strong> We only access emails with your explicit permission. 
+                    Your data is encrypted and never shared with third parties.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Google OAuth configuration (injected by backend if served from /auth/login)
+        const GOOGLE_CLIENT_ID = window.__PHISHNET_CONFIG__?.GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID_HERE';
+        const REDIRECT_URI = window.__PHISHNET_CONFIG__?.REDIRECT_URI || (window.location.origin + '/auth/callback');
+        const BACKEND_URL = window.__PHISHNET_CONFIG__?.BACKEND_URL || (window.location.origin);
+
+        // Initialize Google OAuth
+        function initGoogleAuth() {
+            console.log('Google Auth initialized');
+        }
+
+        async function handleGoogleLogin() {
+            const button = document.getElementById('googleLoginBtn');
+            const loginText = document.getElementById('loginText');
+            const card = document.getElementById('loginCard');
+            
+            button.classList.add('loading');
+            loginText.textContent = 'Connecting to Google...';
+            
+            try {
+                const state = Math.random().toString(36).slice(2);
+                localStorage.setItem('oauth_state', state);
+                localStorage.setItem('oauth_timestamp', Date.now().toString());
+
+                const params = new URLSearchParams({
+                    client_id: GOOGLE_CLIENT_ID,
+                    redirect_uri: REDIRECT_URI,
+                    response_type: 'code',
+                    scope: 'openid email profile https://www.googleapis.com/auth/gmail.readonly',
+                    access_type: 'offline',
+                    prompt: 'consent',
+                    state
+                });
+
+                const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+                // For production, redirect to Google
+                window.location.href = googleAuthUrl;
+
+            } catch (error) {
+                console.error('Authentication error:', error);
+                showError('Authentication failed. Please try again.');
+                resetButton();
+            }
+        }
+
+        function showSuccess() {
+            const card = document.getElementById('loginCard');
+            const loginText = document.getElementById('loginText');
+            
+            card.classList.add('success-animation');
+            loginText.textContent = 'Authentication Successful!';
+            
+            setTimeout(() => {
+                loginText.innerHTML = '<i class="fas fa-check"></i> Redirecting to PhishNet Dashboard...';
+            }, 500);
+
+            setTimeout(() => {
+                resetButton();
+            }, 2500);
+        }
+
+        function showError(message) {
+            const loginText = document.getElementById('loginText');
+            loginText.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${message}`;
+            
+            setTimeout(() => {
+                resetButton();
+            }, 3000);
+        }
+
+        function resetButton() {
+            const button = document.getElementById('googleLoginBtn');
+            const loginText = document.getElementById('loginText');
+            
+            button.classList.remove('loading');
+            loginText.textContent = 'Continue with Google';
+        }
+
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            initGoogleAuth();
+
+            // If redirected back with code, handle callback
+            if (window.location.search.includes('code=')) {
+                // Let the frontend app handle exchanging the code for tokens via backend
+                // This page is intentionally minimal - the main SPA handles callbacks.
+            }
+
+            // entrance animation
+            const card = document.querySelector('.login-card');
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(20px)';
+            
+            setTimeout(() => {
+                card.style.transition = 'all 0.6s ease-out';
+                card.style.opacity = '1';
+                card.style.transform = 'translateY(0)';
+            }, 100);
+        });
+    </script>
+</body>
+</html>

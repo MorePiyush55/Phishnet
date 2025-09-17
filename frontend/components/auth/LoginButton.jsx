@@ -1,0 +1,25 @@
+import React, { useState } from 'react';
+
+export default function LoginButton() {
+  const [loading, setLoading] = useState(false);
+
+  const handleClick = async () => {
+    try {
+      setLoading(true);
+      // Redirect to backend OAuth initiation endpoint
+      const backend = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+      // small delay for UX
+      setTimeout(() => {
+        window.location.href = `${backend}/auth/google`;
+      }, 250);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <button onClick={handleClick} className="google-login-btn" disabled={loading}>
+      {loading ? 'Connecting...' : 'Continue with Google'}
+    </button>
+  );
+}

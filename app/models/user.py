@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Optional
 import enum
 
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text, Enum, ForeignKey, JSON, Float
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text, Enum, ForeignKey, JSON, Float, Index
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -15,6 +15,7 @@ class User(Base):
     """User model for authentication and user management."""
     
     __tablename__ = "users"
+    __table_args__ = {"extend_existing": True}
     
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, index=True, nullable=False)
@@ -69,6 +70,7 @@ class OAuthCredential(Base):
     """OAuth credentials storage with encryption."""
     
     __tablename__ = "oauth_credentials"
+    __table_args__ = {"extend_existing": True}
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
@@ -90,6 +92,10 @@ class AuditLog(Base):
     """Audit log for tracking all OAuth and security events."""
     
     __tablename__ = "audit_logs"
+    __table_args__ = (
+        Index('ix_audit_logs_timestamp', 'timestamp'),
+        {"extend_existing": True},
+    )
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # Nullable for system events
@@ -98,7 +104,7 @@ class AuditLog(Base):
     ip_address = Column(String(45), nullable=True)  # IPv4/IPv6 address
     user_agent = Column(Text, nullable=True)  # Browser user agent
     timestamp = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
-    metadata = Column(JSON, nullable=True)  # Additional context data
+    entry_metadata = Column(JSON, nullable=True)  # Additional context data (renamed from metadata)
     success = Column(Boolean, nullable=False, default=True)
     error_message = Column(Text, nullable=True)
     
@@ -110,6 +116,7 @@ class ScanResult(Base):
     """Email scan results storage."""
     
     __tablename__ = "scan_results"
+    __table_args__ = {"extend_existing": True}
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
@@ -136,6 +143,10 @@ class OAuthToken(Base):
     """Legacy OAuth token storage - deprecated, use OAuthCredential instead."""
     
     __tablename__ = "oauth_tokens"
+    __table_args__ = (
+        Index('ix_oauth_tokens_id', 'id'),
+        {"extend_existing": True},
+    )
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -152,6 +163,10 @@ class OAuthAuditLog(Base):
     """Legacy OAuth audit log - deprecated, use AuditLog instead."""
     
     __tablename__ = "oauth_audit_logs"
+    __table_args__ = (
+        Index('ix_oauth_audit_logs_id', 'id'),
+        {"extend_existing": True},
+    )
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -194,6 +209,7 @@ class RevokedToken(Base):
     """Model to track revoked JWT tokens for security."""
     
     __tablename__ = "revoked_tokens"
+    __table_args__ = {"extend_existing": True}
     
     id = Column(Integer, primary_key=True, index=True)
     jti = Column(String(255), unique=True, index=True, nullable=False)  # JWT ID
@@ -209,6 +225,7 @@ class OAuthToken(Base):
     """Model to store encrypted OAuth refresh tokens."""
     
     __tablename__ = "oauth_tokens"
+    __table_args__ = {"extend_existing": True}
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, nullable=False, index=True)
@@ -236,6 +253,7 @@ class OAuthAuditLog(Base):
     """Audit log for OAuth-related events."""
     
     __tablename__ = "oauth_audit_logs"
+    __table_args__ = {"extend_existing": True}
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, nullable=False, index=True)

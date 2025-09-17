@@ -92,3 +92,16 @@ class DetectionExport(BaseModel):
     risk_levels: Optional[List[str]] = None
     include_details: bool = True
 
+
+class DetectionResponse(BaseModel):
+    """Minimal detection response used by API endpoints and tests."""
+    id: int
+    rule_name: str
+    is_phishing: bool
+    confidence: float
+    created_at: datetime
+    details: Optional[Dict[str, Any]] = None
+
+    class Config:
+        from_attributes = True
+

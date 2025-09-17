@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPBearer
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field, EmailStr
@@ -21,6 +22,7 @@ from app.core.database import get_db
 from app.core.auth import get_current_user, create_access_token, create_refresh_token
 from app.models.user import User
 from app.config.settings import settings
+from app.services.audit import AuditService
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +110,12 @@ async def initiate_google_oauth(
         auth_url = GOOGLE_AUTH_URL + "?" + "&".join([f"{k}={v}" for k, v in params.items()])
         
         logger.info(f"OAuth flow initiated with state: {state}")
+        # Audit log: oauth_initiated
+        try:
+            audit = AuditService()
+            await audit.log_event('OAUTH_INITIATED', 'oauth', state, user_id=0, details={'ip': request.client.host if request.client else None})
+        except Exception:
+            logger.debug('Audit log failed for oauth initiation')
         return RedirectResponse(url=auth_url)
         
     except Exception as e:
@@ -117,9 +125,59 @@ async def initiate_google_oauth(
             detail="Failed to initiate authentication"
         )
 
+
+@router.get("/login", response_class=HTMLResponse)
+async def serve_login_page(request: Request):
+    """Serve a minimal static login page (useful for demo or Vercel fallback).
+
+    This endpoint will try to read the `frontend/public/login.html` file if present
+    and replace a small placeholder object with runtime config so the page can
+    build the correct OAuth URL without exposing secrets.
+    """
+    try:
+        # Attempt to load the static file from the frontend public folder
+        base_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', 'frontend', 'public')
+        candidate = os.path.abspath(os.path.join(base_path, 'login.html'))
+        html = None
+        if os.path.exists(candidate):
+            with open(candidate, 'r', encoding='utf-8') as f:
+                html = f.read()
+
+        if not html:
+            # Fallback minimal page
+            html = f"""
+            <!doctype html>
+            <html><head><meta charset='utf-8'><title>PhishNet Login</title></head>
+            <body>
+            <a href='/api/v1/auth/google'>Sign in with Google</a>
+            </body></html>
+            """
+
+        # Inject a small JS config object for client-side use
+        config = {
+            "GOOGLE_CLIENT_ID": GOOGLE_CLIENT_ID or "",
+            "REDIRECT_URI": GOOGLE_REDIRECT_URI,
+            "BACKEND_URL": os.getenv('BACKEND_URL', '') or ''
+        }
+
+        inject_snippet = f"<script>window.__PHISHNET_CONFIG__ = {config};</script>"
+
+        # Place injection before closing </head> or at top of body
+        if '</head>' in html:
+            html = html.replace('</head>', inject_snippet + '</head>')
+        else:
+            html = inject_snippet + html
+
+        return HTMLResponse(content=html, status_code=200)
+
+    except Exception as e:
+        logger.error(f"Error serving login page: {e}")
+        raise HTTPException(status_code=500, detail="Failed to serve login page")
+
 @router.post("/google/callback", response_model=OAuthTokenResponse)
 async def handle_oauth_callback(
     callback_data: OAuthCallbackRequest,
+    response: Response,
     db: Session = Depends(get_db)
 ):
     """
@@ -162,12 +220,32 @@ async def handle_oauth_callback(
         refresh_token = create_refresh_token(
             data={"sub": str(user.id), "email": user.email}
         )
-        
+
+    # Set refresh token in a secure httpOnly cookie (backend-only)
+        cookie_max_age = 60 * 60 * 24 * 30  # 30 days
+        secure_flag = os.getenv("ENV", "development") == "production"
+        response.set_cookie(
+            key="phishnet_refresh_token",
+            value=refresh_token,
+            httponly=True,
+            secure=secure_flag,
+            samesite="lax",
+            max_age=cookie_max_age
+        )
+
         logger.info(f"OAuth completed for user: {user.email}")
-        
+
+        # Audit log: oauth_completed
+        try:
+            audit = AuditService()
+            await audit.log_event('OAUTH_COMPLETED', 'user', str(user.id), user_id=user.id, details={'email': user.email})
+        except Exception:
+            logger.debug('Audit log failed for oauth completion')
+
+        # Return access token and user info (refresh token stored in cookie)
         return OAuthTokenResponse(
             access_token=access_token,
-            refresh_token=refresh_token,
+            refresh_token="",
             expires_in=3600,  # 1 hour
             user_info={
                 "id": user.id,
@@ -264,13 +342,13 @@ async def logout(
         # 3. Clear session data
         
         logger.info(f"User logged out: {current_user.email}")
-        
-        return JSONResponse(
-            content={
-                "success": True,
-                "message": "Successfully logged out"
-            }
+
+        # Clear refresh cookie if present
+        response = JSONResponse(
+            content={"success": True, "message": "Successfully logged out"}
         )
+        response.delete_cookie("phishnet_refresh_token")
+        return response
         
     except Exception as e:
         logger.error(f"Logout failed: {str(e)}")
@@ -301,6 +379,58 @@ async def exchange_code_for_tokens(code: str, redirect_uri: str) -> Dict[str, An
             )
         
         return response.json()
+
+
+async def refresh_tokens(refresh_token: str) -> Dict[str, Any]:
+    """Use a refresh token to obtain a new access token from Google."""
+    async with httpx.AsyncClient() as client:
+        data = {
+            "client_id": GOOGLE_CLIENT_ID,
+            "client_secret": GOOGLE_CLIENT_SECRET,
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token
+        }
+        resp = await client.post(GOOGLE_TOKEN_URL, data=data)
+        if resp.status_code != 200:
+            logger.error(f"Failed to refresh tokens: {resp.status_code} {resp.text}")
+            raise HTTPException(status_code=400, detail="Failed to refresh tokens")
+        return resp.json()
+
+
+@router.post('/refresh')
+async def refresh_access_token_endpoint(request: Request, response: Response):
+    """Refresh access token using refresh token stored in httpOnly cookie."""
+    try:
+        refresh_token = request.cookies.get('phishnet_refresh_token')
+        if not refresh_token:
+            raise HTTPException(status_code=401, detail='No refresh token')
+
+        token_data = await refresh_tokens(refresh_token)
+
+        # Optionally set a new refresh cookie if provided
+        new_refresh = token_data.get('refresh_token')
+        if new_refresh:
+            cookie_max_age = 60 * 60 * 24 * 30  # 30 days
+            secure_flag = os.getenv("ENV", "development") == "production"
+            response.set_cookie(
+                key="phishnet_refresh_token",
+                value=new_refresh,
+                httponly=True,
+                secure=secure_flag,
+                samesite="lax",
+                max_age=cookie_max_age
+            )
+
+        return JSONResponse(content={
+            'access_token': token_data.get('access_token'),
+            'expires_in': token_data.get('expires_in', 3600)
+        })
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Refresh endpoint failed: {e}")
+        raise HTTPException(status_code=500, detail='Token refresh failed')
 
 async def get_google_user_info(access_token: str) -> Dict[str, Any]:
     """Get user information from Google."""

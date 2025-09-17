@@ -1,4 +1,16 @@
 {
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build"
+    }
+  ],
+  "env": {
+    "NEXT_PUBLIC_GOOGLE_CLIENT_ID": "@google-client-id",
+    "NEXT_PUBLIC_BACKEND_URL": "@backend-url"
+  }
+}
+{
   "version": 2,
   "name": "phishnet-frontend",
   "framework": "vite",

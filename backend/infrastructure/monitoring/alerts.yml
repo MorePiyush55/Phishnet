@@ -1,0 +1,11 @@
+groups:
+  - name: phishnet-alerts
+    rules:
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{job="phishnet-api",status!~"2.."}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate on phishnet-api"
+          description: "More than 5% errors over 5 minutes"

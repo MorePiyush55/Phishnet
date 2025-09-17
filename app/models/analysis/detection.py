@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text, JSON, Index
+from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text, JSON, Index, ForeignKey
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -15,8 +15,8 @@ class Detection(Base):
     __tablename__ = "detections"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, nullable=False, index=True)
-    email_id = Column(Integer, nullable=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    email_id = Column(Integer, ForeignKey("emails.id"), nullable=True, index=True)
     
     # Detection results
     is_phishing = Column(Boolean, nullable=False)

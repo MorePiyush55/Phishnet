@@ -1,3 +1,12 @@
+"""Backend shim re-exporting canonical user models from `app.models.user`.
+
+This avoids duplicate SQLAlchemy table registrations between `app` and
+`backend.app` during imports.
+"""
+
+from app.models.user import *  # noqa: F401,F403
+
+__all__ = [name for name in globals().keys() if not name.startswith("_")]
 """User model for authentication and user management."""
 
 from datetime import datetime
@@ -132,62 +141,32 @@ class ScanResult(Base):
 
 
 # Keep legacy OAuth models for backward compatibility
+
 class OAuthToken(Base):
-    """Legacy OAuth token storage - deprecated, use OAuthCredential instead."""
+    """Model to store encrypted OAuth refresh tokens."""
     
     __tablename__ = "oauth_tokens"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    token_type = Column(String(50), nullable=False)  # access_token, refresh_token
-    encrypted_token = Column(Text, nullable=False)
-    scope = Column(String(500), nullable=True)
-    expires_at = Column(DateTime, nullable=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    provider = Column(String(50), nullable=False)  # 'gmail', 'outlook', etc.
+    encrypted_refresh_token = Column(Text, nullable=False)  # Encrypted token
+    encrypted_access_token = Column(Text, nullable=True)  # Encrypted current access token
+    token_expires_at = Column(DateTime, nullable=True)
+    scope = Column(String(500), nullable=True)  # OAuth scopes granted
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_used_at = Column(DateTime, nullable=True)
     is_active = Column(Boolean, default=True)
-
-
-class OAuthAuditLog(Base):
-    """Legacy OAuth audit log - deprecated, use AuditLog instead."""
     
-    __tablename__ = "oauth_audit_logs"
-    
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    event_type = Column(String(100), nullable=False)
-    success = Column(Boolean, nullable=False)
-    details = Column(JSON, nullable=True)
-    error_message = Column(Text, nullable=True)
-    ip_address = Column(String(45), nullable=True)
-    user_agent = Column(Text, nullable=True)
-    timestamp = Column(DateTime, default=datetime.utcnow)
-    refresh_tokens = relationship("RefreshToken", back_populates="user")
-    emails = relationship("Email", back_populates="user")
+    # Security and audit fields
+    creation_ip = Column(String(45), nullable=True)  # IP when token was created
+    creation_user_agent = Column(String(500), nullable=True)
+    revocation_reason = Column(String(255), nullable=True)
+    revoked_at = Column(DateTime, nullable=True)
     
     def __repr__(self) -> str:
-        return f"<User(id={self.id}, email='{self.email}', username='{self.username}')>"
-    
-    @property
-    def permissions(self) -> list:
-        """Get user permissions based on role."""
-        role_permissions = {
-            UserRole.ADMIN: [
-                "user:create", "user:read", "user:update", "user:delete",
-                "email:read", "email:scan", "email:analyze",
-                "detection:read", "detection:create", "detection:update", "detection:delete",
-                "system:configure", "system:monitor"
-            ],
-            UserRole.ANALYST: [
-                "email:read", "email:scan", "email:analyze",
-                "detection:read", "detection:create", "detection:update",
-                "system:monitor"
-            ],
-            UserRole.VIEWER: [
-                "email:read", "detection:read"
-            ]
-        }
-        return role_permissions.get(self.role, [])
+        return f"<OAuthToken(user_id={self.user_id}, provider='{self.provider}', active={self.is_active})>"
 
 
 class RevokedToken(Base):
@@ -233,7 +212,7 @@ class OAuthToken(Base):
 
 
 class OAuthAuditLog(Base):
-    """Audit log for OAuth-related events."""
+    """OAuth audit log for OAuth-related events."""
     
     __tablename__ = "oauth_audit_logs"
     

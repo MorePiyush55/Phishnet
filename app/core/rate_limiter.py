@@ -646,6 +646,46 @@ async def urlscan_rate_limit(identifier: str = "default", tenant_id: str = None)
     limiter = get_rate_limiter()
     return await limiter.check_rate_limit("urlscan", identifier, tenant_id)
 
+def rate_limit(name_or_max=None, **decorator_kwargs):
+    """Compatibility decorator used across the codebase.
+
+    Usage examples in codebase vary (positional name or keyword args). This
+    decorator supports both forms and delegates checks to the global RateLimiter.
+    It raises a RateLimitError when exceeded.
+    """
+    # Normalize to decorator factory
+    def _make_decorator(rate_identifier=None, **kwargs):
+        def _decorator(func):
+            async def _wrapped(*args, **inner_kwargs):
+                identifier = kwargs.get('identifier', 'default')
+                tenant_id = kwargs.get('tenant_id', None)
+                # Use service name if provided, else a generic key
+                service = rate_identifier or kwargs.get('service') or kwargs.get('name') or 'generic'
+                try:
+                    result = await limiter.check_rate_limit(service, identifier, tenant_id)
+                    if not result.allowed:
+                        raise RateLimitError(f"Rate limit exceeded for {service}", retry_after=result.retry_after)
+                except RateLimitError:
+                    raise
+                except Exception:
+                    # Fail open on unhandled errors
+                    pass
+
+                return await func(*args, **inner_kwargs)
+
+            return _wrapped
+        return _decorator
+
+    # If used directly as @rate_limit(max_calls=100,...)
+    if callable(name_or_max):
+        return _make_decorator()(name_or_max)
+
+    # If passed a string or kwargs
+    if isinstance(name_or_max, str):
+        return _make_decorator(name_or_max, **decorator_kwargs)
+
+    return _make_decorator(**decorator_kwargs)
+
 # Rate limit monitoring functions
 async def get_all_rate_limit_stats() -> Dict[str, Any]:
     """Get comprehensive rate limit statistics"""

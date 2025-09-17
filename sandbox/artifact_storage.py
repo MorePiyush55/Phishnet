@@ -20,8 +20,21 @@ import uuid
 import structlog
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
-from google.cloud import storage as gcs
-from google.cloud.exceptions import NotFound, Forbidden
+
+# Optional imports for Google Cloud Storage. During test collection the
+# google-cloud-storage package may not be installed in the environment; in
+# that case, fall back to a local/no-op behavior to allow imports to succeed.
+try:
+    from google.cloud import storage as gcs
+    from google.cloud.exceptions import NotFound, Forbidden
+except Exception:
+    gcs = None
+
+    class NotFound(Exception):
+        pass
+
+    class Forbidden(Exception):
+        pass
 from PIL import Image
 import zipfile
 import hashlib

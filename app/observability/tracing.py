@@ -7,36 +7,91 @@ import os
 import logging
 from typing import Optional, Dict, Any
 
-from opentelemetry import trace, metrics
-from opentelemetry.exporter.jaeger.thrift import JaegerExporter
-from opentelemetry.exporter.prometheus import PrometheusMetricReader
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from opentelemetry.instrumentation.requests import RequestsInstrumentor
-from opentelemetry.instrumentation.aiohttp_client import AioHttpClientInstrumentor
-from opentelemetry.instrumentation.redis import RedisInstrumentor
-from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.sdk.resources import Resource, SERVICE_NAME, SERVICE_VERSION
-from opentelemetry.semantic_conventions.trace import SpanAttributes
-from opentelemetry.trace.status import Status, StatusCode
+try:
+    from opentelemetry import trace, metrics
+    from opentelemetry.exporter.jaeger.thrift import JaegerExporter
+    from opentelemetry.exporter.prometheus import PrometheusMetricReader
+    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+    from opentelemetry.instrumentation.requests import RequestsInstrumentor
+    from opentelemetry.instrumentation.aiohttp_client import AioHttpClientInstrumentor
+    from opentelemetry.instrumentation.redis import RedisInstrumentor
+    from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    from opentelemetry.sdk.metrics import MeterProvider
+    from opentelemetry.sdk.resources import Resource, SERVICE_NAME, SERVICE_VERSION
+    from opentelemetry.semantic_conventions.trace import SpanAttributes
+    from opentelemetry.trace.status import Status, StatusCode
+    _OTEL_AVAILABLE = True
+except Exception:  # pragma: no cover - optional dependency
+    # Provide minimal no-op fallbacks so tests and imports succeed when OpenTelemetry
+    # instrumentation packages are not installed in the environment.
+    _OTEL_AVAILABLE = False
+
+    class _NoopSpan:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def set_attribute(self, *args, **kwargs):
+            return None
+
+        def set_status(self, *args, **kwargs):
+            return None
+
+        def end(self):
+            return None
+
+    class _NoopTracer:
+        def start_span(self, name: str = None):
+            return _NoopSpan()
+
+    class _NoopOTEL:
+        def get_tracer(self, name: str = None):
+            return _NoopTracer()
+
+        def set_tracer_provider(self, provider):
+            return None
+
+        def get_tracer_provider(self):
+            return None
+
+    class _NoopMetrics:
+        def get_meter(self, name: str = None):
+            return None
+
+        def set_meter_provider(self, provider):
+            return None
+
+    trace = _NoopOTEL()
+    metrics = _NoopMetrics()
+    JaegerExporter = PrometheusMetricReader = FastAPIInstrumentor = RequestsInstrumentor = object
+    AioHttpClientInstrumentor = RedisInstrumentor = SQLAlchemyInstrumentor = object
+    TracerProvider = BatchSpanProcessor = MeterProvider = Resource = SERVICE_NAME = SERVICE_VERSION = object
+    SpanAttributes = {}
+    class Status:
+        pass
+    class StatusCode:
+        OK = None
+        ERROR = None
 
 from app.config.settings import settings
 from app.config.logging import get_logger
 
 logger = get_logger(__name__)
 
-# Global tracer and meter instances
-_tracer: Optional[trace.Tracer] = None
-_meter: Optional[metrics.Meter] = None
+# Global tracer and meter instances (use Any to avoid accessing attributes on noop fallbacks)
+_tracer: Optional[Any] = None
+_meter: Optional[Any] = None
 
 # Metrics instruments
-_emails_processed_counter: Optional[metrics.Counter] = None
-_scan_latency_histogram: Optional[metrics.Histogram] = None
-_api_error_counter: Optional[metrics.Counter] = None
-_external_api_failures_counter: Optional[metrics.Counter] = None
-_circuit_breaker_state_gauge: Optional[metrics.Gauge] = None
+_emails_processed_counter: Optional[Any] = None
+_scan_latency_histogram: Optional[Any] = None
+_api_error_counter: Optional[Any] = None
+_external_api_failures_counter: Optional[Any] = None
+_circuit_breaker_state_gauge: Optional[Any] = None
 
 
 def configure_resource() -> Resource:
@@ -164,7 +219,7 @@ def setup_observability() -> None:
         pass
 
 
-def get_tracer() -> trace.Tracer:
+def get_tracer() -> Any:
     """Get the configured tracer instance."""
     global _tracer
     if _tracer is None:
@@ -173,7 +228,7 @@ def get_tracer() -> trace.Tracer:
     return _tracer
 
 
-def get_meter() -> metrics.Meter:
+def get_meter() -> Any:
     """Get the configured meter instance."""
     global _meter
     if _meter is None:

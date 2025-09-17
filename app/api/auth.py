@@ -8,6 +8,16 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from slowapi import Limiter, _rate_limit_exceeded_handler
+"""Authentication API routes with RBAC and refresh token support."""
+
+import secrets
+from datetime import datetime, timedelta
+from typing import Optional, List
+
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.orm import Session
+from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
@@ -30,21 +40,6 @@ logger = get_logger(__name__)
 router = APIRouter()
 security = HTTPBearer()
 limiter = Limiter(key_func=get_remote_address)
-
-
-class RoleChecker:
-    """Dependency class for role-based access control."""
-    
-    def __init__(self, allowed_roles: List[UserRole]):
-        self.allowed_roles = allowed_roles
-    
-    def __call__(self, current_user: User = Depends(get_current_user)) -> User:
-        if current_user.role not in self.allowed_roles:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions"
-            )
-        return current_user
 
 
 def get_current_user(
@@ -82,6 +77,20 @@ def get_current_active_user(current_user: User = Depends(get_current_user)) -> U
         )
     return current_user
 
+
+# Role checker class used for role-based dependencies
+class RoleChecker:
+    """Dependency class for role-based access control."""
+    def __init__(self, allowed_roles: List[UserRole]):
+        self.allowed_roles = allowed_roles
+
+    def __call__(self, current_user: User = Depends(get_current_user)) -> User:
+        if current_user.role not in self.allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions"
+            )
+        return current_user
 
 # Role-based dependencies
 require_admin = RoleChecker([UserRole.ADMIN])
@@ -165,16 +174,6 @@ async def login(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error"
         )
-
-
-@router.post("/refresh", response_model=Token)
-async def refresh_token(
-    request: Request,
-    refresh_token: str,
-    db: Session = Depends(get_db)
-):
-    """Refresh access token using refresh token."""
-    try:
         # Verify refresh token
         token_data = verify_token(refresh_token, "refresh")
         if not token_data:

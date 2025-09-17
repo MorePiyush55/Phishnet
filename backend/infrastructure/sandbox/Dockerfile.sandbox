@@ -1,0 +1,32 @@
+# Secure Sandbox Container for Headless Browser Analysis
+# (copied from root sandbox/Dockerfile.sandbox)
+ARG BASE_IMAGE=debian:12-slim
+
+FROM ${BASE_IMAGE} as builder
+
+RUN groupadd -r sandbox && useradd -r -g sandbox -s /bin/false sandbox
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget \
+    gnupg \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# ... (trimmed for brevity in copy)
+
+FROM ${BASE_IMAGE} as runtime
+
+RUN groupadd -r -g 1001 sandbox \
+    && useradd -r -u 1001 -g sandbox -s /bin/false -d /tmp sandbox \
+    && mkdir -p /tmp/sandbox \
+    && chown sandbox:sandbox /tmp/sandbox
+
+# ... (trimmed for brevity)
+
+USER sandbox
+WORKDIR /tmp/sandbox
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python3 -c "import sys; sys.exit(0)"
+
+CMD ["python3", "/sandbox/scripts/sandbox_worker.py"]

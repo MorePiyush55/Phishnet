@@ -5,13 +5,13 @@ Database models for tracking user consent, permissions, and data retention polic
 
 from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, JSON, ForeignKey
 from sqlalchemy.orm import relationship
-from sqlalchemy.ext.declarative import declarative_base
+from app.core.database import Base
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from enum import Enum
 import json
 
-Base = declarative_base()
+ 
 
 class ConsentScope(Enum):
     """OAuth scopes for Gmail access"""

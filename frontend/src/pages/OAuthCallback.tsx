@@ -1,4 +1,47 @@
 import React, { useEffect, useState } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+
+export default function OAuthCallback(): JSX.Element {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const [status, setStatus] = useState<'processing' | 'success' | 'error' | 'unknown'>('processing');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    const success = searchParams.get('oauth_success');
+    const error = searchParams.get('oauth_error');
+
+    if (success) {
+      setStatus('success');
+      setTimeout(() => navigate('/dashboard'), 1000);
+      return;
+    }
+
+    if (error) {
+      setStatus('error');
+      setErrorMsg(error);
+      return;
+    }
+
+    setStatus('unknown');
+  }, [searchParams, navigate]);
+
+  return (
+    <div className="p-6 max-w-2xl mx-auto">
+      <h2 className="text-2xl font-semibold mb-2">Connecting Gmail</h2>
+      {status === 'processing' && <p>Finalizing connection — please wait...</p>}
+      {status === 'success' && <p>Gmail connected. Redirecting to dashboard...</p>}
+      {status === 'error' && (
+        <div>
+          <p className="text-red-600">Connection failed: {errorMsg}</p>
+          <p className="mt-2">Try reconnecting or contact support if the problem persists.</p>
+        </div>
+      )}
+      {status === 'unknown' && <p>Unexpected response from OAuth provider.</p>}
+    </div>
+  );
+}
+import React, { useEffect, useState } from 'react';
 import { useSearchParams, Navigate } from 'react-router-dom';
 import { Shield, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 

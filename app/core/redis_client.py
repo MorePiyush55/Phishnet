@@ -64,7 +64,7 @@ class RedisClient:
                         max_connections=self.config.max_connections,
                         decode_responses=self.config.decode_responses
                     )
-                
+
                 self._client = redis.Redis(connection_pool=self._connection_pool)
                 # Test connection
                 self._client.ping()
@@ -72,7 +72,12 @@ class RedisClient:
             except redis.ConnectionError:
                 logger.warning("Redis not available, using mock client")
                 self._client = MockRedisClient()
-        
+
+    def connect(self):
+        """Return a sync redis client (or mock)."""
+        if not self._client:
+            # Ensure initialization happened
+            self.__init__(self.config)
         return self._client
     
     def _create_async_client(self) -> aioredis.Redis:
@@ -394,6 +399,69 @@ class MockRedisClient:
     def get(self, key: str) -> Optional[str]:
         """Mock get."""
         return self._data.get(key)
+    
+    def set(self, key: str, value: str) -> bool:
+        self._data[key] = value
+        return True
+
+    def delete(self, *keys):
+        removed = 0
+        for k in keys:
+            if k in self._data:
+                del self._data[k]
+                removed += 1
+        return removed
+
+    def exists(self, key: str) -> int:
+        return 1 if key in self._data else 0
+
+    def ttl(self, key: str) -> int:
+        # Mock: never expire
+        return -1 if key in self._data else -2
+
+    def keys(self, pattern: str):
+        # Very naive pattern matching supporting '*' at end
+        if pattern.endswith('*'):
+            prefix = pattern[:-1]
+            return [k for k in self._data.keys() if k.startswith(prefix)]
+        return [k for k in self._data.keys() if k == pattern]
+
+    def zadd(self, key: str, mapping: dict) -> int:
+        # Simplified: store as a list
+        self._data.setdefault(key, [])
+        for member, score in mapping.items():
+            self._data[key].append((member, score))
+        return len(mapping)
+
+    def zpopmin(self, key: str, count: int = 1):
+        lst = self._data.get(key, [])
+        if not lst:
+            return []
+        # pop lowest score(s)
+        lst.sort(key=lambda x: x[1])
+        result = []
+        for _ in range(min(count, len(lst))):
+            member, score = lst.pop(0)
+            result.append((member, score))
+        self._data[key] = lst
+        return result
+
+    def zcard(self, key: str) -> int:
+        return len(self._data.get(key, []))
+
+    def bzpopmin(self, key: str, timeout: int = 0):
+        # Blocking pop not implemented; return None
+        res = self.zpopmin(key, count=1)
+        if res:
+            member, score = res[0]
+            return (key, member, score)
+        return None
+
+    def close(self):
+        return None
+
+    def disconnect(self):
+        return None
 
 
 # Global Redis client instance

@@ -288,6 +288,19 @@ def get_business_metrics():
     return BusinessMetrics()
 
 
+# Backwards-compatible object used by older modules/tests
+class _PerformanceMetricsProxy:
+    def __init__(self):
+        self.emails_processed = emails_processed
+        self.cache_hits = cache_hits
+        self.cache_misses = cache_misses
+        self.processing_time = processing_time
+        self.analysis_errors = analysis_errors
+
+
+performance_metrics = _PerformanceMetricsProxy()
+
+
 @dataclass
 class PerformanceWindow:
     """Sliding window for performance metrics."""

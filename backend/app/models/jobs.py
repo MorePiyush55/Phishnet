@@ -1,3 +1,12 @@
+"""Backend shim re-exporting canonical job models from `app.models.jobs`.
+
+This prevents duplicate SQLAlchemy table registrations when both
+`app` and `backend.app` packages are imported during tests or runtime.
+"""
+
+from app.models.jobs import *  # noqa: F401,F403
+
+__all__ = [name for name in globals().keys() if not name.startswith("_")]
 """
 Job models for email scanning orchestration.
 Tracks job status, retries, and progression through pipeline stages.
