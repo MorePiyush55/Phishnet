@@ -129,6 +129,44 @@ async def start_gmail_oauth(
         )
 
 
+@router.post("/start-public", response_model=OAuthStartResponse)
+@limiter.limit("5/minute")  # Rate limit OAuth initiation
+async def start_gmail_oauth_public(
+    request: Request,
+    db: Session = Depends(get_db),
+    oauth_service: GmailOAuth2Service = Depends(get_gmail_oauth_service)
+):
+    """
+    Start Gmail OAuth flow for new users (no authentication required).
+    
+    This endpoint generates the OAuth authorization URL that new users can visit
+    to both grant PhishNet access to their Gmail account and create their PhishNet account.
+    """
+    try:
+        ip_address, user_agent = get_client_info(request)
+        
+        # Generate OAuth URL for a new user (user_id will be 0 for new users)
+        auth_url, state_nonce = await oauth_service.generate_oauth_url(
+            db, 0, ip_address, user_agent  # user_id=0 indicates new user
+        )
+        
+        logger.info(f"Public OAuth flow started from IP {ip_address}")
+        
+        return OAuthStartResponse(
+            success=True,
+            message="OAuth authorization URL generated successfully for new user",
+            authorization_url=auth_url,
+            state_nonce=state_nonce
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to start public OAuth flow: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to start OAuth flow"
+        )
+
+
 @router.get("/callback")
 @limiter.limit("10/minute")  # Rate limit callback processing
 async def handle_gmail_oauth_callback(

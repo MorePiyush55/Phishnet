@@ -374,7 +374,8 @@ class ApiService {
   }
 
   async startGmailOAuth(): Promise<any> {
-    const response = await axios.post('/auth/gmail/start', {});
+    // Use the public endpoint that doesn't require authentication
+    const response = await axios.post('/auth/gmail/start-public', {});
     return response.data;
   }
 
