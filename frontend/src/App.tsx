@@ -39,6 +39,38 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    // Check for OAuth callback parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const oauthSuccess = urlParams.get('oauth_success');
+    const oauthError = urlParams.get('oauth_error');
+    const userEmail = urlParams.get('email');
+
+    if (oauthSuccess === 'true') {
+      // OAuth was successful
+      console.log('OAuth success! User email:', userEmail);
+      setIsAuthenticated(true);
+      // Clear URL parameters and redirect to dashboard
+      window.history.replaceState({}, document.title, window.location.pathname);
+      // You can store user info in localStorage or context here
+      if (userEmail) {
+        localStorage.setItem('user_email', userEmail);
+      }
+    } else if (oauthError) {
+      // OAuth failed
+      console.error('OAuth error:', oauthError);
+      setIsAuthenticated(false);
+      // Clear URL parameters
+      window.history.replaceState({}, document.title, window.location.pathname);
+      // Show error to user
+      alert(`OAuth failed: ${oauthError}`);
+    } else {
+      // No OAuth callback, check existing auth state
+      // You can implement your auth check logic here
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
     checkAuthStatus();
   }, []);
 
