@@ -1,7 +1,7 @@
 import axios, { AxiosResponse } from 'axios';
 
 // Base API configuration
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://phishnet-backend-iuoc.onrender.com';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -111,8 +111,9 @@ export interface ScanHistory {
 }
 
 export interface OAuthStartResponse {
-  oauth_url: string;
-  state: string;
+  success: boolean;
+  message: string;
+  authorization_url: string;
 }
 
 export interface RevokeResponse {
@@ -256,13 +257,14 @@ export class OAuthService {
         throw new Error(`Rate limit exceeded. Wait ${Math.ceil(waitTime / 1000)} seconds.`);
       }
 
-      const response: AxiosResponse<OAuthStartResponse> = await api.get('/auth/start');
-      
-      // Store state for verification (optional extra security)
-      sessionStorage.setItem('oauth_state', response.data.state);
+      const response: AxiosResponse<OAuthStartResponse> = await api.post('/api/test/oauth/start', {});
       
       // Redirect to Google OAuth
-      window.location.href = response.data.oauth_url;
+      if (response.data.success && response.data.authorization_url) {
+        window.location.href = response.data.authorization_url;
+      } else {
+        throw new Error(response.data.message || 'Failed to start OAuth flow');
+      }
     } catch (error: any) {
       return await this.handleApiError(error, { url: '/auth/start', method: 'get' });
     }
