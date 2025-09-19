@@ -10,6 +10,7 @@ import { EmailAnalysisTest } from './components/EmailAnalysisTest';
 import { ErrorProvider } from './components/ErrorHandling';
 import { AuthLandingPage } from './components/AuthLandingPage';
 import { GoogleOAuthButton, OAuthCallbackHandler, AuthProvider } from './components/GoogleOAuth';
+import { OAuthService } from './services/oauthService';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -47,28 +48,14 @@ function App() {
     setIsLoading(false);
   };
 
-  const handleGoogleSignIn = () => {
-    // This will redirect to Google OAuth
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-    const redirectUri = `${window.location.origin}/auth/callback`;
-    
-    const scope = [
-      'https://www.googleapis.com/auth/gmail.readonly',
-      'https://www.googleapis.com/auth/userinfo.profile',
-      'https://www.googleapis.com/auth/userinfo.email'
-    ].join(' ');
-    
-    const params = new URLSearchParams({
-      client_id: clientId,
-      redirect_uri: redirectUri,
-      response_type: 'code',
-      scope,
-      access_type: 'offline',
-      prompt: 'consent',
-      state: Math.random().toString(36).substring(2, 15)
-    });
-    
-    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+  const handleGoogleSignIn = async () => {
+    try {
+      // Use the backend OAuth service instead of hardcoded implementation
+      await OAuthService.startOAuth();
+      // OAuth service will redirect to Google, so we won't reach here normally
+    } catch (error) {
+      console.error('OAuth error:', error);
+    }
   };
 
   const handleAuthSuccess = (tokens: any) => {

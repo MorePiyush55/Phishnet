@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, CheckCircle, AlertCircle, Loader2, ArrowRight } from 'lucide-react';
+import { OAuthService } from '../services/oauthService';
 
 interface GoogleOAuthButtonProps {
   onSuccess: (authCode: string) => void;
@@ -14,68 +15,18 @@ export const GoogleOAuthButton: React.FC<GoogleOAuthButtonProps> = ({
 }) => {
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleGoogleSignIn = () => {
+  const handleGoogleSignIn = async () => {
     setIsLoading(true);
     
     try {
-      // Get client ID from environment variables
-      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-      
-      if (!clientId) {
-        throw new Error('Google Client ID not configured');
-      }
-
-      // For development, use the production backend OAuth endpoint
-      // since the OAuth client is configured for production URLs
-      const redirectUri = 'https://phishnet-1ed1.onrender.com/oauth2callback';
-      
-      // OAuth scopes for Gmail access
-      const scope = [
-        'https://www.googleapis.com/auth/gmail.readonly',
-        'https://www.googleapis.com/auth/userinfo.profile',
-        'https://www.googleapis.com/auth/userinfo.email',
-        'openid'
-      ].join(' ');
-      
-      // Generate secure state parameter
-      const state = generateSecureState();
-      
-      // Store state in localStorage for verification
-      localStorage.setItem('oauth_state', state);
-      localStorage.setItem('oauth_timestamp', Date.now().toString());
-      
-      // Build OAuth URL
-      const params = new URLSearchParams({
-        client_id: clientId,
-        redirect_uri: redirectUri,
-        response_type: 'code',
-        scope,
-        access_type: 'offline',
-        prompt: 'consent',
-        state: state,
-        include_granted_scopes: 'true'
-      });
-      
-      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
-      
-      console.log('OAuth URL:', authUrl);
-      console.log('Redirect URI:', redirectUri);
-      console.log('Client ID:', clientId);
-      
-      // Redirect to Google OAuth
-      window.location.href = authUrl;
-      
+      // Use the backend OAuth service instead of hardcoded implementation
+      await OAuthService.startOAuth();
+      // OAuth service will redirect to Google, so we won't reach here normally
     } catch (error) {
       console.error('OAuth initiation error:', error);
       setIsLoading(false);
       onError(error instanceof Error ? error.message : 'Failed to initiate Google OAuth');
     }
-  };
-
-  const generateSecureState = (): string => {
-    const array = new Uint8Array(32);
-    crypto.getRandomValues(array);
-    return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
   };
 
   return (
