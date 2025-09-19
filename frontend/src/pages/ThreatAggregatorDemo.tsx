@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import ThreatExplanationPanel from '../components/ThreatExplanationPanel';
 import ThreatConfigurationPanel from '../components/ThreatConfigurationPanel';
 
+// API Base URL configuration
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+
 // Sample threat result data
 const SAMPLE_THREAT_RESULT = {
   target: "https://suspicious-phishing-site.com/login",
@@ -15,7 +18,7 @@ const SAMPLE_THREAT_RESULT = {
       confidence: 0.94,
       weight: 0.25,
       explanation: "ML model detected multiple phishing indicators including suspicious domain patterns and content similarity to known phishing sites.",
-      evidence_urls: ["http://localhost:8000/evidence/ml_features_123"],
+      evidence_urls: [`${API_BASE_URL}/evidence/ml_features_123`],
       timestamp: Date.now() / 1000
     },
     llm_verdict: {
@@ -23,7 +26,7 @@ const SAMPLE_THREAT_RESULT = {
       confidence: 0.89,
       weight: 0.20,
       explanation: "LLM analysis identified deceptive language patterns and credential harvesting forms typical of phishing attacks.",
-      evidence_urls: ["http://localhost:8000/evidence/llm_reasoning_456"],
+      evidence_urls: [`${API_BASE_URL}/evidence/llm_reasoning_456`],
       timestamp: Date.now() / 1000
     },
     virustotal: {
@@ -31,7 +34,7 @@ const SAMPLE_THREAT_RESULT = {
       confidence: 0.95,
       weight: 0.15,
       explanation: "6 out of 84 security vendors flagged this URL as malicious or suspicious.",
-      evidence_urls: ["http://localhost:8000/evidence/virustotal_789"],
+      evidence_urls: [`${API_BASE_URL}/evidence/virustotal_789`],
       timestamp: Date.now() / 1000
     },
     abuseipdb: {
@@ -39,7 +42,7 @@ const SAMPLE_THREAT_RESULT = {
       confidence: 0.78,
       weight: 0.15,
       explanation: "IP address has been reported for malicious activities with 72% confidence.",
-      evidence_urls: ["http://localhost:8000/evidence/abuseipdb_101"],
+      evidence_urls: [`${API_BASE_URL}/evidence/abuseipdb_101`],
       timestamp: Date.now() / 1000
     },
     redirect_analysis: {
@@ -47,7 +50,7 @@ const SAMPLE_THREAT_RESULT = {
       confidence: 0.86,
       weight: 0.10,
       explanation: "Detected suspicious redirect chain through multiple domains attempting to evade detection.",
-      evidence_urls: ["http://localhost:8000/evidence/redirects_202"],
+      evidence_urls: [`${API_BASE_URL}/evidence/redirects_202`],
       timestamp: Date.now() / 1000
     }
   },
@@ -62,7 +65,7 @@ const SAMPLE_THREAT_RESULT = {
     supporting_evidence: [
       {
         type: "screenshot",
-        url: "http://localhost:8000/evidence/screenshot_login_page",
+        url: `${API_BASE_URL}/evidence/screenshot_login_page`,
         description: "Screenshot showing fake login form designed to mimic legitimate service",
         metadata: { resolution: "1920x1080", timestamp: "2024-01-15T10:30:00Z" },
         component_source: "redirect_analysis",
@@ -70,7 +73,7 @@ const SAMPLE_THREAT_RESULT = {
       },
       {
         type: "redirect_chain",
-        url: "http://localhost:8000/evidence/redirect_trace",
+        url: `${API_BASE_URL}/evidence/redirect_trace`,
         description: "Complete redirect chain analysis showing evasion techniques",
         metadata: { hops: 4, final_domain: "suspicious-phishing-site.com" },
         component_source: "redirect_analysis",
@@ -78,7 +81,7 @@ const SAMPLE_THREAT_RESULT = {
       },
       {
         type: "ml_features",
-        url: "http://localhost:8000/evidence/ml_feature_vector",
+        url: `${API_BASE_URL}/evidence/ml_feature_vector`,
         description: "ML feature analysis showing 23 positive phishing indicators",
         metadata: { feature_count: 156, positive_indicators: 23 },
         component_source: "ml_score",

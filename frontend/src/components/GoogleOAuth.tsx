@@ -25,9 +25,9 @@ export const GoogleOAuthButton: React.FC<GoogleOAuthButtonProps> = ({
         throw new Error('Google Client ID not configured');
       }
 
-      // Determine redirect URI based on current domain
-      const currentDomain = window.location.origin;
-      const redirectUri = `${currentDomain}/auth/callback`;
+      // For development, use the production backend OAuth endpoint
+      // since the OAuth client is configured for production URLs
+      const redirectUri = 'https://phishnet-1ed1.onrender.com/oauth2callback';
       
       // OAuth scopes for Gmail access
       const scope = [
@@ -52,7 +52,7 @@ export const GoogleOAuthButton: React.FC<GoogleOAuthButtonProps> = ({
         scope,
         access_type: 'offline',
         prompt: 'consent',
-        state,
+        state: state,
         include_granted_scopes: 'true'
       });
       

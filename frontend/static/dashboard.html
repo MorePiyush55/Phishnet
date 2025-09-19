@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhishNet SOC Dashboard</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .loading-spinner {
+            border: 3px solid #f3f4f6;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // API Client
+        const apiClient = {
+            baseURL: window.location.protocol + '//' + window.location.hostname + ':8000',
+            
+            async get(endpoint) {
+                try {
+                    const response = await fetch(`${this.baseURL}${endpoint}`);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    return await response.json();
+                } catch (error) {
+                    console.error('API Error:', error);
+                    throw error;
+                }
+            },
+
+            async login(email, password) {
+                const formData = new FormData();
+                formData.append('username', email);
+                formData.append('password', password);
+                
+                const response = await fetch(`${this.baseURL}/api/v1/auth/login`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Login failed');
+                }
+                
+                const data = await response.json();
+                localStorage.setItem('token', data.access_token);
+                return data;
+            },
+
+            async getWithAuth(endpoint) {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`${this.baseURL}${endpoint}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                return await response.json();
+            }
+        };
+
+        // Login Component
+        function LoginPage({ onLogin }) {
+            const [email, setEmail] = useState('admin@phishnet.local');
+            const [password, setPassword] = useState('admin');
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState('');
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setLoading(true);
+                setError('');
+
+                try {
+                    await apiClient.login(email, password);
+                    onLogin();
+                } catch (err) {
+                    setError('Login failed. Please check your credentials.');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div className="min-h-screen flex items-center justify-center">
+                    <div className="max-w-md w-full space-y-8">
+                        <div>
+                            <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+                                🛡️ PhishNet SOC
+                            </h2>
+                            <p className="mt-2 text-center text-sm text-gray-600">
+                                Email Security Analysis Platform
+                            </p>
+                        </div>
+                        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+                            <div className="rounded-md shadow-sm -space-y-px">
+                                <div>
+                                    <input
+                                        type="email"
+                                        required
+                                        className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                                        placeholder="Email address"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <input
+                                        type="password"
+                                        required
+                                        className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                                        placeholder="Password"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+
+                            {error && (
+                                <div className="text-red-600 text-sm text-center">{error}</div>
+                            )}
+
+                            <div>
+                                <button
+                                    type="submit"
+                                    disabled={loading}
+                                    className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                                >
+                                    {loading ? (
+                                        <div className="loading-spinner"></div>
+                                    ) : (
+                                        'Sign in'
+                                    )}
+                                </button>
+                            </div>
+                        </form>
+                        <div className="text-xs text-gray-500 text-center">
+                            Default: admin@phishnet.local / admin
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Dashboard Stats Component
+        function DashboardStats({ stats }) {
+            return (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+                    <div className="bg-white overflow-hidden shadow rounded-lg">
+                        <div className="p-5">
+                            <div className="flex items-center">
+                                <div className="flex-shrink-0">
+                                    <div className="text-2xl">📧</div>
+                                </div>
+                                <div className="ml-5 w-0 flex-1">
+                                    <dl>
+                                        <dt className="text-sm font-medium text-gray-500 truncate">
+                                            Total Emails
+                                        </dt>
+                                        <dd className="text-lg font-medium text-gray-900">
+                                            {stats?.total_emails || 0}
+                                        </dd>
+                                    </dl>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white overflow-hidden shadow rounded-lg">
+                        <div className="p-5">
+                            <div className="flex items-center">
+                                <div className="flex-shrink-0">
+                                    <div className="text-2xl">🚨</div>
+                                </div>
+                                <div className="ml-5 w-0 flex-1">
+                                    <dl>
+                                        <dt className="text-sm font-medium text-gray-500 truncate">
+                                            High Risk
+                                        </dt>
+                                        <dd className="text-lg font-medium text-red-600">
+                                            {stats?.status_breakdown?.quarantined || 0}
+                                        </dd>
+                                    </dl>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white overflow-hidden shadow rounded-lg">
+                        <div className="p-5">
+                            <div className="flex items-center">
+                                <div className="flex-shrink-0">
+                                    <div className="text-2xl">⏳</div>
+                                </div>
+                                <div className="ml-5 w-0 flex-1">
+                                    <dl>
+                                        <dt className="text-sm font-medium text-gray-500 truncate">
+                                            Pending
+                                        </dt>
+                                        <dd className="text-lg font-medium text-yellow-600">
+                                            {stats?.status_breakdown?.pending || 0}
+                                        </dd>
+                                    </dl>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-white overflow-hidden shadow rounded-lg">
+                        <div className="p-5">
+                            <div className="flex items-center">
+                                <div className="flex-shrink-0">
+                                    <div className="text-2xl">📊</div>
+                                </div>
+                                <div className="ml-5 w-0 flex-1">
+                                    <dl>
+                                        <dt className="text-sm font-medium text-gray-500 truncate">
+                                            Avg Score
+                                        </dt>
+                                        <dd className="text-lg font-medium text-gray-900">
+                                            {stats?.average_score || 'N/A'}
+                                        </dd>
+                                    </dl>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Email List Component
+        function EmailList({ emails, onEmailClick }) {
+            const getRiskColor = (score) => {
+                if (!score) return 'text-gray-500';
+                if (score >= 0.7) return 'text-red-600';
+                if (score >= 0.4) return 'text-yellow-600';
+                return 'text-green-600';
+            };
+
+            const getStatusColor = (status) => {
+                switch (status) {
+                    case 'quarantined': return 'bg-red-100 text-red-800';
+                    case 'analyzed': return 'bg-green-100 text-green-800';
+                    case 'pending': return 'bg-yellow-100 text-yellow-800';
+                    default: return 'bg-gray-100 text-gray-800';
+                }
+            };
+
+            return (
+                <div className="bg-white shadow overflow-hidden sm:rounded-md">
+                    <div className="px-4 py-5 sm:px-6">
+                        <h3 className="text-lg leading-6 font-medium text-gray-900">
+                            Recent Emails
+                        </h3>
+                        <p className="mt-1 max-w-2xl text-sm text-gray-500">
+                            Latest email security analysis results
+                        </p>
+                    </div>
+                    <ul className="divide-y divide-gray-200">
+                        {emails?.map((email) => (
+                            <li key={email.id}>
+                                <div
+                                    className="px-4 py-4 hover:bg-gray-50 cursor-pointer"
+                                    onClick={() => onEmailClick(email)}
+                                >
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center min-w-0 flex-1">
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-center justify-between">
+                                                    <p className="text-sm font-medium text-gray-900 truncate">
+                                                        {email.subject}
+                                                    </p>
+                                                    <div className="ml-2 flex-shrink-0 flex">
+                                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(email.status)}`}>
+                                                            {email.status}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div className="mt-2 flex items-center text-sm text-gray-500">
+                                                    <p className="truncate">
+                                                        From: {email.from_addr}
+                                                    </p>
+                                                    <span className="mx-2">•</span>
+                                                    <p className="truncate">
+                                                        To: {email.to_addr}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="ml-4 flex-shrink-0 text-right">
+                                            <div className={`text-lg font-bold ${getRiskColor(email.score)}`}>
+                                                {email.score ? (email.score * 100).toFixed(0) + '%' : 'N/A'}
+                                            </div>
+                                            <div className="text-xs text-gray-500">
+                                                {new Date(email.created_at).toLocaleDateString()}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            );
+        }
+
+        // Main Dashboard Component
+        function Dashboard() {
+            const [stats, setStats] = useState(null);
+            const [emails, setEmails] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState('');
+            const [selectedEmail, setSelectedEmail] = useState(null);
+
+            useEffect(() => {
+                fetchData();
+                const interval = setInterval(fetchData, 30000); // Refresh every 30 seconds
+                return () => clearInterval(interval);
+            }, []);
+
+            const fetchData = async () => {
+                try {
+                    setError('');
+                    
+                    // Fetch stats and emails in parallel
+                    const [statsResponse, emailsResponse] = await Promise.all([
+                        apiClient.get('/api/v1/emails/stats/summary'),
+                        apiClient.get('/api/v1/emails?limit=10')
+                    ]);
+
+                    setStats(statsResponse);
+                    setEmails(emailsResponse.emails || []);
+                } catch (err) {
+                    setError('Failed to load dashboard data: ' + err.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            if (loading) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center">
+                        <div className="text-center">
+                            <div className="loading-spinner mx-auto mb-4"></div>
+                            <p className="text-gray-600">Loading dashboard...</p>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-gray-100">
+                    {/* Header */}
+                    <div className="bg-white shadow">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                            <div className="flex justify-between items-center py-6">
+                                <div className="flex items-center">
+                                    <h1 className="text-3xl font-bold text-gray-900">
+                                        🛡️ PhishNet SOC Dashboard
+                                    </h1>
+                                </div>
+                                <div className="flex items-center space-x-4">
+                                    <span className="text-sm text-gray-500">
+                                        Last updated: {new Date().toLocaleTimeString()}
+                                    </span>
+                                    <button
+                                        onClick={fetchData}
+                                        className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded text-sm"
+                                    >
+                                        Refresh
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            localStorage.removeItem('token');
+                                            window.location.reload();
+                                        }}
+                                        className="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded text-sm"
+                                    >
+                                        Logout
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Main Content */}
+                    <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+                        {error && (
+                            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+                                {error}
+                            </div>
+                        )}
+
+                        {/* Stats */}
+                        <DashboardStats stats={stats} />
+
+                        {/* Email List */}
+                        <EmailList 
+                            emails={emails} 
+                            onEmailClick={setSelectedEmail}
+                        />
+
+                        {/* Email Detail Modal */}
+                        {selectedEmail && (
+                            <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+                                <div className="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="text-lg font-bold text-gray-900">
+                                            Email Details
+                                        </h3>
+                                        <button
+                                            onClick={() => setSelectedEmail(null)}
+                                            className="text-gray-400 hover:text-gray-600"
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <strong>Subject:</strong> {selectedEmail.subject}
+                                        </div>
+                                        <div>
+                                            <strong>From:</strong> {selectedEmail.from_addr}
+                                        </div>
+                                        <div>
+                                            <strong>To:</strong> {selectedEmail.to_addr}
+                                        </div>
+                                        <div>
+                                            <strong>Status:</strong> {selectedEmail.status}
+                                        </div>
+                                        {selectedEmail.score && (
+                                            <div>
+                                                <strong>Risk Score:</strong> {(selectedEmail.score * 100).toFixed(1)}%
+                                            </div>
+                                        )}
+                                        <div>
+                                            <strong>Received:</strong> {new Date(selectedEmail.received_at).toLocaleString()}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        // Main App Component
+        function App() {
+            const [isAuthenticated, setIsAuthenticated] = useState(false);
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                // Check if user is already logged in
+                const token = localStorage.getItem('token');
+                setIsAuthenticated(!!token);
+                setLoading(false);
+            }, []);
+
+            if (loading) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center">
+                        <div className="loading-spinner"></div>
+                    </div>
+                );
+            }
+
+            return isAuthenticated ? 
+                <Dashboard /> : 
+                <LoginPage onLogin={() => setIsAuthenticated(true)} />;
+        }
+
+        // Render the app
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>

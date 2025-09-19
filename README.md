@@ -13,7 +13,7 @@
 ## 🎯 **Current Development Focus - Immediate Next Steps**
 
 ### 📈 **Performance Optimization** (Backend Focus) - *In Progress*
-- ⚡ **Database Performance**: Advanced indexing, query batching, connection pooling for 10k+ emails/min
+- ⚡ **Database Performance**: MongoDB indexing, aggregation pipeline optimization for 10k+ emails/min
 - 🔄 **Redis Caching**: Smart caching for IP/domain reputation lookups (targeting 90%+ cache hit ratio)
 - 📊 **Load Testing**: Benchmark with large test datasets (10k+ emails) for performance validation
 - 📈 **Real-time Metrics**: Dashboard showing emails processed/sec, cache hit ratios, processing times
@@ -48,20 +48,22 @@
 ```bash
 # Clone and setup
 git clone https://github.com/MorePiyush55/Phishnet.git
-cd Phishnet
+cd Phishnet/backend
 python -m venv phishnet_env
 phishnet_env\Scripts\activate  # Windows
 pip install -r requirements.txt
 
 # Configure environment
 cp .env.example .env
-# Edit .env with your configurations
+# Edit .env with your MongoDB URI
 
-# Initialize database
-python scripts/init_db.py
+# Start backend
+python -m app.main
 
-# Start services
-python run.py
+# Start frontend (in new terminal)
+cd ../frontend
+npm install
+npm run dev
 ```
 
 ### ☁️ **Live Demo - Production Deployment**
@@ -121,16 +123,16 @@ PhishNet follows enterprise patterns with single orchestrator design, comprehens
 - **CPU Utilization**: <60% under normal load
 
 ### Performance Optimization Roadmap
-- **Database Optimization**: Advanced indexing and query batching → Target: 10k+ emails/min
+- **Database Optimization**: MongoDB indexing and aggregation optimization → Target: 10k+ emails/min
 - **Redis Caching**: Intelligent caching strategy → Target: 95%+ cache hit ratio
-- **Connection Pooling**: Optimized database connections → Target: 50% latency reduction
+- **Connection Pooling**: Optimized MongoDB connections → Target: 50% latency reduction
 - **Async Processing**: Enhanced worker orchestration → Target: 5x throughput improvement
 
 ## 🎯 Feature Implementation Priorities
 
 ### Phase 1: Performance & Intelligence (Weeks 1-2)
 ```
-📈 Database Performance Optimization
+📈 MongoDB Performance Optimization
 ├── Advanced indexing for email queries
 ├── Connection pooling and query batching  
 ├── Redis caching for reputation lookups
@@ -223,7 +225,7 @@ PhishNet follows enterprise patterns with single orchestrator design, comprehens
 ### 🚀 Performance & Scalability
 - **High Throughput**: 1000+ emails/minute with horizontal scaling support
 - **Intelligent Caching**: Redis-based caching with 90%+ hit ratios
-- **Database Optimization**: Advanced indexing and connection pooling
+- **Database Optimization**: MongoDB indexing and aggregation pipeline optimization
 - **Async Processing**: Non-blocking orchestration with queue management
 
 ## � Quick Start
@@ -252,11 +254,11 @@ python run.py
 - API Docs: http://localhost:8000/docs
 - Health: http://localhost:8000/health
 
-## �📦 Installation & Setup
+## 📦 Installation & Setup
 
 ### Prerequisites
 - Python 3.11+
-- PostgreSQL 13+
+- MongoDB Atlas or local MongoDB instance
 - Redis 6+
 - Node.js 18+ (for frontend)
 
@@ -274,44 +276,37 @@ python run.py
 
 2. **Install Dependencies**
    ```bash
+   cd backend
    pip install -r requirements.txt
-   pip install -r requirements_enhanced.txt
    ```
 
 3. **Database Configuration**
    ```bash
-   # PostgreSQL setup
-   createdb phishnet_dev
    cp .env.example .env
-   # Edit .env with your database credentials
+   # Edit .env with your MongoDB URI:
+   # MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/phishnet
    ```
 
-4. **Initialize Database**
+4. **Start Application**
    ```bash
-   python scripts/init_complete_db.py
-   ```
-
-5. **Frontend Setup**
-   ```bash
+   # Backend API (automatically creates MongoDB collections)
+   cd backend
+   python -m app.main
+   
+   # Frontend (in separate terminal)
    cd frontend
    npm install
    npm run dev
-   ```
-
-6. **Start Application**
-   ```bash
-   # Backend API
-   python app/main.py
    
-   # Dashboard is available at http://localhost:8080
+   # Dashboard is available at http://localhost:5173
    # API documentation at http://localhost:8000/docs
    ```
 
 ## 🎯 Development Progress Tracker
 
 ### 📈 Performance Optimization - *Sprint 1*
-- [ ] **Database Indexing**: Add composite indexes for email queries
-- [ ] **Connection Pooling**: Implement SQLAlchemy connection pooling (target: 50% latency reduction)
+- [ ] **Database Indexing**: Add MongoDB indexes for email queries
+- [ ] **Connection Pooling**: Optimize MongoDB connection pooling (target: 50% latency reduction)
 - [ ] **Redis Caching**: Implement caching layer for IP/domain lookups (target: 95% hit ratio)
 - [ ] **Load Testing**: Benchmark with 10k+ email dataset
 - [ ] **Performance Dashboard**: Real-time metrics (emails/sec, cache hit ratio, response times)
@@ -848,4 +843,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 **PhishNet** - Protecting users from phishing attacks with AI-powered detection and federated learning.
+
 

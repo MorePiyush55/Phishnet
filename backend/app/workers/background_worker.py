@@ -12,13 +12,9 @@ from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 from enum import Enum
 
-from sqlalchemy.orm import Session
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
-from app.core.database import get_database_url
+from app.db.mongodb import MongoDBManager
+from app.models.mongodb_models import User, EmailAnalysis, AuditLog
 from app.core.redis_client import get_redis_client
-from app.models.user import User, ScanResult, AuditLog
 from app.services.gmail_operations import GmailOperationsService
 from app.config.settings import get_settings
 

@@ -43,21 +43,6 @@ services:
 # REDIS_URL=redis://your-redis-instance
 # SECRET_KEY=your-app-secret-key
 # ENVIRONMENT=production
-
-# Optional: If you want to deploy the Node OAuth backend (node_backend/) instead of FastAPI,
-# you can add a second service like this (example):
-#
-#  - type: web
-#    name: phishnet-node-backend
-#    env: node
-#    plan: starter
-#    buildCommand: cd node_backend && npm install
-#    startCommand: cd node_backend && node server.js
-#    envVars:
-#      - key: GOOGLE_CLIENT_ID
-#        sync: false
-#      - key: GOOGLE_CLIENT_SECRET
-#        sync: false
 #      - key: GOOGLE_REDIRECT_URI
 #        value: https://phishnet-1ed1.onrender.com/auth/google/callback
 #      - key: FRONTEND_URL

@@ -398,6 +398,9 @@ temp/
 ehthumbs.db
 Thumbs.db
 
+# Local folder for storing external API keys (do NOT commit)
+/all_api/
+
 # Security scan results
 .snyk
 security-audit.*
@@ -405,3 +408,22 @@ vulnerability-report.*
 
 # Docker secrets
 run/secrets/
+
+# Additional development artifacts
+*.bak
+*.backup
+*_backup.*
+*_old.*
+temp/
+tmp/
+sandbox_local/
+*_env/
+phishnet_env/
+.coverage
+.pytest_cache/
+
+# IDE and editor files
+.vscode/settings.json.local
+*.swp
+*.swo
+*~

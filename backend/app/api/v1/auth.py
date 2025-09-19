@@ -248,3 +248,109 @@ async def logout(
 async def auth_health():
     """Auth service health check"""
     return {"status": "healthy", "service": "auth"}
+
+
+# Google OAuth Callback Request Model
+class GoogleOAuthCallbackRequest(BaseModel):
+    code: str
+    redirect_uri: str
+    state: str
+
+
+@router.post("/google/callback")
+async def google_oauth_callback(
+    request: GoogleOAuthCallbackRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Handle Google OAuth callback - exchange authorization code for tokens
+    
+    **Contract**: POST /api/v1/auth/google/callback
+    - Input: { code, redirect_uri, state }
+    - Output: { access_token, refresh_token, user_info }
+    """
+    try:
+        import httpx
+        from app.config.settings import settings
+        
+        # Exchange authorization code for tokens
+        token_url = "https://oauth2.googleapis.com/token"
+        token_data = {
+            "client_id": getattr(settings, 'GOOGLE_CLIENT_ID', ''),
+            "client_secret": getattr(settings, 'GOOGLE_CLIENT_SECRET', ''),
+            "code": request.code,
+            "grant_type": "authorization_code",
+            "redirect_uri": request.redirect_uri,
+        }
+        
+        async with httpx.AsyncClient() as client:
+            token_response = await client.post(token_url, data=token_data)
+            
+            if token_response.status_code != 200:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Failed to exchange authorization code: {token_response.text}"
+                )
+            
+            tokens = token_response.json()
+            
+            # Get user info from Google
+            user_info_url = "https://www.googleapis.com/oauth2/v2/userinfo"
+            headers = {"Authorization": f"Bearer {tokens['access_token']}"}
+            
+            user_response = await client.get(user_info_url, headers=headers)
+            
+            if user_response.status_code != 200:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Failed to get user information from Google"
+                )
+            
+            user_info = user_response.json()
+            
+            # Create or find user in database
+            user = db.query(User).filter(User.email == user_info['email']).first()
+            
+            if not user:
+                # Create new user
+                user = User(
+                    email=user_info['email'],
+                    name=user_info.get('name', ''),
+                    role='user',
+                    is_active=True,
+                    password_hash='',  # OAuth users don't have passwords
+                    created_at=datetime.utcnow()
+                )
+                db.add(user)
+                db.commit()
+                db.refresh(user)
+            else:
+                # Update last login
+                user.last_login = datetime.utcnow()
+                db.commit()
+            
+            # Create our app tokens
+            access_token = create_access_token(data={"sub": user.email})
+            refresh_token = create_refresh_token(data={"sub": user.email})
+            
+            return {
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "token_type": "bearer",
+                "google_access_token": tokens.get('access_token'),
+                "google_refresh_token": tokens.get('refresh_token'),
+                "user_info": {
+                    "id": user.id,
+                    "email": user.email,
+                    "name": user.name,
+                    "picture": user_info.get('picture', ''),
+                }
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"OAuth callback failed: {str(e)}"
+        )

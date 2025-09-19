@@ -1,23 +1,21 @@
-"""Models module for PhishNet application - organized into packages."""
+"""Models module for PhishNet application - MongoDB Only."""
 
-# Import all models to ensure they are registered with SQLAlchemy
-# Import from organized packages
-from .core import User, Email, EmailStatus
-from .analysis import Detection, EmailAction, AuditLog, ScoringRule, EmailScore, LinkAnalysis, EmailAIResults, EmailIndicators  
-from .security import FederatedModel, FederatedClient, FederatedTrainingRound, RefreshToken
-
-# Import UserRole from centralized constants
-from src.common.constants import UserRole
-
-# Backward compatibility will be added later once old files are removed
+# Import MongoDB document models only
+from .mongodb_models import (
+    User,
+    EmailAnalysis, 
+    ThreatIntelligence,
+    AnalysisJob,
+    AuditLog,
+    DOCUMENT_MODELS
+)
 
 __all__ = [
-    "User", "UserRole", 
-    "Email", "EmailStatus",
-    "Detection",
-    "FederatedModel", "FederatedClient", "FederatedTrainingRound",
-    "LinkAnalysis", "EmailAIResults", "EmailIndicators",
-    "EmailAction", "AuditLog", "ScoringRule", "EmailScore", 
-    "RefreshToken"
+    "User",
+    "EmailAnalysis", 
+    "ThreatIntelligence",
+    "AnalysisJob",
+    "AuditLog",
+    "DOCUMENT_MODELS"
 ]
 

@@ -21,23 +21,27 @@ except ImportError:
 from app.config.settings import settings
 from app.config.logging import get_logger
 
-# Import core modules with fallbacks
+# MongoDB support
 try:
-    from app.core.database import init_db
+    from app.db.mongodb import MongoDBManager
+    from app.models.mongodb_models import DOCUMENT_MODELS
+    MONGODB_AVAILABLE = True
 except ImportError:
-    def init_db():
-        pass
+    MONGODB_AVAILABLE = False
+    MongoDBManager = None
+    DOCUMENT_MODELS = []
 
 try:
-    from app.api import auth, health, gmail_oauth
+    from app.api import health, gmail_oauth
     from app.api import simple_analysis
+    from app.api import auth_simple
 except ImportError:
     # Create minimal router if imports fail
     from fastapi import APIRouter
-    auth = APIRouter()
     health = APIRouter()
     gmail_oauth = APIRouter()
     simple_analysis = APIRouter()
+    auth_simple = APIRouter()
 
 logger = get_logger(__name__)
 
@@ -48,12 +52,18 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting PhishNet application")
     
-    # Initialize database
-    try:
-        init_db()
-        logger.info("Database initialized successfully")
-    except Exception as e:
-        logger.warning(f"Database initialization skipped: {e}")
+    # Initialize MongoDB
+    if MONGODB_AVAILABLE and settings.get_mongodb_uri():
+        try:
+            await MongoDBManager.connect_to_mongo()
+            await MongoDBManager.initialize_beanie(DOCUMENT_MODELS)
+            logger.info("MongoDB initialized successfully")
+        except Exception as e:
+            logger.error(f"MongoDB initialization failed: {e}")
+            raise  # Fail startup if MongoDB is not available
+    else:
+        logger.error("MongoDB URI not configured or MongoDB not available")
+        raise RuntimeError("MongoDB is required for PhishNet to function")
     
     # Initialize Redis connection (optional)
     try:
@@ -70,6 +80,15 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("Shutting down PhishNet application")
+    
+    # Close MongoDB connection
+    if MONGODB_AVAILABLE and MongoDBManager.client:
+        try:
+            await MongoDBManager.close_mongo_connection()
+        except Exception as e:
+            logger.error(f"Error closing MongoDB connection: {e}")
+    
+    # Close Redis connection
     if hasattr(app.state, 'redis') and app.state.redis:
         try:
             await app.state.redis.close()
@@ -90,12 +109,14 @@ app = FastAPI(
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
+    allow_origins=getattr(settings, 'CORS_ORIGINS', [
         "http://localhost:3000",
         "http://localhost:5173", 
         "https://localhost:3000",
-        "https://localhost:5173"
-    ],
+        "https://localhost:5173",
+        "https://phishnet-1ed1.onrender.com",
+        "https://phishnet-frontend.vercel.app"
+    ]),
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
@@ -103,12 +124,18 @@ app.add_middleware(
 
 # Include essential API routers
 try:
-    app.include_router(health.router, tags=["Health"])
-    app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
-    app.include_router(gmail_oauth.router, tags=["Gmail OAuth"])
-    app.include_router(simple_analysis.router, tags=["Email Analysis"])
+    from .routers import main_router
+    app.include_router(main_router)
 except Exception as e:
-    logger.warning(f"Some routers could not be loaded: {e}")
+    logger.warning(f"Main router could not be loaded: {e}")
+    # Fallback to individual router includes
+    try:
+        app.include_router(health.router, tags=["Health"])
+        app.include_router(auth_simple.router, tags=["Authentication"])
+        app.include_router(gmail_oauth.router, tags=["Gmail OAuth"])
+        app.include_router(simple_analysis.router, tags=["Email Analysis"])
+    except Exception as e:
+        logger.warning(f"Some routers could not be loaded: {e}")
 
 # Prometheus metrics endpoint (if available)
 if METRICS_AVAILABLE and getattr(settings, 'ENABLE_METRICS', False):
@@ -140,6 +167,32 @@ async def health_check():
     }
 
 
+@app.get("/privacy")
+async def privacy_policy():
+    """Privacy policy page for OAuth consent screen."""
+    try:
+        from fastapi.responses import FileResponse
+        import os
+        privacy_path = os.path.join(os.path.dirname(__file__), "templates", "privacy.html")
+        return FileResponse(privacy_path, media_type="text/html")
+    except Exception as e:
+        logger.error(f"Error serving privacy policy: {e}")
+        return {"message": "Privacy policy available at our website"}
+
+
+@app.get("/terms")
+async def terms_of_service():
+    """Terms of service page for OAuth consent screen."""
+    try:
+        from fastapi.responses import FileResponse
+        import os
+        terms_path = os.path.join(os.path.dirname(__file__), "templates", "terms.html")
+        return FileResponse(terms_path, media_type="text/html")
+    except Exception as e:
+        logger.error(f"Error serving terms of service: {e}")
+        return {"message": "Terms of service available at our website"}
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler."""
@@ -155,16 +208,6 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 if __name__ == "__main__":
-    import uvicorn
-    
-    # Get port from environment variable (Render sets this)
-    port = int(os.environ.get("PORT", 8000))
-    
-    uvicorn.run(
-        "app.main:app",
-        host="0.0.0.0",
-        port=port,
-        reload=settings.DEBUG,
-        log_level=settings.LOG_LEVEL.lower()
-    )
+    # Runner moved to single canonical entrypoint `backend/main.py`
+    pass
 

@@ -25,8 +25,8 @@ import {
 } from 'lucide-react';
 
 // API configuration
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
-const WS_BASE = process.env.REACT_APP_WS_URL || 'ws://localhost:8000/api/v1';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+const WS_BASE = import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8000/api/v1';
 
 // Types
 interface ScanResult {

@@ -43,11 +43,10 @@ class Settings(BaseSettings):
     REQUIRE_SPECIAL_CHARS: bool = True
     BCRYPT_ROUNDS: int = 12
     
-    # Database
-    DATABASE_URL: str = "sqlite:///./phishnet_dev.db"
-    DATABASE_POOL_SIZE: int = 20
-    DATABASE_MAX_OVERFLOW: int = 30
-    DATABASE_ECHO: bool = False
+    # Database - MongoDB Only
+    MONGODB_URI: Optional[str] = None
+    MONGODB_DATABASE: str = "phishnet"
+    MONGODB_PASSWORD: Optional[str] = None
     
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -137,7 +136,13 @@ class Settings(BaseSettings):
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
     
     # CORS
-    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:8080"]
+    CORS_ORIGINS: List[str] = [
+        "http://localhost:3000", 
+        "http://localhost:8080",
+        "http://localhost:5173",
+        "https://phishnet-1ed1.onrender.com",
+        "https://phishnet-frontend.vercel.app"
+    ]
     CORS_ALLOW_CREDENTIALS: bool = True
     CORS_ALLOW_METHODS: List[str] = ["*"]
     CORS_ALLOW_HEADERS: List[str] = ["*"]
@@ -194,12 +199,12 @@ class Settings(BaseSettings):
             raise ValueError("SECRET_KEY must be at least 32 characters long")
         return v
     
-    @field_validator("DATABASE_URL")
+    @field_validator("MONGODB_URI")
     @classmethod
-    def validate_database_url(cls, v: str) -> str:
-        """Validate database URL format."""
-        if not v.startswith(("postgresql://", "postgres://", "sqlite:///")):
-            raise ValueError("DATABASE_URL must be a PostgreSQL or SQLite URL")
+    def validate_mongodb_uri(cls, v: Optional[str]) -> Optional[str]:
+        """Validate MongoDB URI format."""
+        if v and not v.startswith(("mongodb://", "mongodb+srv://")):
+            raise ValueError("MONGODB_URI must be a valid MongoDB connection string")
         return v
     
     @field_validator("ENVIRONMENT")
@@ -218,6 +223,24 @@ class Settings(BaseSettings):
     def is_development(self) -> bool:
         """Check if running in development."""
         return self.ENVIRONMENT == Environment.DEVELOPMENT
+    
+    def get_mongodb_uri(self) -> Optional[str]:
+        """Get MongoDB URI with password substituted if needed."""
+        if not self.MONGODB_URI:
+            return None
+        
+        # If URI already contains credentials, return as-is
+        if "@" in self.MONGODB_URI and not ("<db_password>" in self.MONGODB_URI or "your-actual-password-here" in self.MONGODB_URI):
+            return self.MONGODB_URI
+        
+        # If URI contains password placeholder, substitute with actual password
+        if self.MONGODB_PASSWORD:
+            if "<db_password>" in self.MONGODB_URI:
+                return self.MONGODB_URI.replace("<db_password>", self.MONGODB_PASSWORD)
+            elif "your-actual-password-here" in self.MONGODB_URI:
+                return self.MONGODB_URI.replace("your-actual-password-here", self.MONGODB_PASSWORD)
+        
+        return self.MONGODB_URI
     
     def get_virustotal_api_key(self) -> Optional[str]:
         """Get VirusTotal API key securely."""
@@ -258,7 +281,7 @@ class Settings(BaseSettings):
                 'abuseipdb': bool(os.getenv('ABUSEIPDB_API_KEY')),
                 'google_api': bool(os.getenv('GOOGLE_API_KEY')),
                 'redis': True,  # Redis password is optional
-                'database': True  # Database password is optional for SQLite
+                'mongodb': bool(self.MONGODB_URI)  # MongoDB URI is required
             }
     
     model_config = {

@@ -411,12 +411,5 @@ async def get_metrics():
 
 
 if __name__ == "__main__":
-    # Development server
-    uvicorn.run(
-        "app.enhanced_main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=settings.DEBUG,
-        log_level="info",
-        access_log=True
-    )
+    # Runner moved to single canonical entrypoint `backend/main.py`
+    pass

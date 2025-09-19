@@ -12,14 +12,11 @@ import urllib.parse
 
 # Import with fallbacks
 try:
-    from app.core.auth import get_current_user
-    from app.models.user import User
+    from app.core.auth_simple import get_current_user
 except ImportError:
     # Fallback auth for deployment
     def get_current_user():
         return {"id": 1, "username": "demo"}
-    
-    User = dict
 
 router = APIRouter(prefix="/api/analyze", tags=["Email Analysis"])
 

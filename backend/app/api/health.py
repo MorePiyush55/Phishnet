@@ -1,16 +1,13 @@
-"""Health check and observability endpoints."""
+"""Health check and observability endpoints - MongoDB Only."""
 
 import time
 import uuid
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.orm import Session
-from sqlalchemy import text
-import redis
+from fastapi import APIRouter, HTTPException, Request
 import asyncio
 
-from app.core.database import get_db
+from app.db.mongodb import MongoDBManager
 from app.config.settings import settings
 from app.config.logging import get_logger
 
@@ -24,23 +21,32 @@ class HealthChecker:
     def __init__(self):
         self.start_time = time.time()
     
-    async def check_database(self, db: Session) -> Dict[str, Any]:
-        """Check database connectivity and performance."""
+    async def check_database(self) -> Dict[str, Any]:
+        """Check MongoDB connectivity and performance."""
         try:
             start_time = time.time()
             
-            # Simple query to test connection
-            result = db.execute(text("SELECT 1 as health_check"))
-            result.fetchone()
+            if not MongoDBManager.client:
+                return {
+                    "status": "unhealthy",
+                    "error": "MongoDB client not connected",
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
             
-            # Test write capability
-            db.execute(text("SELECT NOW()"))
+            # Test MongoDB connection with ping
+            await MongoDBManager.client.admin.command('ping')
+            
+            # Test database access
+            db = MongoDBManager.client[settings.MONGODB_DATABASE]
+            collections = await db.list_collection_names()
             
             response_time = (time.time() - start_time) * 1000
             
             return {
                 "status": "healthy",
                 "response_time_ms": round(response_time, 2),
+                "database": settings.MONGODB_DATABASE,
+                "collections_count": len(collections),
                 "timestamp": datetime.now(timezone.utc).isoformat()
             }
             
@@ -200,7 +206,7 @@ health_checker = HealthChecker()
 
 
 @router.get("/")
-async def health_check(request: Request, db: Session = Depends(get_db)):
+async def health_check(request: Request):
     """Basic health check endpoint."""
     correlation_id = str(uuid.uuid4())
     
@@ -209,7 +215,7 @@ async def health_check(request: Request, db: Session = Depends(get_db)):
         request.state.correlation_id = correlation_id
         
         # Quick database check
-        db_health = await health_checker.check_database(db)
+        db_health = await health_checker.check_database()
         
         if db_health["status"] == "healthy":
             return {
@@ -242,14 +248,14 @@ async def health_check(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/detailed")
-async def detailed_health_check(request: Request, db: Session = Depends(get_db)):
+async def detailed_health_check(request: Request):
     """Detailed health check with all components."""
     correlation_id = str(uuid.uuid4())
     request.state.correlation_id = correlation_id
     
     try:
         # Run all health checks concurrently
-        db_task = health_checker.check_database(db)
+        db_task = health_checker.check_database()
         redis_task = health_checker.check_redis()
         api_task = health_checker.check_external_apis()
         
@@ -308,11 +314,11 @@ async def detailed_health_check(request: Request, db: Session = Depends(get_db))
 
 
 @router.get("/readiness")
-async def readiness_check(db: Session = Depends(get_db)):
+async def readiness_check():
     """Kubernetes readiness probe endpoint."""
     try:
         # Check critical dependencies
-        db_health = await health_checker.check_database(db)
+        db_health = await health_checker.check_database()
         
         if db_health["status"] == "healthy":
             return {"status": "ready"}
@@ -334,7 +340,7 @@ async def liveness_check():
 
 
 @router.get("/startup")
-async def startup_check(db: Session = Depends(get_db)):
+async def startup_check():
     """Kubernetes startup probe endpoint."""
     try:
         uptime = time.time() - health_checker.start_time
@@ -351,7 +357,7 @@ async def startup_check(db: Session = Depends(get_db)):
             )
         
         # Check that critical services are available
-        db_health = await health_checker.check_database(db)
+        db_health = await health_checker.check_database()
         redis_health = await health_checker.check_redis()
         
         if db_health["status"] != "healthy":
@@ -396,11 +402,11 @@ async def startup_check(db: Session = Depends(get_db)):
 
 
 @router.get("/metrics")
-async def metrics_endpoint(db: Session = Depends(get_db)):
+async def metrics_endpoint():
     """Prometheus metrics endpoint."""
     try:
         # Collect metrics
-        db_health = await health_checker.check_database(db)
+        db_health = await health_checker.check_database()
         redis_health = await health_checker.check_redis()
         system_info = health_checker.get_system_info()
         
