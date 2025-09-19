@@ -207,6 +207,25 @@ async def health_check():
     }
 
 
+@app.get("/test-oauth")
+async def test_oauth_direct():
+    """Direct test OAuth endpoint in main.py."""
+    try:
+        import os
+        client_id = os.getenv("GMAIL_CLIENT_ID")
+        redirect_uri = os.getenv("GMAIL_REDIRECT_URI")
+        
+        return {
+            "success": True,
+            "message": "Direct OAuth test endpoint working",
+            "has_client_id": bool(client_id),
+            "has_redirect_uri": bool(redirect_uri),
+            "client_id_start": client_id[:10] + "..." if client_id else None
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 @app.get("/privacy")
 async def privacy_policy():
     """Privacy policy page for OAuth consent screen."""
