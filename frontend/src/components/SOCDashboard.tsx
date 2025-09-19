@@ -35,6 +35,7 @@ import { useUIStore } from '../stores/uiStore';
 import { useWebSocket } from '../hooks/useWebSocket';
 import { useAuth, usePermissions } from '../hooks/useAuth';
 import { OAuthService, UserStatus } from '../services/oauthService';
+import EmailAnalysis from './EmailAnalysis';
 
 // Types
 interface Email {

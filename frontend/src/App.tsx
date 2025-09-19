@@ -11,6 +11,7 @@ import { ErrorProvider } from './components/ErrorHandling';
 import { AuthLandingPage } from './components/AuthLandingPage';
 import { GoogleOAuthButton, OAuthCallbackHandler, AuthProvider } from './components/GoogleOAuth';
 import { OAuthService } from './services/oauthService';
+import EmailAnalysis from './components/EmailAnalysis';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -49,9 +50,10 @@ function App() {
       // OAuth was successful
       console.log('OAuth success! User email:', userEmail);
       setIsAuthenticated(true);
-      // Clear URL parameters and redirect to dashboard
-      window.history.replaceState({}, document.title, window.location.pathname);
-      // You can store user info in localStorage or context here
+      setIsLoading(false);
+      // Clear URL parameters and redirect to email analysis
+      window.history.replaceState({}, document.title, '/emails');
+      // Store user info in localStorage
       if (userEmail) {
         localStorage.setItem('user_email', userEmail);
       }
@@ -124,7 +126,7 @@ function App() {
                   path="/" 
                   element={
                     isAuthenticated ? 
-                      <Navigate to="/dashboard" replace /> : 
+                      <Navigate to="/emails" replace /> : 
                       <AuthLandingPage onGoogleSignIn={handleGoogleSignIn} />
                   } 
                 />
@@ -146,6 +148,14 @@ function App() {
                   element={
                     <RequireAuth>
                       <SOCDashboard />
+                    </RequireAuth>
+                  } 
+                />
+                <Route 
+                  path="/emails" 
+                  element={
+                    <RequireAuth>
+                      <EmailAnalysis userEmail={localStorage.getItem('user_email') || ''} />
                     </RequireAuth>
                   } 
                 />
