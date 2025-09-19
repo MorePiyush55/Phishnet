@@ -9,7 +9,6 @@ try:
     from ..api.gmail_oauth import router as gmail_oauth_router
     from ..api.simple_oauth import router as simple_oauth_router
     from ..api.simple_analysis import router as simple_analysis_router
-    from ..api.oauth_routes import router as oauth_router
 except ImportError as e:
     # Fallback if imports fail
     print(f"Router import failed: {e}")
@@ -19,7 +18,6 @@ except ImportError as e:
     gmail_oauth_router = APIRouter()
     simple_oauth_router = APIRouter()
     simple_analysis_router = APIRouter()
-    oauth_router = APIRouter()
 
 # Create main router that includes all sub-routers
 main_router = APIRouter()
@@ -27,9 +25,8 @@ main_router = APIRouter()
 # Include all routers with appropriate prefixes and tags
 main_router.include_router(health_router, tags=["Health"])
 main_router.include_router(auth_router, tags=["Authentication"])
-main_router.include_router(oauth_router, tags=["OAuth"])
 main_router.include_router(gmail_oauth_router, tags=["Gmail OAuth"])
 main_router.include_router(simple_oauth_router, tags=["Simple OAuth"])
 main_router.include_router(simple_analysis_router, tags=["Email Analysis"])
 
-__all__ = ["main_router", "health_router", "auth_router", "oauth_router", "gmail_oauth_router", "simple_oauth_router", "simple_analysis_router"]
+__all__ = ["main_router", "health_router", "auth_router", "gmail_oauth_router", "simple_oauth_router", "simple_analysis_router"]
