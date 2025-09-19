@@ -14,6 +14,7 @@ import {
   Wifi,
   WifiOff
 } from 'lucide-react';
+import { OAuthService } from '../services/oauthService';
 
 interface GmailIntegrationStatus {
   connected: boolean;
@@ -126,9 +127,8 @@ export const GmailIntegration: React.FC<GmailIntegrationProps> = ({
     try {
       setIsConnecting(true);
       
-      // Mock OAuth URL - will be replaced with real API
-      const authUrl = 'https://accounts.google.com/oauth2/auth?...';
-      window.open(authUrl, '_blank');
+      // Use the proper OAuth service
+      await OAuthService.startOAuth();
     } catch (error) {
       console.error('Gmail connection failed:', error);
     } finally {

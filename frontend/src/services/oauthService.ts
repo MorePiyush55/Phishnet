@@ -252,8 +252,8 @@ export class OAuthService {
   static async startOAuth(): Promise<void> {
     try {
       // Check rate limit
-      if (!RateLimiter.canMakeRequest('/auth/start')) {
-        const waitTime = RateLimiter.getTimeUntilNextRequest('/auth/start');
+      if (!RateLimiter.canMakeRequest('/api/test/oauth/start')) {
+        const waitTime = RateLimiter.getTimeUntilNextRequest('/api/test/oauth/start');
         throw new Error(`Rate limit exceeded. Wait ${Math.ceil(waitTime / 1000)} seconds.`);
       }
 
@@ -266,7 +266,7 @@ export class OAuthService {
         throw new Error(response.data.message || 'Failed to start OAuth flow');
       }
     } catch (error: any) {
-      return await this.handleApiError(error, { url: '/auth/start', method: 'get' });
+      return await this.handleApiError(error, { url: '/api/test/oauth/start', method: 'post' });
     }
   }
 
