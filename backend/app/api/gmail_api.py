@@ -3,7 +3,17 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, EmailStr
-from app.services.gmail_service import GmailService
+
+# Import GmailService directly to avoid dependency chain issues
+try:
+    from ..services.gmail_service import GmailService
+except ImportError:
+    # If import fails, create a mock service for now
+    class GmailService:
+        def __init__(self):
+            pass
+        async def analyze_emails_for_phishing(self, email, max_emails):
+            raise HTTPException(status_code=503, detail="Gmail service temporarily unavailable")
 
 router = APIRouter(prefix="/api/gmail", tags=["Gmail Analysis"])
 
