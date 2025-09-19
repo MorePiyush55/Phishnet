@@ -124,20 +124,58 @@ app.add_middleware(
 )
 
 # Include essential API routers
+router_errors = []
 try:
     from .routers import main_router
     app.include_router(main_router)
+    logger.info("Main router loaded successfully")
 except Exception as e:
     logger.warning(f"Main router could not be loaded: {e}")
     # Fallback to individual router includes
+    
+    # Try to include each router individually
     try:
+        from app.api import health
         app.include_router(health.router, tags=["Health"])
-        app.include_router(auth_simple.router, tags=["Authentication"])
-        app.include_router(gmail_oauth.router, tags=["Gmail OAuth"])
-        app.include_router(simple_oauth.router, tags=["Simple OAuth"])
-        app.include_router(simple_analysis.router, tags=["Email Analysis"])
+        logger.info("Health router loaded")
     except Exception as e:
-        logger.warning(f"Some routers could not be loaded: {e}")
+        logger.error(f"Health router failed: {e}")
+        router_errors.append(f"health: {e}")
+    
+    try:
+        from app.api import auth_simple
+        app.include_router(auth_simple.router, tags=["Authentication"])
+        logger.info("Auth router loaded")
+    except Exception as e:
+        logger.error(f"Auth router failed: {e}")
+        router_errors.append(f"auth: {e}")
+    
+    try:
+        from app.api import simple_oauth
+        app.include_router(simple_oauth.router, tags=["Simple OAuth"])
+        logger.info("Simple OAuth router loaded")
+    except Exception as e:
+        logger.error(f"Simple OAuth router failed: {e}")
+        router_errors.append(f"simple_oauth: {e}")
+    
+    try:
+        from app.api import gmail_oauth
+        app.include_router(gmail_oauth.router, tags=["Gmail OAuth"])
+        logger.info("Gmail OAuth router loaded")
+    except Exception as e:
+        logger.error(f"Gmail OAuth router failed: {e}")
+        router_errors.append(f"gmail_oauth: {e}")
+    
+    try:
+        from app.api import simple_analysis
+        app.include_router(simple_analysis.router, tags=["Email Analysis"])
+        logger.info("Analysis router loaded")
+    except Exception as e:
+        logger.error(f"Analysis router failed: {e}")
+        router_errors.append(f"analysis: {e}")
+
+if router_errors:
+    logger.error(f"Router loading errors: {router_errors}")
 
 # Prometheus metrics endpoint (if available)
 if METRICS_AVAILABLE and getattr(settings, 'ENABLE_METRICS', False):
