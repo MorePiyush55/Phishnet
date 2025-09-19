@@ -103,7 +103,7 @@ class ApiService {
   private tokenExpiry: number | null = null;
 
   constructor() {
-    this.baseURL = `${API_BASE_URL}/api/v1`;
+    this.baseURL = `${API_BASE_URL}/api`;
     
     // Initialize axios defaults
     axios.defaults.baseURL = this.baseURL;

@@ -4,37 +4,38 @@ services:
     env: python
     plan: starter
     buildCommand: pip install --no-cache-dir -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    startCommand: python main.py
     envVars:
       - key: PYTHON_VERSION
         value: 3.13
       - key: PORT
         generateValue: true
-      - key: GOOGLE_CLIENT_ID
-        sync: false
-      - key: GOOGLE_CLIENT_SECRET
-        sync: false
-      - key: GOOGLE_REDIRECT_URI
-        value: https://phishnet-1ed1.onrender.com/api/v1/auth/google/callback
+      - key: MONGODB_URI
+        value: mongodb+srv://Propam:Propam%405553@phisnet-db.4qvmhkw.mongodb.net/?retryWrites=true&w=majority&appName=PhisNet-DB
+      - key: SECRET_KEY
+        generateValue: true
       - key: JWT_SECRET_KEY
         generateValue: true
       - key: FRONTEND_URL
-        value: https://phishnet-rouge.vercel.app
+        value: https://phishnet-frontend.vercel.app
       - key: ENVIRONMENT
         value: production
+      - key: DEBUG
+        value: false
       - key: CORS_ORIGINS
-        value: https://phishnet-rouge.vercel.app,https://localhost:3000
-      - key: DATABASE_URL
-        fromDatabase:
-          name: phishnet-db
-          property: connectionString
+        value: https://phishnet-frontend.vercel.app,https://localhost:3000,https://phishnet-rouge.vercel.app
+      - key: APP_NAME
+        value: PhishNet
+      - key: APP_VERSION
+        value: 1.0.0
+      - key: REDIS_URL
+        value: ""
     healthCheckPath: /health
-    
-  - type: pserv
-    name: phishnet-db
-    plan: free
-    databaseName: phishnet
-    user: phishnet_user
+
+# Optional Redis service (commented out for now)
+# - type: redis
+#   name: phishnet-redis
+#   plan: free
 
 # Environment Variables (Set in Render Dashboard)
 # GOOGLE_CLIENT_ID=your-google-client-id

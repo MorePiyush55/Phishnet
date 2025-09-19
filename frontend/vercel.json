@@ -1,22 +1,14 @@
 {
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build"
-    }
-  ],
-  "env": {
-    "NEXT_PUBLIC_GOOGLE_CLIENT_ID": "@google-client-id",
-    "NEXT_PUBLIC_BACKEND_URL": "@backend-url"
-  }
-}
-{
   "version": 2,
-  "name": "phishnet-frontend",
+  "name": "phishnet-frontend", 
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "installCommand": "npm install",
+  "env": {
+    "VITE_BACKEND_URL": "https://phishnet-backend.onrender.com",
+    "VITE_API_BASE_URL": "https://phishnet-backend.onrender.com/api"
+  },
   "rewrites": [
     {
       "source": "/(.*)",

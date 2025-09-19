@@ -1,5 +1,5 @@
 import React from 'react';
-import useOAuth from '../hooks/useOAuth';
+import { useOAuth } from '../hooks/useOAuth';
 
 export function ConnectGmailButton({ redirectTo = '/' }: { redirectTo?: string }) {
   const { startOAuth } = useOAuth();

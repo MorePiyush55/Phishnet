@@ -5,7 +5,7 @@ const API_BASE = (
   import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || ''
 ).toString();
 
-export default function useOAuth() {
+export function useOAuth() {
   const startOAuth = useCallback((redirectTo = '/') => {
     const url = `${API_BASE}/api/v1/auth/gmail/start?redirect_to=${encodeURIComponent(
       redirectTo

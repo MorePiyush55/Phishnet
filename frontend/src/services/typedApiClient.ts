@@ -33,7 +33,7 @@ import {
 
 // Default configuration
 const DEFAULT_CONFIG: ApiConfig = {
-  baseURL: '/api/v1',
+  baseURL: '/api',
   timeout: 30000,
   retryAttempts: 3,
   retryDelay: 1000,
