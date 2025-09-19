@@ -93,7 +93,7 @@ export interface SystemStats {
 }
 
 // Base API configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://phishnet-1ed1.onrender.com';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://phishnet-backend-iuoc.onrender.com';
 
 class ApiService {
   private baseURL: string;
