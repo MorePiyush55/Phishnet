@@ -1,17 +1,22 @@
 import { useCallback } from 'react';
-
-// Use Vite environment variables (import.meta.env)
-const API_BASE = (
-  import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || ''
-).toString();
+import { apiService } from '../services/apiService';
 
 export function useOAuth() {
-  const startOAuth = useCallback((redirectTo = '/') => {
-    const url = `${API_BASE}/api/v1/auth/gmail/start?redirect_to=${encodeURIComponent(
-      redirectTo
-    )}`;
-    // Navigate to backend start endpoint so backend can set server-side state/cookies
-    window.location.href = url;
+  const startOAuth = useCallback(async () => {
+    try {
+      // Use the API service method instead of direct navigation
+      const response = await apiService.startGmailOAuth();
+      
+      if (response.success && response.authorization_url) {
+        // Redirect to the OAuth URL returned by the backend
+        window.location.href = response.authorization_url;
+      } else {
+        throw new Error(response.message || 'Failed to start OAuth flow');
+      }
+    } catch (error) {
+      console.error('OAuth start error:', error);
+      throw error;
+    }
   }, []);
 
   return { startOAuth };
