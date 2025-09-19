@@ -374,8 +374,8 @@ class ApiService {
   }
 
   async startGmailOAuth(): Promise<any> {
-    // Use the public endpoint that doesn't require authentication
-    const response = await axios.post('/auth/gmail/start-public', {});
+    // Use the working test OAuth endpoint
+    const response = await axios.post('/api/test/oauth/start', {});
     return response.data;
   }
 
