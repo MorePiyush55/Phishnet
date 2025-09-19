@@ -33,12 +33,12 @@ async def start_oauth():
         # Generate state token
         state = secrets.token_urlsafe(32)
         
-        # Create OAuth URL
+        # Create OAuth URL with basic profile scope (doesn't require verification)
         auth_url = (
             f"https://accounts.google.com/o/oauth2/auth?"
             f"client_id={client_id}&"
             f"redirect_uri={redirect_uri}&"
-            f"scope=https://www.googleapis.com/auth/gmail.readonly&"
+            f"scope=openid email profile&"
             f"response_type=code&"
             f"state={state}&"
             f"access_type=offline&"
