@@ -25,9 +25,44 @@ from app.config.settings import settings
 from app.config.logging import get_logger
 from app.core.database import get_db
 from app.models.user import User, OAuthToken, OAuthAuditLog
-from app.core.redis_client import redis_client
+# Removed Redis dependency - using in-memory storage instead
 
 logger = get_logger(__name__)
+
+# In-memory storage for OAuth state (replaces Redis)
+# Format: {state_key: {"state_data": {...}, "expires_at": timestamp}}
+oauth_state_store = {}
+
+def _clean_expired_states():
+    """Clean up expired OAuth states from memory."""
+    current_time = datetime.utcnow().timestamp()
+    expired_keys = [
+        key for key, value in oauth_state_store.items() 
+        if value["expires_at"] < current_time
+    ]
+    for key in expired_keys:
+        del oauth_state_store[key]
+
+async def _store_oauth_state(state_key: str, state_data: dict, ttl_seconds: int = 600):
+    """Store OAuth state in memory with expiration."""
+    _clean_expired_states()
+    expires_at = datetime.utcnow().timestamp() + ttl_seconds
+    oauth_state_store[state_key] = {
+        "state_data": state_data,
+        "expires_at": expires_at
+    }
+
+async def _get_oauth_state(state_key: str) -> Optional[dict]:
+    """Get OAuth state from memory."""
+    _clean_expired_states()
+    if state_key in oauth_state_store:
+        return oauth_state_store[state_key]["state_data"]
+    return None
+
+async def _delete_oauth_state(state_key: str):
+    """Delete OAuth state from memory."""
+    if state_key in oauth_state_store:
+        del oauth_state_store[state_key]
 
 
 class GmailOAuth2Service:
@@ -141,11 +176,11 @@ class GmailOAuth2Service:
             }
             state = base64.urlsafe_b64encode(json.dumps(state_data).encode()).decode()
             
-            # Store state in Redis with expiration
-            await redis_client.setex(
+            # Store state in memory with expiration (replaces Redis)
+            await _store_oauth_state(
                 f"oauth_state:{user_id}:{state_data['nonce']}",
-                600,  # 10 minutes
-                json.dumps(state_data)
+                state_data,
+                600  # 10 minutes
             )
             
             # Create OAuth flow
@@ -252,11 +287,11 @@ class GmailOAuth2Service:
                     detail="Authorization request expired"
                 )
             
-            # Validate stored state in Redis
+            # Validate stored state in memory (replaces Redis)
             nonce = state_data.get("nonce")
-            stored_state = await redis_client.get(f"oauth_state:{user_id}:{nonce}")
-            if not stored_state:
-                logger.error(f"State not found in Redis for user {user_id}")
+            stored_state_data = await _get_oauth_state(f"oauth_state:{user_id}:{nonce}")
+            if not stored_state_data:
+                logger.error(f"State not found in memory for user {user_id}")
                 await self._log_oauth_event(
                     db, user_id, "oauth_callback_state_not_found", False,
                     error_message="State not found",
@@ -268,8 +303,8 @@ class GmailOAuth2Service:
                     detail="Invalid or expired authorization request"
                 )
             
-            # Clean up state from Redis
-            await redis_client.delete(f"oauth_state:{user_id}:{nonce}")
+            # Clean up state from memory (replaces Redis)
+            await _delete_oauth_state(f"oauth_state:{user_id}:{nonce}")
             
             # Exchange authorization code for tokens
             flow = Flow.from_client_config(
