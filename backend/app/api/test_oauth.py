@@ -23,10 +23,12 @@ async def start_oauth():
     try:
         # Get OAuth credentials from environment
         client_id = os.getenv("GMAIL_CLIENT_ID")
-        redirect_uri = os.getenv("GMAIL_REDIRECT_URI")
         
-        if not client_id or not redirect_uri:
+        if not client_id:
             raise HTTPException(status_code=500, detail="OAuth credentials not configured")
+        
+        # Use the correct redirect URI that matches our callback endpoint
+        redirect_uri = "https://phishnet-backend-iuoc.onrender.com/api/test/oauth/callback"
         
         # Generate state token
         state = secrets.token_urlsafe(32)
@@ -50,3 +52,20 @@ async def start_oauth():
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"OAuth error: {str(e)}")
+
+@router.get("/oauth/callback")
+async def oauth_callback(code: str = None, state: str = None, error: str = None):
+    """OAuth callback endpoint."""
+    if error:
+        return {"success": False, "error": error, "message": "OAuth authorization failed"}
+    
+    if not code:
+        return {"success": False, "error": "no_code", "message": "No authorization code received"}
+    
+    return {
+        "success": True, 
+        "message": "OAuth callback received successfully",
+        "code": code[:10] + "..." if code else None,
+        "state": state[:10] + "..." if state else None,
+        "next_step": "Exchange code for access token"
+    }
