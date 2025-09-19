@@ -32,7 +32,7 @@ except ImportError:
     DOCUMENT_MODELS = []
 
 try:
-    from app.api import health, gmail_oauth
+    from app.api import health, gmail_oauth, simple_oauth
     from app.api import simple_analysis
     from app.api import auth_simple
 except ImportError:
@@ -40,6 +40,7 @@ except ImportError:
     from fastapi import APIRouter
     health = APIRouter()
     gmail_oauth = APIRouter()
+    simple_oauth = APIRouter()
     simple_analysis = APIRouter()
     auth_simple = APIRouter()
 
@@ -133,6 +134,7 @@ except Exception as e:
         app.include_router(health.router, tags=["Health"])
         app.include_router(auth_simple.router, tags=["Authentication"])
         app.include_router(gmail_oauth.router, tags=["Gmail OAuth"])
+        app.include_router(simple_oauth.router, tags=["Simple OAuth"])
         app.include_router(simple_analysis.router, tags=["Email Analysis"])
     except Exception as e:
         logger.warning(f"Some routers could not be loaded: {e}")
