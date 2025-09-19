@@ -35,6 +35,7 @@ try:
     from app.api import health, gmail_oauth, simple_oauth
     from app.api import simple_analysis
     from app.api import auth_simple
+    from app.api import test_oauth, gmail_api
 except ImportError:
     # Create minimal router if imports fail
     from fastapi import APIRouter
@@ -43,6 +44,8 @@ except ImportError:
     simple_oauth = APIRouter()
     simple_analysis = APIRouter()
     auth_simple = APIRouter()
+    test_oauth = APIRouter()
+    gmail_api = APIRouter()
 
 logger = get_logger(__name__)
 
@@ -173,6 +176,24 @@ except Exception as e:
     except Exception as e:
         logger.error(f"Analysis router failed: {e}")
         router_errors.append(f"analysis: {e}")
+
+    # Add test_oauth router
+    try:
+        from app.api import test_oauth
+        app.include_router(test_oauth.router, tags=["Test OAuth"])
+        logger.info("Test OAuth router loaded")
+    except Exception as e:
+        logger.error(f"Test OAuth router failed: {e}")
+        router_errors.append(f"test_oauth: {e}")
+
+    # Add gmail_api router
+    try:
+        from app.api import gmail_api
+        app.include_router(gmail_api.router, tags=["Gmail Analysis"])
+        logger.info("Gmail API router loaded")
+    except Exception as e:
+        logger.error(f"Gmail API router failed: {e}")
+        router_errors.append(f"gmail_api: {e}")
 
 if router_errors:
     logger.error(f"Router loading errors: {router_errors}")
