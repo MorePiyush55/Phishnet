@@ -128,72 +128,33 @@ app.add_middleware(
 
 # Include essential API routers
 router_errors = []
+
+# Add routers directly with robust error handling
+routers_to_add = [
+    ("app.api.health", "Health"),
+    ("app.api.test_oauth", "Test OAuth"),
+    ("app.api.gmail_api", "Gmail Analysis"),
+    ("app.api.auth_simple", "Authentication"),
+    ("app.api.simple_oauth", "Simple OAuth"),
+    ("app.api.gmail_oauth", "Gmail OAuth"),
+    ("app.api.simple_analysis", "Email Analysis")
+]
+
+for module_path, tag in routers_to_add:
+    try:
+        module = __import__(module_path, fromlist=['router'])
+        app.include_router(module.router, tags=[tag])
+        logger.info(f"{tag} router loaded successfully")
+    except Exception as e:
+        logger.error(f"{tag} router failed to load: {e}")
+        router_errors.append(f"{tag}: {e}")
+
+# Try to load main_router as fallback
 try:
     from .routers import main_router
-    app.include_router(main_router)
-    logger.info("Main router loaded successfully")
+    logger.info("Main router also loaded as fallback")
 except Exception as e:
     logger.warning(f"Main router could not be loaded: {e}")
-    # Fallback to individual router includes
-    
-    # Try to include each router individually
-    try:
-        from app.api import health
-        app.include_router(health.router, tags=["Health"])
-        logger.info("Health router loaded")
-    except Exception as e:
-        logger.error(f"Health router failed: {e}")
-        router_errors.append(f"health: {e}")
-    
-    try:
-        from app.api import auth_simple
-        app.include_router(auth_simple.router, tags=["Authentication"])
-        logger.info("Auth router loaded")
-    except Exception as e:
-        logger.error(f"Auth router failed: {e}")
-        router_errors.append(f"auth: {e}")
-    
-    try:
-        from app.api import simple_oauth
-        app.include_router(simple_oauth.router, tags=["Simple OAuth"])
-        logger.info("Simple OAuth router loaded")
-    except Exception as e:
-        logger.error(f"Simple OAuth router failed: {e}")
-        router_errors.append(f"simple_oauth: {e}")
-    
-    try:
-        from app.api import gmail_oauth
-        app.include_router(gmail_oauth.router, tags=["Gmail OAuth"])
-        logger.info("Gmail OAuth router loaded")
-    except Exception as e:
-        logger.error(f"Gmail OAuth router failed: {e}")
-        router_errors.append(f"gmail_oauth: {e}")
-    
-    try:
-        from app.api import simple_analysis
-        app.include_router(simple_analysis.router, tags=["Email Analysis"])
-        logger.info("Analysis router loaded")
-    except Exception as e:
-        logger.error(f"Analysis router failed: {e}")
-        router_errors.append(f"analysis: {e}")
-
-    # Add test_oauth router
-    try:
-        from app.api import test_oauth
-        app.include_router(test_oauth.router, tags=["Test OAuth"])
-        logger.info("Test OAuth router loaded")
-    except Exception as e:
-        logger.error(f"Test OAuth router failed: {e}")
-        router_errors.append(f"test_oauth: {e}")
-
-    # Add gmail_api router
-    try:
-        from app.api import gmail_api
-        app.include_router(gmail_api.router, tags=["Gmail Analysis"])
-        logger.info("Gmail API router loaded")
-    except Exception as e:
-        logger.error(f"Gmail API router failed: {e}")
-        router_errors.append(f"gmail_api: {e}")
 
 if router_errors:
     logger.error(f"Router loading errors: {router_errors}")
