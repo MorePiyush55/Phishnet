@@ -134,6 +134,7 @@ routers_to_add = [
     ("app.api.health", "Health"),
     ("app.api.test_oauth", "Test OAuth"),
     ("app.api.gmail_api", "Gmail Analysis"),
+    ("app.api.gmail_simple", "Gmail Simple"),
     ("app.api.auth_simple", "Authentication"),
     ("app.api.simple_oauth", "Simple OAuth"),
     ("app.api.gmail_oauth", "Gmail OAuth"),
