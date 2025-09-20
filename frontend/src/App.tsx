@@ -6,6 +6,7 @@ import { RequireAuth } from './hooks/useAuth';
 import SOCDashboard from './components/SOCDashboard';
 import LoginPage from './components/LoginPage';
 import { ConnectedPage } from './pages/ConnectedPage';
+import { OAuthTest } from './pages/OAuthTest';
 import { EmailAnalysisTest } from './components/EmailAnalysisTest';
 import { ErrorProvider } from './components/ErrorHandling';
 import { AuthLandingPage } from './components/AuthLandingPage';
@@ -179,6 +180,10 @@ function App() {
                       <EmailAnalysisTest />
                     </RequireAuth>
                   } 
+                />
+                <Route 
+                  path="/oauth-test" 
+                  element={<OAuthTest />} 
                 />
                 
                 {/* Fallback */}
