@@ -112,43 +112,33 @@ async def gmail_health():
     return {"status": "ok", "service": "gmail_simple"}
 
 @router.post("/analyze")
-async def analyze_user_emails(request: UserEmailRequest) -> EmailListResponse:
+async def analyze_user_emails(request: UserEmailRequest):
     """
     Analyze user's Gmail emails for phishing indicators.
     
     This is a simplified test version that returns mock data.
     """
     try:
-        print(f"Mock Gmail analysis for {request.user_email}, max_emails: {request.max_emails}")
-        
-        # Create a simple mock email
-        mock_email = EmailAnalysisResponse(
-            id="mock-1",
-            subject="Test Email",
-            sender="test@example.com",
-            received_at=datetime.now().isoformat(),
-            snippet="This is a test email",
-            phishing_analysis={
-                "risk_score": 50,
-                "risk_level": "MEDIUM",
-                "indicators": ["Test indicator"],
-                "summary": "Test analysis"
-            }
-        )
-        
-        response = EmailListResponse(
-            total_emails=1,
-            emails=[mock_email]
-        )
-        
-        print(f"Returning mock email: {mock_email}")
-        return response
+        # Very simple response without complex models
+        return {
+            "total_emails": 1,
+            "emails": [
+                {
+                    "id": "mock-1",
+                    "subject": "Test Email",
+                    "sender": "test@example.com",
+                    "received_at": "2024-01-01T12:00:00",
+                    "snippet": "This is a test email",
+                    "phishing_analysis": {
+                        "risk_score": 50,
+                        "risk_level": "MEDIUM",
+                        "indicators": ["Test indicator"],
+                        "summary": "Test analysis"
+                    }
+                }
+            ]
+        }
         
     except Exception as e:
-        print(f"Error in mock Gmail analysis: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Failed to analyze emails: {str(e)}"
-        )
+        # Return JSON error instead of HTTPException
+        return {"error": f"Failed to analyze emails: {str(e)}"}
