@@ -1,105 +1,10 @@
 """Simple Gmail API endpoint for testing without complex dependencies."""
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, EmailStr
-from typing import List, Dict, Any
-import random
-from datetime import datetime, timedelta
+from typing import Dict, Any
+import datetime
 
 router = APIRouter(prefix="/api/gmail", tags=["Gmail Test"])
-
-class UserEmailRequest(BaseModel):
-    user_email: EmailStr
-    max_emails: int = 10
-
-class EmailAnalysisResponse(BaseModel):
-    id: str
-    subject: str
-    sender: str
-    received_at: str
-    snippet: str
-    phishing_analysis: Dict[str, Any]
-
-class EmailListResponse(BaseModel):
-    total_emails: int
-    emails: List[EmailAnalysisResponse]
-
-def generate_mock_email(index: int, user_email: str) -> EmailAnalysisResponse:
-    """Generate a mock email for testing."""
-    
-    # Sample email data
-    subjects = [
-        "Important: Verify your account immediately",
-        "Your package has been delivered",
-        "Meeting reminder for tomorrow",
-        "Security alert: Unusual login detected",
-        "Special offer just for you!",
-        "Your invoice is ready",
-        "Team update from Monday",
-        "Password reset request"
-    ]
-    
-    senders = [
-        "security@bank-alert.com",
-        "noreply@legitimate-site.com", 
-        "team@yourcompany.com",
-        "support@suspicious-domain.net",
-        "notifications@trusted-service.com"
-    ]
-    
-    snippets = [
-        "Click here to verify your account before it gets suspended...",
-        "Your package delivery was attempted but failed. Click to reschedule...",
-        "Just a reminder about our team meeting scheduled for tomorrow at 2 PM...",
-        "We detected an unusual login from a new device. If this wasn't you...",
-        "Limited time offer! Get 90% off on premium products. Act now...",
-        "Your monthly invoice is ready for download. Please review and pay...",
-        "Here's a quick update on what the team accomplished this week...",
-        "Someone requested a password reset for your account. If this wasn't you..."
-    ]
-    
-    # Determine risk level based on sender and content
-    sender = senders[index % len(senders)]
-    subject = subjects[index % len(subjects)]
-    snippet = snippets[index % len(snippets)]
-    
-    # Simple risk assessment
-    if "security" in sender.lower() or "alert" in subject.lower() or "verify" in snippet.lower():
-        risk_level = "HIGH"
-        risk_score = random.randint(70, 95)
-        indicators = ["Suspicious sender domain", "Urgent action required", "Account verification request"]
-        summary = "High risk phishing attempt. Requests urgent account verification."
-    elif "offer" in subject.lower() or "90%" in snippet.lower():
-        risk_level = "MEDIUM" 
-        risk_score = random.randint(40, 69)
-        indicators = ["Promotional content", "Time pressure tactics"]
-        summary = "Medium risk promotional email with aggressive marketing tactics."
-    elif "team" in sender.lower() or "meeting" in subject.lower():
-        risk_level = "SAFE"
-        risk_score = random.randint(1, 25)
-        indicators = []
-        summary = "Safe internal communication."
-    else:
-        risk_level = "LOW"
-        risk_score = random.randint(26, 39)
-        indicators = ["External sender"]
-        summary = "Low risk external email."
-    
-    received_time = datetime.now() - timedelta(hours=random.randint(1, 72))
-    
-    return EmailAnalysisResponse(
-        id=f"mock-email-{index}-{hash(user_email) % 1000}",
-        subject=subject,
-        sender=sender,
-        received_at=received_time.isoformat(),
-        snippet=snippet,
-        phishing_analysis={
-            "risk_score": risk_score,
-            "risk_level": risk_level,
-            "indicators": indicators,
-            "summary": summary
-        }
-    )
 
 @router.get("/test")
 async def test_endpoint():
@@ -112,39 +17,52 @@ async def gmail_health():
     return {"status": "ok", "service": "gmail_simple"}
 
 @router.post("/analyze")
-async def analyze_user_emails(request: UserEmailRequest):
+async def analyze_user_emails(request: Dict[str, Any]):
     """
     Analyze user's Gmail emails for phishing indicators.
     
     This is a simplified test version that returns mock data.
     """
     try:
-        print(f"Received request: {request}")
+        print("Starting analyze_user_emails")
         
-        # Generate mock emails using our function
-        emails = []
-        for i in range(min(request.max_emails, 5)):  # Limit to 5 emails max
-            email = generate_mock_email(i, request.user_email)
-            emails.append({
-                "id": email.id,
-                "subject": email.subject,
-                "sender": email.sender,
-                "received_at": email.received_at,
-                "snippet": email.snippet,
-                "phishing_analysis": email.phishing_analysis
-            })
-        
+        # Minimal working response
         result = {
-            "total_emails": len(emails),
-            "emails": emails
+            "total_emails": 2,
+            "emails": [
+                {
+                    "id": "test-1",
+                    "subject": "Test Email 1",
+                    "sender": "sender1@example.com",
+                    "received_at": "2024-01-01T10:00:00Z",
+                    "snippet": "This is test email 1",
+                    "phishing_analysis": {
+                        "risk_score": 30,
+                        "risk_level": "LOW",
+                        "indicators": [],
+                        "summary": "Safe email"
+                    }
+                },
+                {
+                    "id": "test-2",
+                    "subject": "Important: Verify Account",
+                    "sender": "security@fake-bank.com",
+                    "received_at": "2024-01-01T11:00:00Z",
+                    "snippet": "Click here to verify your account immediately",
+                    "phishing_analysis": {
+                        "risk_score": 85,
+                        "risk_level": "HIGH",
+                        "indicators": ["Suspicious domain", "Urgent action required"],
+                        "summary": "Potential phishing attempt"
+                    }
+                }
+            ]
         }
         
-        print(f"Returning result: {result}")
+        print("Successfully created result")
         return result
         
     except Exception as e:
-        error_msg = f"Failed to analyze emails: {str(e) if str(e) else 'Unknown error occurred'}"
-        print(f"Error in analyze_user_emails: {error_msg}")
-        print(f"Exception type: {type(e).__name__}")
-        # Return proper error response
-        raise HTTPException(status_code=500, detail=error_msg)
+        print(f"Exception occurred: {e}")
+        print(f"Exception type: {type(e)}")
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
