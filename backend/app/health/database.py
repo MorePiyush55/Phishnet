@@ -210,7 +210,7 @@ class DatabaseHealthChecker(HealthChecker):class DatabaseHealthChecker(HealthChe
 
         try:                    'pool_info': pool_info,
 
-            if not MONGODB_AVAILABLE or not MongoDBManager.client:                    'warnings': warnings if warnings else None
+            if not MONGODB_AVAILABLE or MongoDBManager.client is None:                    'warnings': warnings if warnings else None
 
                 return HealthResult(                }
 
