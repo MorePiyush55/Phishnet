@@ -8,9 +8,15 @@ import datetime
 try:
     from ..services.gmail_service import GmailService
     GMAIL_SERVICE_AVAILABLE = True
-except ImportError:
+    print("Gmail service imported successfully")
+except ImportError as e:
     GMAIL_SERVICE_AVAILABLE = False
     GmailService = None
+    print(f"Failed to import Gmail service: {e}")
+except Exception as e:
+    GMAIL_SERVICE_AVAILABLE = False
+    GmailService = None
+    print(f"Error importing Gmail service: {e}")
 
 router = APIRouter(prefix="/api/gmail-simple", tags=["Gmail Test"])
 
@@ -46,15 +52,20 @@ async def analyze_user_emails(request: Optional[Dict[str, Any]] = None):
         
         # Check if Gmail service is available
         if not GMAIL_SERVICE_AVAILABLE or not GmailService:
+            print("Gmail service not available, returning mock data")
             # Return mock data as fallback
             return get_mock_emails_response()
+        
+        print(f"Gmail service available, trying to fetch emails for: {user_email}")
         
         # Create Gmail service instance
         gmail_service = GmailService()
         
         # Try to fetch real emails
         try:
+            print("Calling analyze_emails_for_phishing...")
             analyzed_emails = await gmail_service.analyze_emails_for_phishing(user_email, max_emails)
+            print(f"Got {len(analyzed_emails) if analyzed_emails else 0} emails from Gmail service")
             
             # Convert to our expected format
             formatted_emails = []
@@ -81,11 +92,17 @@ async def analyze_user_emails(request: Optional[Dict[str, Any]] = None):
             
         except Exception as gmail_error:
             print(f"Gmail API error: {gmail_error}")
+            print(f"Gmail error type: {type(gmail_error)}")
+            import traceback
+            print(f"Gmail error traceback: {traceback.format_exc()}")
             # Fall back to mock data if Gmail API fails
             return get_mock_emails_response()
         
     except Exception as e:
         print(f"Error in analyze_user_emails: {e}")
+        print(f"Error type: {type(e)}")
+        import traceback
+        print(f"Error traceback: {traceback.format_exc()}")
         # Return mock data on any error
         return get_mock_emails_response()
 
