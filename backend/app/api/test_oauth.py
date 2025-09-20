@@ -84,8 +84,11 @@ async def oauth_callback(code: str = None, state: str = None, error: str = None)
         client_secret = os.getenv("GMAIL_CLIENT_SECRET")
         base_url = os.getenv("BASE_URL", "https://phishnet-backend-iuoc.onrender.com")
         
+        print(f"DEBUG: client_id exists: {bool(client_id)}")
+        print(f"DEBUG: client_secret exists: {bool(client_secret)}")
+        
         if not client_id or not client_secret:
-            raise Exception("OAuth credentials not configured")
+            raise Exception(f"OAuth credentials not configured - client_id: {bool(client_id)}, client_secret: {bool(client_secret)}")
         
         token_data = {
             "client_id": client_id,
@@ -95,72 +98,46 @@ async def oauth_callback(code: str = None, state: str = None, error: str = None)
             "redirect_uri": f"{base_url}/api/test/oauth/callback"
         }
         
-        import httpx
-        async with httpx.AsyncClient() as client:
-            token_response = await client.post(token_url, data=token_data)
+        print(f"DEBUG: Making token request to {token_url}")
+        
+        # Use requests instead of httpx for better compatibility
+        import requests
+        token_response = requests.post(token_url, data=token_data)
+        
+        print(f"DEBUG: Token response status: {token_response.status_code}")
+        print(f"DEBUG: Token response text: {token_response.text[:200]}...")
             
         if token_response.status_code != 200:
-            raise Exception(f"Token exchange failed: {token_response.text}")
+            raise Exception(f"Token exchange failed ({token_response.status_code}): {token_response.text}")
             
         tokens = token_response.json()
         access_token = tokens.get("access_token")
         
+        print(f"DEBUG: Access token received: {bool(access_token)}")
+        
         if not access_token:
-            raise Exception("No access token received")
+            raise Exception(f"No access token received. Response: {tokens}")
             
         # Get user info from Google
         userinfo_url = f"https://www.googleapis.com/oauth2/v2/userinfo?access_token={access_token}"
         
-        async with httpx.AsyncClient() as client:
-            userinfo_response = await client.get(userinfo_url)
+        userinfo_response = requests.get(userinfo_url)
+        
+        print(f"DEBUG: User info response status: {userinfo_response.status_code}")
             
         if userinfo_response.status_code != 200:
-            raise Exception(f"Failed to get user info: {userinfo_response.text}")
+            raise Exception(f"Failed to get user info ({userinfo_response.status_code}): {userinfo_response.text}")
             
         user_info = userinfo_response.json()
         user_email = user_info.get('email')
         
+        print(f"DEBUG: User email: {user_email}")
+        
         if not user_email:
-            raise Exception("No email found in user info")
+            raise Exception(f"No email found in user info: {user_info}")
         
-        # Store tokens in MongoDB (create or update user)
-        from app.db.mongodb import get_mongodb_db
-        from app.models.mongodb_models import User
-        import pymongo
-        from datetime import datetime, timezone
-        
-        # Get MongoDB connection
-        mongo_db = await get_mongodb_db()
-        users_collection = mongo_db.users
-        
-        # Calculate token expiration (Google access tokens expire in 1 hour)
-        expires_in = tokens.get('expires_in', 3600)  # Default 1 hour
-        expires_at = datetime.now(timezone.utc).timestamp() + expires_in
-        
-        # Update or create user with tokens
-        update_data = {
-            "gmail_access_token": access_token,
-            "gmail_refresh_token": tokens.get('refresh_token'),
-            "gmail_token_expires_at": datetime.fromtimestamp(expires_at, timezone.utc),
-            "updated_at": datetime.now(timezone.utc),
-            "is_verified": True
-        }
-        
-        # Upsert user (create if doesn't exist, update if exists)
-        await users_collection.update_one(
-            {"email": user_email},
-            {
-                "$set": update_data,
-                "$setOnInsert": {
-                    "username": user_email.split('@')[0],
-                    "full_name": user_info.get('name', ''),
-                    "hashed_password": "oauth_user",  # OAuth users don't have passwords
-                    "is_active": True,
-                    "created_at": datetime.now(timezone.utc)
-                }
-            },
-            upsert=True
-        )
+        # Skip MongoDB storage for now to isolate the issue
+        print(f"DEBUG: Skipping MongoDB storage, redirecting with success")
         
         # Store user authentication (in a real app, you'd save this to database)
         # For now, just redirect to frontend with success
@@ -168,6 +145,8 @@ async def oauth_callback(code: str = None, state: str = None, error: str = None)
         return RedirectResponse(f"{frontend_url}?oauth_success=true&email={user_email}")
         
     except Exception as e:
-        # Redirect to frontend with error
+        print(f"ERROR: OAuth callback failed: {str(e)}")
+        # Redirect to frontend with detailed error
         frontend_url = "https://phishnet-tau.vercel.app"
-        return RedirectResponse(f"{frontend_url}?oauth_error=token_exchange_failed")
+        error_msg = str(e).replace(' ', '_').replace('&', 'and')[:100]  # URL-safe error
+        return RedirectResponse(f"{frontend_url}?oauth_error={error_msg}")
