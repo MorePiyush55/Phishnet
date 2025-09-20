@@ -15,8 +15,45 @@ class OAuthTestResponse(BaseModel):
 
 @router.get("/oauth")
 async def test_oauth():
-    """Test OAuth endpoint."""
-    return {"success": True, "message": "OAuth test endpoint working"}
+    """Start OAuth flow with redirect."""
+    try:
+        # Get OAuth credentials from environment
+        client_id = os.getenv("GMAIL_CLIENT_ID")
+        
+        if not client_id:
+            return {"success": False, "message": "OAuth credentials not configured"}
+        
+        # Use the correct redirect URI that matches our callback endpoint
+        redirect_uri = "https://phishnet-backend-iuoc.onrender.com/api/test/oauth/callback"
+        
+        # Generate state token
+        state = secrets.token_urlsafe(32)
+        
+        # Create OAuth URL with Gmail access scope
+        scopes = [
+            "openid",
+            "email", 
+            "profile",
+            "https://www.googleapis.com/auth/gmail.readonly"
+        ]
+        scope_string = " ".join(scopes)
+        
+        auth_url = (
+            f"https://accounts.google.com/o/oauth2/auth?"
+            f"client_id={client_id}&"
+            f"redirect_uri={redirect_uri}&"
+            f"scope={scope_string}&"
+            f"response_type=code&"
+            f"state={state}&"
+            f"access_type=offline&"
+            f"prompt=consent"
+        )
+        
+        # Redirect directly to Google OAuth
+        return RedirectResponse(auth_url)
+        
+    except Exception as e:
+        return {"success": False, "message": f"OAuth error: {str(e)}"}
 
 @router.get("/auth/google")
 async def start_oauth_get():

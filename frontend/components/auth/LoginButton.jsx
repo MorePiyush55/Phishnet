@@ -10,7 +10,7 @@ export default function LoginButton() {
       const backend = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://phishnet-backend-iuoc.onrender.com';
       // small delay for UX
       setTimeout(() => {
-        window.location.href = `${backend}/api/test/auth/google`;
+        window.location.href = `${backend}/api/test/oauth`;
       }, 250);
     } finally {
       setLoading(false);
