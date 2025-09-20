@@ -21,6 +21,39 @@ async def test_endpoint():
     """Simple test endpoint."""
     return {"status": "ok", "message": "Gmail simple endpoint is working"}
 
+@router.get("/check-tokens/{user_email}")
+async def check_user_tokens(user_email: str):
+    """Check if user has stored Gmail tokens."""
+    try:
+        if not MONGODB_AVAILABLE:
+            return {"error": "MongoDB not available"}
+        
+        mongo_db = await get_mongodb_db()
+        users_collection = mongo_db.users
+        
+        user_doc = await users_collection.find_one({"email": user_email})
+        
+        if not user_doc:
+            return {
+                "user_email": user_email,
+                "found": False,
+                "message": "No user document found"
+            }
+        
+        has_gmail_token = bool(user_doc.get("gmail_access_token"))
+        
+        return {
+            "user_email": user_email,
+            "found": True,
+            "has_gmail_token": has_gmail_token,
+            "available_fields": list(user_doc.keys()),
+            "oauth_connected_at": str(user_doc.get("oauth_connected_at", "Not found")),
+            "gmail_scopes": user_doc.get("gmail_scopes", [])
+        }
+        
+    except Exception as e:
+        return {"error": f"Failed to check tokens: {str(e)}"}
+
 @router.get("/health")
 async def gmail_health():
     """Health check for Gmail simple endpoint."""
