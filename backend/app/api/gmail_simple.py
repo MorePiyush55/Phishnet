@@ -119,26 +119,32 @@ async def analyze_user_emails(request: UserEmailRequest):
     This is a simplified test version that returns mock data.
     """
     try:
-        # Very simple response without complex models
-        return {
-            "total_emails": 1,
-            "emails": [
-                {
-                    "id": "mock-1",
-                    "subject": "Test Email",
-                    "sender": "test@example.com",
-                    "received_at": "2024-01-01T12:00:00",
-                    "snippet": "This is a test email",
-                    "phishing_analysis": {
-                        "risk_score": 50,
-                        "risk_level": "MEDIUM",
-                        "indicators": ["Test indicator"],
-                        "summary": "Test analysis"
-                    }
-                }
-            ]
+        print(f"Received request: {request}")
+        
+        # Generate mock emails using our function
+        emails = []
+        for i in range(min(request.max_emails, 5)):  # Limit to 5 emails max
+            email = generate_mock_email(i, request.user_email)
+            emails.append({
+                "id": email.id,
+                "subject": email.subject,
+                "sender": email.sender,
+                "received_at": email.received_at,
+                "snippet": email.snippet,
+                "phishing_analysis": email.phishing_analysis
+            })
+        
+        result = {
+            "total_emails": len(emails),
+            "emails": emails
         }
         
+        print(f"Returning result: {result}")
+        return result
+        
     except Exception as e:
-        # Return JSON error instead of HTTPException
-        return {"error": f"Failed to analyze emails: {str(e)}"}
+        error_msg = f"Failed to analyze emails: {str(e) if str(e) else 'Unknown error occurred'}"
+        print(f"Error in analyze_user_emails: {error_msg}")
+        print(f"Exception type: {type(e).__name__}")
+        # Return proper error response
+        raise HTTPException(status_code=500, detail=error_msg)
