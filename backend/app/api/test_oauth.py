@@ -144,17 +144,21 @@ async def start_oauth():
 @router.get("/oauth/callback")
 async def oauth_callback(code: str = None, state: str = None, error: str = None):
     """OAuth callback endpoint - completes the OAuth flow and redirects to frontend."""
+    frontend_url = "https://phishnet-tau.vercel.app"
+    
+    print(f"DEBUG: OAuth callback received - code: {bool(code)}, state: {state}, error: {error}")
+    
     if error:
-        # Redirect to frontend with error
-        frontend_url = "https://phishnet-tau.vercel.app"
+        print(f"DEBUG: OAuth error received: {error}")
         return RedirectResponse(f"{frontend_url}?oauth_error={error}")
     
     if not code:
-        # Redirect to frontend with error
-        frontend_url = "https://phishnet-tau.vercel.app"
+        print(f"DEBUG: No authorization code received")
         return RedirectResponse(f"{frontend_url}?oauth_error=no_code")
     
     try:
+        print(f"DEBUG: Starting token exchange with code: {code[:10]}...")
+        
         # Exchange authorization code for tokens
         token_url = "https://oauth2.googleapis.com/token"
         
@@ -165,69 +169,97 @@ async def oauth_callback(code: str = None, state: str = None, error: str = None)
         
         print(f"DEBUG: client_id exists: {bool(client_id)}")
         print(f"DEBUG: client_secret exists: {bool(client_secret)}")
+        print(f"DEBUG: base_url: {base_url}")
         
         if not client_id or not client_secret:
-            raise Exception(f"OAuth credentials not configured - client_id: {bool(client_id)}, client_secret: {bool(client_secret)}")
+            error_msg = f"OAuth credentials not configured - client_id: {bool(client_id)}, client_secret: {bool(client_secret)}"
+            print(f"ERROR: {error_msg}")
+            return RedirectResponse(f"{frontend_url}?oauth_error=missing_credentials")
+        
+        redirect_uri = f"{base_url}/api/test/oauth/callback"
+        print(f"DEBUG: redirect_uri: {redirect_uri}")
         
         token_data = {
             "client_id": client_id,
             "client_secret": client_secret,
             "code": code,
             "grant_type": "authorization_code",
-            "redirect_uri": f"{base_url}/api/test/oauth/callback"
+            "redirect_uri": redirect_uri
         }
         
         print(f"DEBUG: Making token request to {token_url}")
         
         # Use requests instead of httpx for better compatibility
         import requests
-        token_response = requests.post(token_url, data=token_data)
         
-        print(f"DEBUG: Token response status: {token_response.status_code}")
-        print(f"DEBUG: Token response text: {token_response.text[:200]}...")
+        try:
+            token_response = requests.post(token_url, data=token_data, timeout=30)
+            print(f"DEBUG: Token response status: {token_response.status_code}")
             
-        if token_response.status_code != 200:
-            raise Exception(f"Token exchange failed ({token_response.status_code}): {token_response.text}")
+            if token_response.status_code != 200:
+                print(f"ERROR: Token exchange failed ({token_response.status_code}): {token_response.text}")
+                return RedirectResponse(f"{frontend_url}?oauth_error=token_exchange_failed")
+                
+        except requests.exceptions.RequestException as e:
+            print(f"ERROR: Token request failed: {str(e)}")
+            return RedirectResponse(f"{frontend_url}?oauth_error=token_request_failed")
             
-        tokens = token_response.json()
+        try:
+            tokens = token_response.json()
+        except Exception as e:
+            print(f"ERROR: Failed to parse token response JSON: {str(e)}")
+            print(f"Raw response: {token_response.text}")
+            return RedirectResponse(f"{frontend_url}?oauth_error=invalid_token_response")
+            
         access_token = tokens.get("access_token")
         
         print(f"DEBUG: Access token received: {bool(access_token)}")
         
         if not access_token:
-            raise Exception(f"No access token received. Response: {tokens}")
+            print(f"ERROR: No access token received. Response: {tokens}")
+            return RedirectResponse(f"{frontend_url}?oauth_error=no_access_token")
             
         # Get user info from Google
         userinfo_url = f"https://www.googleapis.com/oauth2/v2/userinfo?access_token={access_token}"
         
-        userinfo_response = requests.get(userinfo_url)
-        
-        print(f"DEBUG: User info response status: {userinfo_response.status_code}")
+        try:
+            userinfo_response = requests.get(userinfo_url, timeout=30)
+            print(f"DEBUG: User info response status: {userinfo_response.status_code}")
+                
+            if userinfo_response.status_code != 200:
+                print(f"ERROR: Failed to get user info ({userinfo_response.status_code}): {userinfo_response.text}")
+                return RedirectResponse(f"{frontend_url}?oauth_error=userinfo_failed")
+                
+        except requests.exceptions.RequestException as e:
+            print(f"ERROR: User info request failed: {str(e)}")
+            return RedirectResponse(f"{frontend_url}?oauth_error=userinfo_request_failed")
             
-        if userinfo_response.status_code != 200:
-            raise Exception(f"Failed to get user info ({userinfo_response.status_code}): {userinfo_response.text}")
+        try:
+            user_info = userinfo_response.json()
+        except Exception as e:
+            print(f"ERROR: Failed to parse user info JSON: {str(e)}")
+            return RedirectResponse(f"{frontend_url}?oauth_error=invalid_userinfo_response")
             
-        user_info = userinfo_response.json()
         user_email = user_info.get('email')
         
         print(f"DEBUG: User email: {user_email}")
         
         if not user_email:
-            raise Exception(f"No email found in user info: {user_info}")
+            print(f"ERROR: No email found in user info: {user_info}")
+            return RedirectResponse(f"{frontend_url}?oauth_error=no_email")
         
         # Skip MongoDB storage for now to isolate the issue
-        print(f"DEBUG: Skipping MongoDB storage, redirecting with success")
-        
-        # Store user authentication (in a real app, you'd save this to database)
-        # For now, just redirect to frontend with success
-        frontend_url = "https://phishnet-tau.vercel.app"
+        print(f"DEBUG: Successfully processed OAuth for {user_email}, redirecting to frontend")
         
         # Redirect to a success page instead of the main page
         return RedirectResponse(f"{frontend_url}/connected?oauth_success=true&email={user_email}")
         
     except Exception as e:
         print(f"ERROR: OAuth callback failed: {str(e)}")
+        print(f"ERROR: Exception type: {type(e).__name__}")
+        import traceback
+        print(f"ERROR: Traceback: {traceback.format_exc()}")
+        
         # Redirect to frontend with detailed error
-        frontend_url = "https://phishnet-tau.vercel.app"
-        error_msg = str(e).replace(' ', '_').replace('&', 'and')[:100]  # URL-safe error
+        error_msg = str(e).replace(' ', '_').replace('&', 'and')[:50]  # URL-safe error
         return RedirectResponse(f"{frontend_url}?oauth_error={error_msg}")
