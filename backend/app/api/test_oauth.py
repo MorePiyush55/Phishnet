@@ -221,7 +221,9 @@ async def oauth_callback(code: str = None, state: str = None, error: str = None)
         # Store user authentication (in a real app, you'd save this to database)
         # For now, just redirect to frontend with success
         frontend_url = "https://phishnet-tau.vercel.app"
-        return RedirectResponse(f"{frontend_url}?oauth_success=true&email={user_email}")
+        
+        # Redirect to a success page instead of the main page
+        return RedirectResponse(f"{frontend_url}/connected?oauth_success=true&email={user_email}")
         
     except Exception as e:
         print(f"ERROR: OAuth callback failed: {str(e)}")

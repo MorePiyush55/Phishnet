@@ -5,7 +5,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { RequireAuth } from './hooks/useAuth';
 import SOCDashboard from './components/SOCDashboard';
 import LoginPage from './components/LoginPage';
-import ConnectedPage from './pages/ConnectedPage';
+import { ConnectedPage } from './pages/ConnectedPage';
 import { EmailAnalysisTest } from './components/EmailAnalysisTest';
 import { ErrorProvider } from './components/ErrorHandling';
 import { AuthLandingPage } from './components/AuthLandingPage';
@@ -51,34 +51,47 @@ function App() {
       console.log('OAuth success! User email:', userEmail);
       setIsAuthenticated(true);
       setIsLoading(false);
-      // Clear URL parameters and redirect to email analysis
-      window.history.replaceState({}, document.title, '/emails');
+      
       // Store user info in localStorage
       if (userEmail) {
         localStorage.setItem('user_email', userEmail);
+        localStorage.setItem('access_token', 'oauth_authenticated'); // Simple token for auth check
+        localStorage.setItem('oauth_success', 'true');
       }
+      
+      // Don't redirect here, let the ConnectedPage handle the flow
     } else if (oauthError) {
       // OAuth failed
       console.error('OAuth error:', oauthError);
       setIsAuthenticated(false);
+      setIsLoading(false);
       // Clear URL parameters
       window.history.replaceState({}, document.title, window.location.pathname);
       // Show error to user
       alert(`OAuth failed: ${oauthError}`);
     } else {
       // No OAuth callback, check existing auth state
-      // You can implement your auth check logic here
-      setIsLoading(false);
+      checkAuthStatus();
     }
   }, []);
 
   useEffect(() => {
-    checkAuthStatus();
+    // Only run checkAuthStatus if we haven't already processed OAuth callback
+    const urlParams = new URLSearchParams(window.location.search);
+    const oauthSuccess = urlParams.get('oauth_success');
+    if (!oauthSuccess) {
+      checkAuthStatus();
+    }
   }, []);
 
   const checkAuthStatus = () => {
     const accessToken = localStorage.getItem('access_token');
-    setIsAuthenticated(!!accessToken);
+    const userEmail = localStorage.getItem('user_email');
+    const oauthSuccess = localStorage.getItem('oauth_success');
+    
+    // User is authenticated if they have an access token or completed OAuth
+    const isAuth = !!(accessToken || (userEmail && oauthSuccess));
+    setIsAuthenticated(isAuth);
     setIsLoading(false);
   };
 
