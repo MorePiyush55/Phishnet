@@ -251,22 +251,12 @@ export class OAuthService {
    */
   static async startOAuth(): Promise<void> {
     try {
-      // Check rate limit
-      if (!RateLimiter.canMakeRequest('/api/test/oauth/start')) {
-        const waitTime = RateLimiter.getTimeUntilNextRequest('/api/test/oauth/start');
-        throw new Error(`Rate limit exceeded. Wait ${Math.ceil(waitTime / 1000)} seconds.`);
-      }
-
-      const response: AxiosResponse<OAuthStartResponse> = await api.post('/api/test/oauth/start', {});
-      
-      // Redirect to Google OAuth
-      if (response.data.success && response.data.authorization_url) {
-        window.location.href = response.data.authorization_url;
-      } else {
-        throw new Error(response.data.message || 'Failed to start OAuth flow');
-      }
+      // Direct redirect to backend OAuth endpoint (no API call needed)
+      const backendUrl = API_BASE_URL;
+      window.location.href = `${backendUrl}/api/test/oauth`;
     } catch (error: any) {
-      return await this.handleApiError(error, { url: '/api/test/oauth/start', method: 'post' });
+      console.error('OAuth redirect error:', error);
+      throw new Error('Failed to start OAuth flow');
     }
   }
 

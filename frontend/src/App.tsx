@@ -84,9 +84,9 @@ function App() {
 
   const handleGoogleSignIn = async () => {
     try {
-      // Use the backend OAuth service instead of hardcoded implementation
-      await OAuthService.startOAuth();
-      // OAuth service will redirect to Google, so we won't reach here normally
+      // Direct redirect to backend OAuth endpoint
+      const backendUrl = import.meta.env.VITE_API_URL || 'https://phishnet-backend-iuoc.onrender.com';
+      window.location.href = `${backendUrl}/api/test/oauth`;
     } catch (error) {
       console.error('OAuth error:', error);
     }
