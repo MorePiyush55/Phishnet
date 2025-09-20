@@ -111,6 +111,22 @@ export const AuthLandingPage: React.FC<AuthLandingPageProps> = ({ onGoogleSignIn
                       <span>Read-Only Access</span>
                     </div>
                   </div>
+
+                  {/* Security Notice */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
+                    <div className="flex items-start space-x-3">
+                      <Shield className="h-5 w-5 text-blue-600 mt-0.5" />
+                      <div className="text-sm">
+                        <p className="font-medium text-blue-900 mb-1">Security Notice</p>
+                        <p className="text-blue-700 mb-2">
+                          Google may show an "unverified app" warning during login. This is normal for apps in development.
+                        </p>
+                        <p className="text-blue-600 text-xs">
+                          Click "Advanced" → "Go to PhishNet (unsafe)" to continue safely. Your data remains protected by Google's OAuth 2.0 security.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Trust Indicators */}
