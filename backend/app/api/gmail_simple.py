@@ -101,6 +101,11 @@ def generate_mock_email(index: int, user_email: str) -> EmailAnalysisResponse:
         }
     )
 
+@router.get("/test")
+async def test_endpoint():
+    """Simple test endpoint."""
+    return {"status": "ok", "message": "Gmail simple endpoint is working"}
+
 @router.get("/health")
 async def gmail_health():
     """Health check for Gmail simple endpoint."""
@@ -116,18 +121,27 @@ async def analyze_user_emails(request: UserEmailRequest) -> EmailListResponse:
     try:
         print(f"Mock Gmail analysis for {request.user_email}, max_emails: {request.max_emails}")
         
-        # Generate mock emails
-        mock_emails = []
-        for i in range(min(request.max_emails, 8)):  # Max 8 mock emails
-            mock_email = generate_mock_email(i, request.user_email)
-            mock_emails.append(mock_email)
-        
-        response = EmailListResponse(
-            total_emails=len(mock_emails),
-            emails=mock_emails
+        # Create a simple mock email
+        mock_email = EmailAnalysisResponse(
+            id="mock-1",
+            subject="Test Email",
+            sender="test@example.com",
+            received_at=datetime.now().isoformat(),
+            snippet="This is a test email",
+            phishing_analysis={
+                "risk_score": 50,
+                "risk_level": "MEDIUM",
+                "indicators": ["Test indicator"],
+                "summary": "Test analysis"
+            }
         )
         
-        print(f"Returning {len(mock_emails)} mock emails")
+        response = EmailListResponse(
+            total_emails=1,
+            emails=[mock_email]
+        )
+        
+        print(f"Returning mock email: {mock_email}")
         return response
         
     except Exception as e:
