@@ -1,7 +1,7 @@
 """Simple Gmail API endpoint for testing without complex dependencies."""
 
-from fastapi import APIRouter, HTTPException
-from typing import Dict, Any
+from fastapi import APIRouter, HTTPException, Request
+from typing import Dict, Any, Optional
 import datetime
 
 router = APIRouter(prefix="/api/gmail", tags=["Gmail Test"])
@@ -17,7 +17,7 @@ async def gmail_health():
     return {"status": "ok", "service": "gmail_simple"}
 
 @router.post("/analyze")
-async def analyze_user_emails():
+async def analyze_user_emails(request: Optional[Dict[str, Any]] = None):
     """
     Analyze user's Gmail emails for phishing indicators.
     
@@ -28,7 +28,7 @@ async def analyze_user_emails():
         "emails": [
             {
                 "id": "test-1",
-                "subject": "Test Email 1",
+                "subject": "Test Email 1", 
                 "sender": "sender1@example.com",
                 "received_at": "2024-01-01T10:00:00Z",
                 "snippet": "This is test email 1",
