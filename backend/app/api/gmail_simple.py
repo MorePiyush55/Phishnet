@@ -55,18 +55,24 @@ async def analyze_user_emails(request: Optional[Dict[str, Any]] = None):
         
         # Try to get user's Gmail tokens from MongoDB
         try:
+            print(f"Connecting to MongoDB for user: {user_email}")
             mongo_db = await get_mongodb_db()
             users_collection = mongo_db.users
             
             user_doc = await users_collection.find_one({"email": user_email})
+            print(f"MongoDB query result: {bool(user_doc)}")
+            
             if not user_doc:
                 print(f"No user document found for {user_email}")
                 return get_mock_emails_response()
             
             # Check if user has Gmail tokens
             gmail_access_token = user_doc.get("gmail_access_token")
+            print(f"Gmail access token found: {bool(gmail_access_token)}")
+            
             if not gmail_access_token:
                 print(f"No Gmail access token found for {user_email}")
+                print(f"Available fields in user doc: {list(user_doc.keys()) if user_doc else 'None'}")
                 return get_mock_emails_response()
             
             print(f"Found Gmail token for {user_email}, fetching real emails...")
@@ -81,7 +87,7 @@ async def analyze_user_emails(request: Optional[Dict[str, Any]] = None):
                     "emails": real_emails
                 }
             else:
-                print("No real emails found, returning mock data")
+                print("No real emails found or API call failed, returning mock data")
                 return get_mock_emails_response()
                 
         except Exception as mongodb_error:
@@ -100,6 +106,8 @@ async def analyze_user_emails(request: Optional[Dict[str, Any]] = None):
 async def fetch_gmail_emails(access_token: str, max_emails: int = 10) -> List[Dict[str, Any]]:
     """Fetch emails directly from Gmail API."""
     try:
+        print(f"Starting Gmail API call with max_emails: {max_emails}")
+        
         headers = {
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json"
@@ -107,17 +115,22 @@ async def fetch_gmail_emails(access_token: str, max_emails: int = 10) -> List[Di
         
         # Get list of message IDs
         async with httpx.AsyncClient() as client:
-            messages_response = await client.get(
-                f"https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults={max_emails}",
-                headers=headers
-            )
+            messages_url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults={max_emails}"
+            print(f"Calling Gmail API: {messages_url}")
+            
+            messages_response = await client.get(messages_url, headers=headers)
+            
+            print(f"Gmail API response status: {messages_response.status_code}")
             
             if messages_response.status_code != 200:
                 print(f"Failed to get message list: {messages_response.status_code}")
+                print(f"Response text: {messages_response.text}")
                 return []
             
             messages_data = messages_response.json()
             messages = messages_data.get("messages", [])
+            
+            print(f"Found {len(messages)} messages from Gmail API")
             
             if not messages:
                 print("No messages found in Gmail")
@@ -125,21 +138,28 @@ async def fetch_gmail_emails(access_token: str, max_emails: int = 10) -> List[Di
             
             # Fetch detailed email data
             emails = []
-            for message in messages[:max_emails]:
+            for i, message in enumerate(messages[:max_emails]):
                 message_id = message["id"]
+                print(f"Fetching email {i+1}/{len(messages[:max_emails])}: {message_id}")
                 
                 # Get full message details
-                message_response = await client.get(
-                    f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}",
-                    headers=headers
-                )
+                message_url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}"
+                message_response = await client.get(message_url, headers=headers)
+                
+                print(f"Email {i+1} response status: {message_response.status_code}")
                 
                 if message_response.status_code == 200:
                     message_data = message_response.json()
                     email_info = parse_gmail_message(message_data)
                     if email_info:
+                        print(f"Successfully parsed email: {email_info.get('subject', 'No subject')}")
                         emails.append(email_info)
+                    else:
+                        print(f"Failed to parse email {message_id}")
+                else:
+                    print(f"Failed to fetch email {message_id}: {message_response.status_code}")
             
+            print(f"Successfully processed {len(emails)} emails")
             return emails
             
     except Exception as e:
