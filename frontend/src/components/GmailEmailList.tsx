@@ -93,7 +93,7 @@ export const GmailEmailList: React.FC<GmailEmailListProps> = ({ userEmail, onEma
       // First test if the endpoint is reachable
       console.log('Testing Gmail API endpoint...');
       
-      const response = await fetch(`${apiUrl}/api/gmail/analyze`, {
+      const response = await fetch(`${apiUrl}/api/gmail-simple/analyze`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
