@@ -1,22 +1,18 @@
 """Real Gmail API endpoint for fetching user emails."""
 
 from fastapi import APIRouter, HTTPException, Request
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import datetime
+import httpx
+import asyncio
 
-# Import the real Gmail service
+# Import MongoDB directly
 try:
-    from ..services.gmail_service import GmailService
-    GMAIL_SERVICE_AVAILABLE = True
-    print("Gmail service imported successfully")
-except ImportError as e:
-    GMAIL_SERVICE_AVAILABLE = False
-    GmailService = None
-    print(f"Failed to import Gmail service: {e}")
-except Exception as e:
-    GMAIL_SERVICE_AVAILABLE = False
-    GmailService = None
-    print(f"Error importing Gmail service: {e}")
+    from ..db.mongodb import get_mongodb_db
+    MONGODB_AVAILABLE = True
+except ImportError:
+    MONGODB_AVAILABLE = False
+    print("MongoDB not available for Gmail tokens")
 
 router = APIRouter(prefix="/api/gmail-simple", tags=["Gmail Test"])
 
@@ -28,14 +24,14 @@ async def test_endpoint():
 @router.get("/health")
 async def gmail_health():
     """Health check for Gmail simple endpoint."""
-    return {"status": "ok", "service": "gmail_simple", "real_gmail_api": GMAIL_SERVICE_AVAILABLE}
+    return {"status": "ok", "service": "gmail_simple", "mongodb_available": MONGODB_AVAILABLE}
 
 @router.post("/analyze")
 async def analyze_user_emails(request: Optional[Dict[str, Any]] = None):
     """
     Analyze user's Gmail emails for phishing indicators.
     
-    This fetches real emails from the user's Gmail account.
+    This fetches real emails from the user's Gmail account using stored OAuth tokens.
     """
     try:
         # Get user email from request
@@ -50,61 +46,193 @@ async def analyze_user_emails(request: Optional[Dict[str, Any]] = None):
                 "emails": []
             }
         
-        # Check if Gmail service is available
-        if not GMAIL_SERVICE_AVAILABLE or not GmailService:
-            print("Gmail service not available, returning mock data")
-            # Return mock data as fallback
+        print(f"Fetching emails for user: {user_email}")
+        
+        # Check if MongoDB is available for token storage
+        if not MONGODB_AVAILABLE:
+            print("MongoDB not available, returning mock data")
             return get_mock_emails_response()
         
-        print(f"Gmail service available, trying to fetch emails for: {user_email}")
-        
-        # Create Gmail service instance
-        gmail_service = GmailService()
-        
-        # Try to fetch real emails
+        # Try to get user's Gmail tokens from MongoDB
         try:
-            print("Calling analyze_emails_for_phishing...")
-            analyzed_emails = await gmail_service.analyze_emails_for_phishing(user_email, max_emails)
-            print(f"Got {len(analyzed_emails) if analyzed_emails else 0} emails from Gmail service")
+            mongo_db = await get_mongodb_db()
+            users_collection = mongo_db.users
             
-            # Convert to our expected format
-            formatted_emails = []
-            for email in analyzed_emails:
-                formatted_email = {
-                    "id": email.get("id", ""),
-                    "subject": email.get("subject", "No Subject"),
-                    "sender": email.get("from", "Unknown Sender"),
-                    "received_at": email.get("received_at", ""),
-                    "snippet": email.get("snippet", ""),
-                    "phishing_analysis": email.get("phishing_analysis", {
-                        "risk_score": 0,
-                        "risk_level": "SAFE",
-                        "indicators": [],
-                        "summary": "No analysis available"
-                    })
+            user_doc = await users_collection.find_one({"email": user_email})
+            if not user_doc:
+                print(f"No user document found for {user_email}")
+                return get_mock_emails_response()
+            
+            # Check if user has Gmail tokens
+            gmail_access_token = user_doc.get("gmail_access_token")
+            if not gmail_access_token:
+                print(f"No Gmail access token found for {user_email}")
+                return get_mock_emails_response()
+            
+            print(f"Found Gmail token for {user_email}, fetching real emails...")
+            
+            # Fetch real Gmail emails
+            real_emails = await fetch_gmail_emails(gmail_access_token, max_emails)
+            
+            if real_emails:
+                print(f"Successfully fetched {len(real_emails)} real emails")
+                return {
+                    "total_emails": len(real_emails),
+                    "emails": real_emails
                 }
-                formatted_emails.append(formatted_email)
-            
-            return {
-                "total_emails": len(formatted_emails),
-                "emails": formatted_emails
-            }
-            
-        except Exception as gmail_error:
-            print(f"Gmail API error: {gmail_error}")
-            print(f"Gmail error type: {type(gmail_error)}")
+            else:
+                print("No real emails found, returning mock data")
+                return get_mock_emails_response()
+                
+        except Exception as mongodb_error:
+            print(f"MongoDB error: {mongodb_error}")
             import traceback
-            print(f"Gmail error traceback: {traceback.format_exc()}")
-            # Fall back to mock data if Gmail API fails
+            print(f"MongoDB error traceback: {traceback.format_exc()}")
             return get_mock_emails_response()
         
     except Exception as e:
         print(f"Error in analyze_user_emails: {e}")
-        print(f"Error type: {type(e)}")
         import traceback
         print(f"Error traceback: {traceback.format_exc()}")
-        # Return mock data on any error
         return get_mock_emails_response()
+
+
+async def fetch_gmail_emails(access_token: str, max_emails: int = 10) -> List[Dict[str, Any]]:
+    """Fetch emails directly from Gmail API."""
+    try:
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+        
+        # Get list of message IDs
+        async with httpx.AsyncClient() as client:
+            messages_response = await client.get(
+                f"https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults={max_emails}",
+                headers=headers
+            )
+            
+            if messages_response.status_code != 200:
+                print(f"Failed to get message list: {messages_response.status_code}")
+                return []
+            
+            messages_data = messages_response.json()
+            messages = messages_data.get("messages", [])
+            
+            if not messages:
+                print("No messages found in Gmail")
+                return []
+            
+            # Fetch detailed email data
+            emails = []
+            for message in messages[:max_emails]:
+                message_id = message["id"]
+                
+                # Get full message details
+                message_response = await client.get(
+                    f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}",
+                    headers=headers
+                )
+                
+                if message_response.status_code == 200:
+                    message_data = message_response.json()
+                    email_info = parse_gmail_message(message_data)
+                    if email_info:
+                        emails.append(email_info)
+            
+            return emails
+            
+    except Exception as e:
+        print(f"Error fetching Gmail emails: {e}")
+        return []
+
+
+def parse_gmail_message(message_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Parse Gmail message data into our format."""
+    try:
+        payload = message_data.get("payload", {})
+        headers = payload.get("headers", [])
+        
+        # Extract email information
+        email_info = {
+            "id": message_data.get("id", ""),
+            "subject": "",
+            "sender": "",
+            "received_at": "",
+            "snippet": message_data.get("snippet", ""),
+            "phishing_analysis": {
+                "risk_score": 0,
+                "risk_level": "SAFE",
+                "indicators": [],
+                "summary": "Real email from Gmail"
+            }
+        }
+        
+        # Parse headers
+        for header in headers:
+            name = header.get("name", "").lower()
+            value = header.get("value", "")
+            
+            if name == "subject":
+                email_info["subject"] = value
+            elif name == "from":
+                email_info["sender"] = value
+            elif name == "date":
+                # Convert date to ISO format
+                try:
+                    from email.utils import parsedate_to_datetime
+                    dt = parsedate_to_datetime(value)
+                    email_info["received_at"] = dt.isoformat()
+                except:
+                    email_info["received_at"] = value
+        
+        # Basic phishing analysis
+        email_info["phishing_analysis"] = analyze_email_for_phishing(email_info)
+        
+        return email_info
+        
+    except Exception as e:
+        print(f"Error parsing Gmail message: {e}")
+        return None
+
+
+def analyze_email_for_phishing(email_info: Dict[str, Any]) -> Dict[str, Any]:
+    """Simple phishing analysis for real emails."""
+    indicators = []
+    risk_score = 0
+    
+    subject = email_info.get("subject", "").lower()
+    sender = email_info.get("sender", "").lower()
+    snippet = email_info.get("snippet", "").lower()
+    
+    # Check for phishing indicators
+    suspicious_words = ["urgent", "verify", "suspend", "click here", "act now", "limited time"]
+    for word in suspicious_words:
+        if word in subject or word in snippet:
+            indicators.append(f"Suspicious phrase: '{word}'")
+            risk_score += 15
+    
+    # Check sender domain
+    if any(domain in sender for domain in ["suspicious", "fake", "phishing"]):
+        indicators.append("Suspicious sender domain")
+        risk_score += 25
+    
+    # Determine risk level
+    if risk_score >= 70:
+        risk_level = "HIGH"
+    elif risk_score >= 40:
+        risk_level = "MEDIUM"
+    elif risk_score >= 20:
+        risk_level = "LOW"
+    else:
+        risk_level = "SAFE"
+    
+    return {
+        "risk_score": min(risk_score, 100),
+        "risk_level": risk_level,
+        "indicators": indicators,
+        "summary": f"Real Gmail email analysis - {risk_level.lower()} risk"
+    }
 
 def get_mock_emails_response():
     """Return mock emails as fallback."""
