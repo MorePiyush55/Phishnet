@@ -46,6 +46,10 @@ export const GmailEmailList: React.FC<GmailEmailListProps> = ({ userEmail, onEma
       console.log('Fetching Gmail emails for:', userEmail);
       
       const apiUrl = 'https://phishnet-backend-iuoc.onrender.com';
+      
+      // First test if the endpoint is reachable
+      console.log('Testing Gmail API endpoint...');
+      
       const response = await fetch(`${apiUrl}/api/gmail/analyze`, {
         method: 'POST',
         headers: {
@@ -53,25 +57,59 @@ export const GmailEmailList: React.FC<GmailEmailListProps> = ({ userEmail, onEma
         },
         body: JSON.stringify({
           user_email: userEmail,
-          max_emails: 10
+          max_emails: 5  // Start with fewer emails to test
         }),
       });
 
       console.log('Gmail API response status:', response.status);
+      console.log('Gmail API response headers:', response.headers);
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (e) {
+          errorData = { detail: await response.text() };
+        }
+        
+        console.error('Gmail API error response:', errorData);
         throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
       }
 
       const data: GmailEmailsResponse = await response.json();
       console.log('Gmail emails received:', data);
       
-      setEmails(data.emails || []);
-      setLastFetch(new Date());
+      if (data && data.emails) {
+        setEmails(data.emails);
+        setLastFetch(new Date());
+        console.log(`Successfully loaded ${data.emails.length} emails`);
+      } else {
+        console.warn('No emails in response:', data);
+        setEmails([]);
+      }
+      
     } catch (err) {
       console.error('Gmail email fetch error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch Gmail emails');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch Gmail emails';
+      setError(errorMessage);
+      
+      // For debugging - show a mock email if the API fails
+      if (errorMessage.includes('Gmail service temporarily unavailable') || errorMessage.includes('503')) {
+        setEmails([{
+          id: 'mock-1',
+          subject: 'Test Email - API Unavailable',
+          sender: 'test@example.com',
+          received_at: new Date().toISOString(),
+          snippet: 'This is a mock email shown because the Gmail API is temporarily unavailable.',
+          phishing_analysis: {
+            risk_score: 25,
+            risk_level: 'LOW',
+            indicators: ['Mock analysis'],
+            summary: 'Gmail service is currently unavailable, showing mock data.'
+          }
+        }]);
+        setError('Gmail service temporarily unavailable. Showing mock data.');
+      }
     } finally {
       setLoading(false);
     }

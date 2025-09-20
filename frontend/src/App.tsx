@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, RequireAuth } from './contexts/AuthContext';
-import SOCDashboard from './components/SOCDashboard';
+import SimpleDashboard from './components/SimpleDashboard';
 import LoginPage from './components/LoginPage';
 import { ConnectedPage } from './pages/ConnectedPage';
 import { OAuthTest } from './pages/OAuthTest';
@@ -58,7 +58,7 @@ const App: React.FC = () => {
                 path="/dashboard" 
                 element={
                   <RequireAuth>
-                    <SOCDashboard />
+                    <SimpleDashboard />
                   </RequireAuth>
                 } 
               />
