@@ -33,14 +33,14 @@ async def check_user_tokens(user_email: str):
         
         user_doc = await users_collection.find_one({"email": user_email})
         
-        if not user_doc:
+        if user_doc is None:
             return {
                 "user_email": user_email,
                 "found": False,
                 "message": "No user document found"
             }
         
-        has_gmail_token = bool(user_doc.get("gmail_access_token"))
+        has_gmail_token = user_doc.get("gmail_access_token") is not None
         
         return {
             "user_email": user_email,
@@ -92,16 +92,17 @@ async def analyze_user_emails(request: Optional[Dict[str, Any]] = None):
             mongo_db = await get_mongodb_db()
             users_collection = mongo_db.users
             
+            print(f"Attempting to find user document for: {user_email}")
             user_doc = await users_collection.find_one({"email": user_email})
-            print(f"MongoDB query result: {bool(user_doc)}")
+            print(f"MongoDB query result: {user_doc is not None}")
             
-            if not user_doc:
+            if user_doc is None:
                 print(f"No user document found for {user_email}")
                 return get_mock_emails_response()
             
             # Check if user has Gmail tokens
             gmail_access_token = user_doc.get("gmail_access_token")
-            print(f"Gmail access token found: {bool(gmail_access_token)}")
+            print(f"Gmail access token found: {gmail_access_token is not None}")
             
             if not gmail_access_token:
                 print(f"No Gmail access token found for {user_email}")
