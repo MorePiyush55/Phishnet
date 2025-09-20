@@ -33,20 +33,20 @@ export const ConnectedPage: React.FC = () => {
           setUserInfo({ email: userEmail });
           setStatus('success');
           
-          // Store authentication info
+          // Store authentication info with enhanced persistence
           localStorage.setItem('user_email', userEmail);
           localStorage.setItem('access_token', 'oauth_authenticated');
           localStorage.setItem('oauth_success', 'true');
-          localStorage.setItem('phishnet_auth', JSON.stringify({
-            connected: true,
-            email: userEmail,
-            timestamp: Date.now()
-          }));
+          localStorage.setItem('isAuthenticated', 'true');
+          localStorage.setItem('authMethod', 'oauth');
+          localStorage.setItem('authTimestamp', Date.now().toString());
+          
+          console.log('OAuth authentication stored successfully for:', userEmail);
           
           // Auto-redirect to dashboard after showing success
           setTimeout(() => {
-            navigate('/emails');
-          }, 4000);
+            navigate('/dashboard', { replace: true });
+          }, 3000);
         } else {
           setError('No OAuth success parameters found. Please try connecting again.');
           setStatus('error');
