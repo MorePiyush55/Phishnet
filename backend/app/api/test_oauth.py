@@ -248,7 +248,45 @@ async def oauth_callback(code: str = None, state: str = None, error: str = None)
             print(f"ERROR: No email found in user info: {user_info}")
             return RedirectResponse(f"{frontend_url}?oauth_error=no_email")
         
-        # Skip MongoDB storage for now to isolate the issue
+        # Store Gmail tokens in MongoDB for later use by Gmail service
+        print(f"DEBUG: Storing Gmail tokens for {user_email}")
+        
+        try:
+            # Import MongoDB connection
+            from app.db.mongodb import get_mongodb_db
+            
+            mongo_db = await get_mongodb_db()
+            users_collection = mongo_db.users
+            
+            # Calculate token expiration
+            expires_in = tokens.get('expires_in', 3600)  # Default 1 hour
+            from datetime import datetime, timezone, timedelta
+            expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+            
+            # Store or update user with Gmail tokens
+            user_data = {
+                "email": user_email,
+                "gmail_access_token": access_token,
+                "gmail_refresh_token": tokens.get("refresh_token"),
+                "gmail_token_expires_at": expires_at,
+                "gmail_scopes": tokens.get("scope", "").split(" "),
+                "oauth_connected_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc)
+            }
+            
+            # Upsert user document
+            await users_collection.update_one(
+                {"email": user_email},
+                {"$set": user_data},
+                upsert=True
+            )
+            
+            print(f"DEBUG: Successfully stored Gmail tokens for {user_email}")
+            
+        except Exception as db_error:
+            print(f"WARNING: Failed to store tokens in database: {str(db_error)}")
+            # Continue anyway - OAuth still succeeded
+        
         print(f"DEBUG: Successfully processed OAuth for {user_email}, redirecting to frontend")
         
         # Redirect to a success page instead of the main page

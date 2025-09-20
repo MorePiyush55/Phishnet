@@ -70,6 +70,9 @@ async def get_mongo_database() -> AsyncIOMotorDatabase:
         await MongoDBManager.connect_to_mongo()
     return MongoDBManager.database
 
+async def get_mongodb_db() -> AsyncIOMotorDatabase:
+    """Get MongoDB database instance (alias for compatibility)."""
+    return await get_mongo_database()
 
 async def ping_mongodb() -> bool:
     """Test MongoDB connection."""
