@@ -33,6 +33,49 @@ export const GmailEmailList: React.FC<GmailEmailListProps> = ({ userEmail, onEma
   const [error, setError] = useState<string | null>(null);
   const [lastFetch, setLastFetch] = useState<Date | null>(null);
 
+  // Mock data for testing
+  const mockEmails: GmailEmail[] = [
+    {
+      id: 'mock-1',
+      subject: 'Urgent: Your account needs verification',
+      sender: 'security@suspicious-bank.com',
+      received_at: new Date().toISOString(),
+      snippet: 'Your account will be suspended if you do not verify immediately...',
+      phishing_analysis: {
+        risk_score: 85,
+        risk_level: 'HIGH',
+        indicators: ['Suspicious sender domain', 'Urgent action required', 'Account suspension threat'],
+        summary: 'High risk phishing attempt. Requests urgent account verification with threats.'
+      }
+    },
+    {
+      id: 'mock-2',
+      subject: 'Team meeting reminder',
+      sender: 'colleague@yourcompany.com',
+      received_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+      snippet: 'Just a reminder about our team meeting scheduled for tomorrow at 2 PM...',
+      phishing_analysis: {
+        risk_score: 15,
+        risk_level: 'SAFE',
+        indicators: [],
+        summary: 'Safe internal communication from known colleague.'
+      }
+    },
+    {
+      id: 'mock-3',
+      subject: 'Limited time offer - 90% off!',
+      sender: 'deals@promocompany.net',
+      received_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+      snippet: 'Amazing discount! Get 90% off premium products. Limited time only...',
+      phishing_analysis: {
+        risk_score: 55,
+        risk_level: 'MEDIUM',
+        indicators: ['Promotional content', 'Time pressure tactics', 'Unrealistic discount'],
+        summary: 'Medium risk promotional email with aggressive marketing tactics.'
+      }
+    }
+  ];
+
   const fetchEmails = async () => {
     if (!userEmail) {
       setError('No user email provided');
@@ -93,23 +136,10 @@ export const GmailEmailList: React.FC<GmailEmailListProps> = ({ userEmail, onEma
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch Gmail emails';
       setError(errorMessage);
       
-      // For debugging - show a mock email if the API fails
-      if (errorMessage.includes('Gmail service temporarily unavailable') || errorMessage.includes('503')) {
-        setEmails([{
-          id: 'mock-1',
-          subject: 'Test Email - API Unavailable',
-          sender: 'test@example.com',
-          received_at: new Date().toISOString(),
-          snippet: 'This is a mock email shown because the Gmail API is temporarily unavailable.',
-          phishing_analysis: {
-            risk_score: 25,
-            risk_level: 'LOW',
-            indicators: ['Mock analysis'],
-            summary: 'Gmail service is currently unavailable, showing mock data.'
-          }
-        }]);
-        setError('Gmail service temporarily unavailable. Showing mock data.');
-      }
+      // Fallback to mock data if API fails
+      console.log('Using mock data fallback due to API error...');
+      setEmails(mockEmails);
+      
     } finally {
       setLoading(false);
     }
@@ -118,6 +148,10 @@ export const GmailEmailList: React.FC<GmailEmailListProps> = ({ userEmail, onEma
   useEffect(() => {
     if (userEmail) {
       fetchEmails();
+    } else {
+      // Show mock data immediately if no user email
+      setEmails(mockEmails);
+      setLoading(false);
     }
   }, [userEmail]);
 
