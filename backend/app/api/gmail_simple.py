@@ -101,6 +101,11 @@ def generate_mock_email(index: int, user_email: str) -> EmailAnalysisResponse:
         }
     )
 
+@router.get("/health")
+async def gmail_health():
+    """Health check for Gmail simple endpoint."""
+    return {"status": "ok", "service": "gmail_simple"}
+
 @router.post("/analyze")
 async def analyze_user_emails(request: UserEmailRequest) -> EmailListResponse:
     """
@@ -117,13 +122,18 @@ async def analyze_user_emails(request: UserEmailRequest) -> EmailListResponse:
             mock_email = generate_mock_email(i, request.user_email)
             mock_emails.append(mock_email)
         
-        return EmailListResponse(
+        response = EmailListResponse(
             total_emails=len(mock_emails),
             emails=mock_emails
         )
         
+        print(f"Returning {len(mock_emails)} mock emails")
+        return response
+        
     except Exception as e:
         print(f"Error in mock Gmail analysis: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=500, 
             detail=f"Failed to analyze emails: {str(e)}"
