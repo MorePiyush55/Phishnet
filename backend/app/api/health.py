@@ -26,7 +26,7 @@ class HealthChecker:
         try:
             start_time = time.time()
             
-            if not MongoDBManager.client:
+            if MongoDBManager.client is None:
                 return {
                     "status": "unhealthy",
                     "error": "MongoDB client not connected",

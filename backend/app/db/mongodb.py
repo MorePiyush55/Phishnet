@@ -66,7 +66,7 @@ class MongoDBManager:
 # Convenience functions
 async def get_mongo_database() -> AsyncIOMotorDatabase:
     """Get MongoDB database instance."""
-    if not MongoDBManager.database:
+    if MongoDBManager.database is None:
         await MongoDBManager.connect_to_mongo()
     return MongoDBManager.database
 
@@ -77,7 +77,7 @@ async def get_mongodb_db() -> AsyncIOMotorDatabase:
 async def ping_mongodb() -> bool:
     """Test MongoDB connection."""
     try:
-        if not MongoDBManager.client:
+        if MongoDBManager.client is None:
             await MongoDBManager.connect_to_mongo()
         
         await MongoDBManager.client.admin.command('ping')
