@@ -7,10 +7,10 @@ export default function LoginButton() {
     try {
       setLoading(true);
       // Redirect to backend OAuth initiation endpoint
-      const backend = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+      const backend = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://phishnet-backend-iuoc.onrender.com';
       // small delay for UX
       setTimeout(() => {
-        window.location.href = `${backend}/auth/google`;
+        window.location.href = `${backend}/api/test/oauth/start`;
       }, 250);
     } finally {
       setLoading(false);
