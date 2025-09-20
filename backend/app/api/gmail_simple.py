@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Request
 from typing import Dict, Any, Optional
 import datetime
 
-router = APIRouter(prefix="/api/gmail", tags=["Gmail Test"])
+router = APIRouter(prefix="/api/gmail-simple", tags=["Gmail Test"])
 
 @router.get("/test")
 async def test_endpoint():
