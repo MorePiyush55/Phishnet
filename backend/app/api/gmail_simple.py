@@ -17,52 +17,40 @@ async def gmail_health():
     return {"status": "ok", "service": "gmail_simple"}
 
 @router.post("/analyze")
-async def analyze_user_emails(request: Dict[str, Any]):
+async def analyze_user_emails():
     """
     Analyze user's Gmail emails for phishing indicators.
     
     This is a simplified test version that returns mock data.
     """
-    try:
-        print("Starting analyze_user_emails")
-        
-        # Minimal working response
-        result = {
-            "total_emails": 2,
-            "emails": [
-                {
-                    "id": "test-1",
-                    "subject": "Test Email 1",
-                    "sender": "sender1@example.com",
-                    "received_at": "2024-01-01T10:00:00Z",
-                    "snippet": "This is test email 1",
-                    "phishing_analysis": {
-                        "risk_score": 30,
-                        "risk_level": "LOW",
-                        "indicators": [],
-                        "summary": "Safe email"
-                    }
-                },
-                {
-                    "id": "test-2",
-                    "subject": "Important: Verify Account",
-                    "sender": "security@fake-bank.com",
-                    "received_at": "2024-01-01T11:00:00Z",
-                    "snippet": "Click here to verify your account immediately",
-                    "phishing_analysis": {
-                        "risk_score": 85,
-                        "risk_level": "HIGH",
-                        "indicators": ["Suspicious domain", "Urgent action required"],
-                        "summary": "Potential phishing attempt"
-                    }
+    return {
+        "total_emails": 2,
+        "emails": [
+            {
+                "id": "test-1",
+                "subject": "Test Email 1",
+                "sender": "sender1@example.com",
+                "received_at": "2024-01-01T10:00:00Z",
+                "snippet": "This is test email 1",
+                "phishing_analysis": {
+                    "risk_score": 30,
+                    "risk_level": "LOW",
+                    "indicators": [],
+                    "summary": "Safe email"
                 }
-            ]
-        }
-        
-        print("Successfully created result")
-        return result
-        
-    except Exception as e:
-        print(f"Exception occurred: {e}")
-        print(f"Exception type: {type(e)}")
-        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+            },
+            {
+                "id": "test-2",
+                "subject": "Important: Verify Account",
+                "sender": "security@fake-bank.com",
+                "received_at": "2024-01-01T11:00:00Z",
+                "snippet": "Click here to verify your account immediately",
+                "phishing_analysis": {
+                    "risk_score": 85,
+                    "risk_level": "HIGH",
+                    "indicators": ["Suspicious domain", "Urgent action required"],
+                    "summary": "Potential phishing attempt"
+                }
+            }
+        ]
+    }
