@@ -18,7 +18,7 @@ async def test_oauth():
     """Test OAuth endpoint."""
     return {"success": True, "message": "OAuth test endpoint working"}
 
-@router.get("/oauth/start")
+@router.get("/auth/google")
 async def start_oauth_get():
     """Start OAuth flow with GET (direct redirect)."""
     try:
