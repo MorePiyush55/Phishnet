@@ -331,39 +331,41 @@ export const GmailEmailList: React.FC<GmailEmailListProps> = ({ userEmail, onEma
             </div>
           ))}
         </div>
+      )}
 
-        {/* Pagination Info and Load More Button */}
-        {!loading && !error && emails.length > 0 && (
-          <div className="mt-6 space-y-4">
-            {/* Email Count Info */}
-            <div className="text-center text-sm text-gray-400">
-              Showing {fetchedEmails} of {totalEmails} emails
-            </div>
-            
-            {/* Load More Button */}
-            {nextPageToken && (
-              <div className="text-center">
-                <button
-                  onClick={loadMoreEmails}
-                  disabled={loading}
-                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center space-x-2 mx-auto"
-                >
-                  <Mail className="h-4 w-4" />
-                  <span>Load More Emails</span>
-                  {loading && <RefreshCw className="h-4 w-4 animate-spin" />}
-                </button>
-              </div>
-            )}
-            
-            {/* No More Emails Message */}
-            {!nextPageToken && totalEmails > 0 && (
-              <div className="text-center text-sm text-gray-500">
-                All emails loaded ({totalEmails} total)
-              </div>
-            )}
+      {/* Pagination Info and Load More Button */}
+      {!loading && !error && emails.length > 0 && (
+        <div className="mt-6 space-y-4">
+          {/* Email Count Info */}
+          <div className="text-center text-sm text-gray-400">
+            Showing {fetchedEmails} of {totalEmails} emails
           </div>
-        )}
+          
+          {/* Load More Button */}
+          {nextPageToken && (
+            <div className="text-center">
+              <button
+                onClick={loadMoreEmails}
+                disabled={loading}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center space-x-2 mx-auto"
+              >
+                <Mail className="h-4 w-4" />
+                <span>Load More Emails</span>
+                {loading && <RefreshCw className="h-4 w-4 animate-spin" />}
+              </button>
+            </div>
+          )}
+          
+          {/* No More Emails Message */}
+          {!nextPageToken && totalEmails > 0 && (
+            <div className="text-center text-sm text-gray-500">
+              All emails loaded ({totalEmails} total)
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
 };
+
+export default GmailEmailList;

@@ -1,82 +1,111 @@
-# Google OAuth App Verification Guide
+# OAuth App Configuration for Google Verification
 
-## Current Status
-✅ OAuth flow is working correctly
-⚠️ App shows "unverified" warning (normal for development)
+## App Information
+- **App Name**: PhishNet - Email Security Scanner
+- **App Description**: An AI-powered email security platform that analyzes Gmail emails for phishing threats and malicious content to protect users from cybersecurity attacks.
+- **App Category**: Security & Privacy
+- **Developer**: PhishNet Team
 
-## Quick Solutions
+## Redirect URIs Configuration
 
-### 1. For Testing (Immediate)
-**Add test users to Google Cloud Console:**
+### Production URLs (Required for Verification)
+- `https://phishnet-backend-iuoc.onrender.com/api/test/oauth/callback`
+- `https://phishnet-tau.vercel.app/auth/callback`
 
-1. Go to: https://console.cloud.google.com
-2. Select your project
-3. Navigate: APIs & Services > OAuth consent screen
-4. Scroll to "Test users" section
-5. Click "ADD USERS"
-6. Add email addresses: propam5553@gmail.com (and other testers)
-7. Save
+### Development URLs (For Testing)
+- `http://localhost:8001/api/test/oauth/callback`
+- `http://localhost:3000/auth/callback`
 
-**Test users will NOT see the warning!**
+## OAuth Scopes Requested
 
-### 2. For Development (Current)
-**Users can safely proceed by:**
-1. Click "Hide Advanced" (if visible)
-2. Click "Go to phishnet-backend-iuoc.onrender.com (unsafe)"
-3. Continue with OAuth flow
+### 1. `openid` (Non-sensitive)
+**Purpose**: Basic OAuth 2.0 authentication
+**Justification**: Required for secure user authentication
 
-### 3. For Production (Future)
-**To remove warning completely, Google requires:**
+### 2. `email` (Non-sensitive)
+**Purpose**: Access user's primary email address
+**Justification**: Used to identify and associate Gmail account with PhishNet user profile
 
-#### Required Information:
-- ✅ App name: PhishNet
-- ✅ User support email: propam5553@gmail.com
-- ✅ Developer contact: propam5553@gmail.com
-- ✅ Authorized domains: onrender.com, vercel.app
+### 3. `profile` (Non-sensitive)
+**Purpose**: Access user's basic profile information (name, profile picture)
+**Justification**: Used to personalize the user interface and display user information
 
-#### Required Pages (Create these):
-- 🔲 Privacy Policy URL
-- 🔲 Terms of Service URL
-- 🔲 App Homepage URL
+### 4. `https://www.googleapis.com/auth/gmail.readonly` (Sensitive - Requires Verification)
+**Purpose**: Read-only access to Gmail messages and metadata
+**Justification**: 
+- **Security Analysis**: Read email headers, sender information, and content to detect phishing attempts
+- **Threat Detection**: Analyze links, attachments, and email patterns for malicious indicators
+- **Read-Only Access**: No modification, deletion, or sending of emails - purely for security analysis
+- **User Protection**: Helps users identify and avoid phishing attacks, malware, and other email threats
 
-#### Verification Process:
-1. Complete OAuth consent screen
-2. Submit verification request
-3. Google security review (2-6 weeks)
-4. App becomes "verified"
+## Security Measures
 
-## Current OAuth Scopes
-- `openid` - Basic OAuth
-- `email` - User email address
-- `profile` - Basic profile info
-- `https://www.googleapis.com/auth/gmail.readonly` - Read Gmail (sensitive scope)
+### Data Protection
+- All Gmail data is processed in real-time and not permanently stored
+- OAuth tokens are encrypted at rest using industry-standard encryption
+- JWT tokens used for session management with proper expiration
+- All API communications use HTTPS/TLS encryption
 
-## Next Steps
+### Privacy Compliance
+- Users can revoke access at any time through Google Account settings
+- No sharing of Gmail data with third parties
+- Data processing limited to security analysis only
+- Transparent privacy policy explaining data usage
 
-### Immediate (Testing):
-1. Add test users to Google Cloud Console
-2. Test OAuth flow with added users
-3. No verification warning for test users
+### Access Controls
+- Per-user token isolation - users only see their own emails
+- Automatic token refresh with secure storage
+- Proper error handling and token revocation
+- CORS protection for production domains
 
-### Short-term (MVP):
-1. Keep current setup for development
-2. Add security notice on frontend (already done)
-3. Continue building features
+## App Branding Requirements
 
-### Long-term (Production):
-1. Create privacy policy page
-2. Create terms of service page
-3. Submit for Google verification
-4. Remove "unverified" warning
+### Logo and Icons
+- High-resolution app logo (minimum 512x512 px)
+- Favicon and various icon sizes for different platforms
+- Consistent branding across OAuth consent screen
 
-## Security Notes
-- OAuth 2.0 provides security even for "unverified" apps
-- Google controls all authentication
-- Your app never sees user passwords
-- Users can revoke access anytime
-- Read-only access only (cannot modify/delete emails)
+### App Domain Verification
+- Domain ownership verification for phishnet-tau.vercel.app
+- SSL certificate validation
+- Proper domain configuration
 
-## Current Configuration
-- Client ID: 830148817247-7kog97nrhe2ve3i8n8cvj0mrts0icj2q.apps.googleusercontent.com
-- Redirect URI: https://phishnet-backend-iuoc.onrender.com/api/test/oauth/callback
-- Status: Working correctly, shows expected warning
+## Legal Documents Required
+
+### 1. Privacy Policy
+- Clear explanation of data collection and usage
+- Gmail data processing procedures
+- User rights and data retention policies
+- Contact information for privacy inquiries
+
+### 2. Terms of Service
+- Service usage agreement
+- User responsibilities and limitations
+- Liability disclaimers
+- Service availability terms
+
+### 3. OAuth Scope Justification Document
+- Detailed explanation of why Gmail read-only access is necessary
+- Security use case documentation
+- User benefit explanation
+- Data handling procedures
+
+## Verification Checklist
+
+- [ ] All redirect URIs properly configured in Google Cloud Console
+- [ ] Privacy Policy published and accessible
+- [ ] Terms of Service published and accessible
+- [ ] App branding materials prepared
+- [ ] Domain verification completed
+- [ ] OAuth scope justification documented
+- [ ] Security measures documented
+- [ ] Test with limited users completed
+- [ ] Production readiness verified
+
+## Post-Verification Benefits
+
+1. **No Security Warnings**: Users will see professional consent screen without warnings
+2. **Unlimited Users**: No longer limited to 100 test users
+3. **Production Ready**: App appears legitimate and trustworthy
+4. **Better User Experience**: Professional branding on consent screen
+5. **Compliance**: Meets Google's security and privacy requirements

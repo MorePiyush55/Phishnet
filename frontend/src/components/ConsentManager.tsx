@@ -357,7 +357,7 @@ const ConsentManager: React.FC = () => {
                     <input
                       type="checkbox"
                       checked={consentStatus.data_processing.subject_analysis}
-                      onChange={(e) => updateConsentPreferences({ allow_subject_analysis: e.target.checked })}
+                      onChange={(e) => updateConsentPreferences({ subject_analysis: e.target.checked })}
                       disabled={updating}
                       className="h-4 w-4 text-blue-600 rounded border-gray-300"
                     />
@@ -374,7 +374,7 @@ const ConsentManager: React.FC = () => {
                     <input
                       type="checkbox"
                       checked={consentStatus.data_processing.body_analysis}
-                      onChange={(e) => updateConsentPreferences({ allow_body_analysis: e.target.checked })}
+                      onChange={(e) => updateConsentPreferences({ body_analysis: e.target.checked })}
                       disabled={updating}
                       className="h-4 w-4 text-blue-600 rounded border-gray-300"
                     />
@@ -391,7 +391,7 @@ const ConsentManager: React.FC = () => {
                     <input
                       type="checkbox"
                       checked={consentStatus.data_processing.attachment_scanning}
-                      onChange={(e) => updateConsentPreferences({ allow_attachment_scanning: e.target.checked })}
+                      onChange={(e) => updateConsentPreferences({ attachment_scanning: e.target.checked })}
                       disabled={updating}
                       className="h-4 w-4 text-blue-600 rounded border-gray-300"
                     />
@@ -415,8 +415,8 @@ const ConsentManager: React.FC = () => {
                       type="checkbox"
                       checked={consentStatus.data_processing.llm_processing && !consentStatus.data_processing.ai_analysis_opt_out}
                       onChange={(e) => updateConsentPreferences({ 
-                        allow_llm_processing: e.target.checked,
-                        opt_out_ai_analysis: !e.target.checked 
+                        llm_processing: e.target.checked,
+                        ai_analysis_opt_out: !e.target.checked 
                       })}
                       disabled={updating}
                       className="h-4 w-4 text-blue-600 rounded border-gray-300"
@@ -434,7 +434,7 @@ const ConsentManager: React.FC = () => {
                     <input
                       type="checkbox"
                       checked={consentStatus.data_processing.threat_intel_lookup}
-                      onChange={(e) => updateConsentPreferences({ allow_threat_intel_lookup: e.target.checked })}
+                      onChange={(e) => updateConsentPreferences({ threat_intel_lookup: e.target.checked })}
                       disabled={updating}
                       className="h-4 w-4 text-blue-600 rounded border-gray-300"
                     />
@@ -457,7 +457,7 @@ const ConsentManager: React.FC = () => {
                     <input
                       type="checkbox"
                       checked={!consentStatus.data_processing.persistent_storage_opt_out}
-                      onChange={(e) => updateConsentPreferences({ opt_out_persistent_storage: !e.target.checked })}
+                      onChange={(e) => updateConsentPreferences({ persistent_storage_opt_out: !e.target.checked })}
                       disabled={updating}
                       className="h-4 w-4 text-blue-600 rounded border-gray-300"
                     />
