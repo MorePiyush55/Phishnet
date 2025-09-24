@@ -51,7 +51,7 @@ sentry-sdk[fastapi]==1.40.6
 psutil==5.9.6
 
 # Privacy and Compliance
-cryptography==41.0.8
+cryptography==43.0.3
 pydantic[email]==2.9.2
 
 # OAuth and Google APIs
