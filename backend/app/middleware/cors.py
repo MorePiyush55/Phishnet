@@ -16,12 +16,16 @@ def add_cors_middleware(app: FastAPI):
     allowed_origins = [
         "http://localhost:3000",  # React development server
         "http://localhost:8080",  # Alternative frontend port
+        "https://phishnet-tau.vercel.app",  # Production Vercel frontend
         settings.BASE_URL
     ]
     
     if settings.DEBUG:
-        # Allow all origins in development
-        allowed_origins = ["*"]
+        # Allow all origins in development, plus production frontend
+        allowed_origins = [
+            "*",
+            "https://phishnet-tau.vercel.app"  # Always allow production frontend
+        ]
     
     app.add_middleware(
         CORSMiddleware,

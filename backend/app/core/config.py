@@ -88,6 +88,27 @@ class Settings(BaseSettings):
     enable_tracing: bool = False
     log_level: str = "INFO"
     
+    # Observability Configuration
+    sentry_dsn: Optional[str] = None
+    sentry_traces_sample_rate: float = 0.1
+    jaeger_host: str = "localhost"  
+    jaeger_port: int = 6831
+    log_file: Optional[str] = None
+    tracing_enabled: bool = True
+    slow_request_threshold_ms: float = 1000.0
+    slow_scan_threshold_ms: float = 30000.0
+    slow_ml_threshold_ms: float = 5000.0
+    
+    # Privacy and Compliance Configuration
+    privacy_encryption_key: str = "change-this-in-production-please"
+    data_retention_default_days: int = 90
+    gdpr_compliance_enabled: bool = True
+    ccpa_compliance_enabled: bool = True
+    privacy_policy_version: str = "1.0"
+    terms_of_service_version: str = "1.0"
+    dpo_email: str = "privacy@phishnet.com"
+    data_breach_notification_hours: int = 72  # GDPR requirement
+    
     @validator('google_client_id')
     def validate_google_client_id(cls, v):
         if not v:

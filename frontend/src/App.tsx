@@ -11,6 +11,7 @@ import { EmailAnalysisTest } from './components/EmailAnalysisTest';
 import { ErrorProvider } from './components/ErrorHandling';
 import { AuthLandingPage } from './components/AuthLandingPage';
 import EmailAnalysis from './components/EmailAnalysis';
+import LinkAnalysisPage from '../pages/LinkAnalysisPage';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -75,6 +76,14 @@ const App: React.FC = () => {
                 element={
                   <RequireAuth>
                     <EmailAnalysisTest />
+                  </RequireAuth>
+                } 
+              />
+              <Route 
+                path="/link-analysis" 
+                element={
+                  <RequireAuth>
+                    <LinkAnalysisPage />
                   </RequireAuth>
                 } 
               />

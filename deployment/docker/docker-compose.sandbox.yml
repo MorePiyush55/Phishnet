@@ -1,0 +1,165 @@
+# PhishNet Sandbox Environment
+# Secure containerized execution with network isolation
+
+version: '3.8'
+
+services:
+  # Sandbox container for executing suspicious content
+  phishnet-sandbox:
+    build:
+      context: ./docker
+      dockerfile: Dockerfile.sandbox
+    container_name: phishnet-sandbox-${SANDBOX_SESSION_ID:-default}
+    hostname: sandbox-isolated
+    networks:
+      - sandbox_network
+    volumes:
+      # Evidence collection (read-only host mount)
+      - ./sandbox/evidence:/sandbox/evidence:rw
+      # Logs (append-only)
+      - ./sandbox/logs:/sandbox/logs:rw
+      # Temporary execution space (ephemeral)
+      - sandbox_temp:/sandbox/temp
+    environment:
+      - SANDBOX_SESSION_ID=${SANDBOX_SESSION_ID:-default}
+      - EXECUTION_TIMEOUT=${EXECUTION_TIMEOUT:-60}
+      - EVIDENCE_COLLECTION=${EVIDENCE_COLLECTION:-true}
+      - NETWORK_MONITORING=${NETWORK_MONITORING:-true}
+      - SCREENSHOT_ENABLED=${SCREENSHOT_ENABLED:-true}
+      - SANDBOX_PROXY_URL=${SANDBOX_PROXY_URL:-}
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_RAW  # For network monitoring
+      - SYS_PTRACE  # For process monitoring (restricted)
+    security_opt:
+      - seccomp=/etc/docker/seccomp-sandbox.json
+      - no-new-privileges:true
+      - apparmor:docker-default
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+      - /var/tmp:noexec,nosuid,size=50m
+      - /run:noexec,nosuid,size=50m
+    ulimits:
+      nproc: 128
+      nofile: 1024
+      fsize: 100000000  # 100MB file size limit
+    memory: 512m
+    cpus: 0.5
+    restart: "no"  # Never restart - single use containers
+    
+  # Proxy service for controlled egress
+  sandbox-proxy:
+    build:
+      context: ./docker
+      dockerfile: Dockerfile.proxy
+    container_name: phishnet-sandbox-proxy
+    networks:
+      - sandbox_network
+      - external_network
+    environment:
+      - PROXY_LOG_LEVEL=INFO
+      - ALLOWED_DOMAINS_FILE=/proxy/allowed_domains.txt
+      - REPUTATION_API_ENABLED=true
+      - REQUEST_LOGGING=true
+    volumes:
+      - ./sandbox/proxy_logs:/proxy/logs:rw
+      - ./config/allowed_domains.txt:/proxy/allowed_domains.txt:ro
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=50m
+    memory: 256m
+    cpus: 0.25
+    
+  # Network monitor for traffic analysis
+  network-monitor:
+    build:
+      context: ./docker 
+      dockerfile: Dockerfile.netmon
+    container_name: phishnet-network-monitor
+    networks:
+      - sandbox_network
+    volumes:
+      - ./sandbox/network_captures:/captures:rw
+    environment:
+      - CAPTURE_INTERFACE=eth0
+      - CAPTURE_FILTER=host not 127.0.0.1
+      - MAX_CAPTURE_SIZE=100MB
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+    memory: 256m
+    cpus: 0.25
+    
+  # Evidence processor
+  evidence-processor:
+    build:
+      context: ./docker
+      dockerfile: Dockerfile.evidence
+    container_name: phishnet-evidence-processor
+    volumes:
+      - ./sandbox/evidence:/evidence:ro
+      - ./sandbox/processed:/processed:rw
+    environment:
+      - PROCESSING_ENABLED=true
+      - MALWARE_SCAN=true
+      - CONTENT_ANALYSIS=true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=200m
+    memory: 512m
+    cpus: 0.5
+    depends_on:
+      - phishnet-sandbox
+
+networks:
+  # Isolated sandbox network
+  sandbox_network:
+    driver: bridge
+    internal: true  # No external access
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "false"
+      com.docker.network.bridge.enable_ip_masquerade: "false"
+      
+  # External network for proxy only
+  external_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+
+volumes:
+  # Ephemeral volume for sandbox temp data
+  sandbox_temp:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=200m,noexec,nosuid
+
+# Security constraints
+x-security-opts: &security-opts
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+    - apparmor:docker-default
+  read_only: true

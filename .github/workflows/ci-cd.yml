@@ -1,4 +1,4 @@
-name: PhishNet CI/CD Pipeline
+name: PhishNet Comprehensive CI/CD Pipeline
 
 on:
   push:
@@ -6,64 +6,135 @@ on:
     tags: [ 'v*' ]
   pull_request:
     branches: [ main, develop ]
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  PYTHON_VERSION: "3.13"
+  NODE_VERSION: "18"
 
 jobs:
-  # Security and dependency scanning
-  security-scan:
-    name: Security Scan
+  # Code Quality & Security Checks with Observability
+  lint-and-security:
+    name: Code Quality & Security
     runs-on: ubuntu-latest
     permissions:
       security-events: write
       contents: read
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
-      with:
-        scan-type: 'fs'
-        scan-ref: '.'
-        format: 'sarif'
-        output: 'trivy-results.sarif'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
 
-    - name: Upload Trivy scan results to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@v2
-      if: always()
-      with:
-        sarif_file: 'trivy-results.sarif'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 black isort bandit safety mypy
+          pip install -r backend/requirements.txt
 
-  # Code quality and testing
-  test:
-    name: Test and Quality
+      - name: Code formatting check (Black)
+        run: black --check backend/
+
+      - name: Import sorting check (isort)
+        run: isort --check-only backend/
+
+      - name: Lint with flake8
+        run: |
+          flake8 backend/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 backend/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: Type checking (mypy)
+        run: mypy backend/app --ignore-missing-imports
+
+      - name: Security scan (bandit)
+        run: bandit -r backend/ -x backend/tests/
+
+      - name: Dependency vulnerability scan
+        run: safety check --json
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  # Backend Unit Tests with Observability
+  backend-tests:
+    name: Backend Tests
     runs-on: ubuntu-latest
-    
+    needs: lint-and-security
     services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_PASSWORD: testpass
-          POSTGRES_USER: testuser
-          POSTGRES_DB: testdb
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-        ports:
-          - 5432:5432
 
       redis:
-        image: redis:7
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+
+      jaeger:
+        image: jaegertracing/all-in-one:latest
+        ports:
+          - 16686:16686
+          - 6831:6831/udp
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install pytest pytest-asyncio pytest-cov pytest-mock
+
+      - name: Run backend unit tests with observability
+        env:
+          MONGODB_URI: mongodb://localhost:27017/phishnet_test
+          REDIS_URL: redis://localhost:6379
+          JAEGER_HOST: localhost
+          JAEGER_PORT: 6831
+          SENTRY_DSN: ""  # Disabled for tests
+          TESTING: true
+        run: |
+          cd backend
+          pytest tests/ -v --cov=app --cov-report=xml --cov-report=html
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./backend/coverage.xml
+          flags: backend
         ports:
           - 6379:6379
 

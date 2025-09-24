@@ -38,8 +38,21 @@ email-validator==2.1.0.post1
 # Logging
 structlog==24.4.0
 
-# Monitoring and Metrics
+# Monitoring and Metrics  
 prometheus_client==0.17.1
+
+# Observability and Tracing
+opentelemetry-api==1.22.0
+opentelemetry-sdk==1.22.0
+opentelemetry-exporter-jaeger-thrift==1.22.0
+opentelemetry-instrumentation-fastapi==0.43b0
+opentelemetry-instrumentation-redis==0.43b0
+sentry-sdk[fastapi]==1.40.6
+psutil==5.9.6
+
+# Privacy and Compliance
+cryptography==41.0.8
+pydantic[email]==2.9.2
 
 # OAuth and Google APIs
 google-auth==2.23.4

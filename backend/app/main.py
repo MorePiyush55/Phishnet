@@ -1,4 +1,4 @@
-"""Main FastAPI application for PhishNet - Simplified for deployment."""
+"""Main FastAPI application for PhishNet with comprehensive observability."""
 
 import os
 from contextlib import asynccontextmanager
@@ -21,6 +21,33 @@ except ImportError:
 from app.config.settings import settings
 from app.config.logging import get_logger
 
+# Observability imports
+try:
+    from app.observability import (
+        get_logger as get_structured_logger,
+        tracing_manager,
+        error_capture
+    )
+    from app.observability.middleware import (
+        ObservabilityMiddleware,
+        HealthCheckMiddleware
+    )
+    OBSERVABILITY_AVAILABLE = True
+except ImportError:
+    OBSERVABILITY_AVAILABLE = False
+    get_structured_logger = get_logger
+
+# Privacy compliance imports
+try:
+    from app.privacy.middleware import (
+        PrivacyComplianceMiddleware,
+        ConsentEnforcementMiddleware,
+        DataMinimizationMiddleware
+    )
+    PRIVACY_AVAILABLE = True
+except ImportError:
+    PRIVACY_AVAILABLE = False
+
 # MongoDB support
 try:
     from app.db.mongodb import MongoDBManager
@@ -32,10 +59,9 @@ except ImportError:
     DOCUMENT_MODELS = []
 
 try:
-    from app.api import health, gmail_oauth, simple_oauth
-    from app.api import simple_analysis
-    from app.api import auth_simple
-    from app.api import test_oauth, gmail_api
+    from app.api import health, test_oauth  # Minimal APIs for testing
+    from app.api import gmail_simple  # Add our real analyzer test endpoint
+    # Temporarily disabled: gmail_oauth, simple_oauth, simple_analysis, auth_simple, gmail_api
 except ImportError:
     # Create minimal router if imports fail
     from fastapi import APIRouter
@@ -47,7 +73,8 @@ except ImportError:
     test_oauth = APIRouter()
     gmail_api = APIRouter()
 
-logger = get_logger(__name__)
+# Use structured logger if available
+logger = get_structured_logger(__name__) if OBSERVABILITY_AVAILABLE else get_logger(__name__)
 
 
 @asynccontextmanager
@@ -104,11 +131,32 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=getattr(settings, 'APP_NAME', 'PhishNet'),
     version=getattr(settings, 'APP_VERSION', '1.0.0'),
-    description="Real-Time Email Phishing Detector",
+    description="Real-Time Email Phishing Detector with Observability",
     docs_url="/docs" if getattr(settings, 'DEBUG', True) else None,
     redoc_url="/redoc" if getattr(settings, 'DEBUG', True) else None,
     lifespan=lifespan
 )
+
+# Add observability middleware first
+if OBSERVABILITY_AVAILABLE:
+    app.add_middleware(
+        ObservabilityMiddleware,
+        slow_request_threshold=getattr(settings, 'SLOW_REQUEST_THRESHOLD_MS', 1000.0)
+    )
+    app.add_middleware(HealthCheckMiddleware)
+
+# Add privacy compliance middleware
+if PRIVACY_AVAILABLE:
+    app.add_middleware(
+        PrivacyComplianceMiddleware,
+        enable_pii_redaction=getattr(settings, 'GDPR_COMPLIANCE_ENABLED', True),
+        enable_audit_logging=True
+    )
+    app.add_middleware(
+        ConsentEnforcementMiddleware,
+        consent_required_paths=['/api/v1/gmail', '/api/v1/analyze', '/api/v1/scan']
+    )
+    app.add_middleware(DataMinimizationMiddleware)
 
 # Add CORS middleware
 app.add_middleware(
@@ -138,7 +186,14 @@ routers_to_add = [
     ("app.api.auth_simple", "Authentication"),
     ("app.api.simple_oauth", "Simple OAuth"),
     ("app.api.gmail_oauth", "Gmail OAuth"),
-    ("app.api.simple_analysis", "Email Analysis")
+    ("app.api.simple_analysis", "Email Analysis"),
+    ("app.api.async_analysis", "Async Email Analysis"),
+    ("app.api.websockets", "WebSocket Updates"),
+    ("app.api.link_analysis", "Link Redirect Analysis"),
+    ("app.api.threat_intelligence", "Threat Intelligence"),
+    ("app.api.workers", "Worker Management"),
+    ("app.observability.routes", "Observability"),
+    ("app.privacy.routes", "Privacy & Compliance")
 ]
 
 for module_path, tag in routers_to_add:
@@ -160,13 +215,13 @@ except Exception as e:
 if router_errors:
     logger.error(f"Router loading errors: {router_errors}")
 
-# Prometheus metrics endpoint (if available)
+# Prometheus metrics endpoint (if available) - Legacy support
 if METRICS_AVAILABLE and getattr(settings, 'ENABLE_METRICS', False):
     try:
         metrics_app = make_asgi_app()
-        app.mount("/metrics", metrics_app)
+        app.mount("/legacy-metrics", metrics_app)  # Rename to avoid conflict
     except Exception as e:
-        logger.warning(f"Metrics endpoint not available: {e}")
+        logger.warning(f"Legacy metrics endpoint not available: {e}")
 
 
 @app.get("/")

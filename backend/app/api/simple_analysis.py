@@ -35,7 +35,7 @@ class AnalysisDetails(BaseModel):
 class EmailAnalysisResponse(BaseModel):
     is_phishing: bool
     confidence: float = Field(..., ge=0.0, le=1.0)
-    risk_level: str = Field(..., regex="^(LOW|MEDIUM|HIGH|CRITICAL)$")
+    risk_level: str = Field(..., pattern="^(LOW|MEDIUM|HIGH|CRITICAL)$")
     threats_detected: List[str]
     analysis_details: AnalysisDetails
     recommendations: List[str]

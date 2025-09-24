@@ -34,6 +34,54 @@ import { useUIStore } from '../stores/uiStore';
 import { useEmails } from '../hooks/useTypedApi';
 import EmailAnalysis from './EmailAnalysis';
 import { GmailEmailList } from './GmailEmailList';
+import { useOAuth } from '../hooks/useOAuth';
+import { useWebSocket } from '../hooks/useWebSocket';
+import { OAuthService, UserStatus as OAuthUserStatus } from '../services/oauthService';
+
+// Temporary implementations for missing hooks
+const useAuth = () => {
+  const { user, isAuthenticated } = useOAuth();
+  return {
+    user: user ? {
+      email: user.email || 'user@example.com',
+      name: user.display_name || 'User',
+      username: user.email?.split('@')[0] || 'user',
+      role: 'admin'
+    } : {
+      email: 'propam5553@gmail.com',
+      name: 'User',
+      username: 'propam5553',
+      role: 'admin'
+    },
+    logout: () => window.location.href = '/'
+  };
+};
+
+const usePermissions = () => ({
+  canDeleteEmails: true,
+  canViewAudits: true
+});
+
+const useUpdateEmailStatus = () => ({
+  mutate: async () => {},
+  mutateAsync: async (params: any) => {},
+  isLoading: false,
+  isPending: false
+});
+
+const useDeleteEmail = () => ({
+  mutate: async () => {},
+  mutateAsync: async (emailId: any) => {},
+  isLoading: false,
+  isPending: false
+});
+
+const useBulkUpdateEmails = () => ({
+  mutate: async () => {},
+  mutateAsync: async (params: any) => {},
+  isLoading: false,
+  isPending: false
+});
 
 // Types
 interface Email {
@@ -64,71 +112,6 @@ interface UserStatus {
   status?: string;
 }
 
-// Mock implementations for missing hooks
-const useAuth = () => ({
-  user: { 
-    email: 'propam5553@gmail.com', 
-    name: 'User',
-    username: 'propam5553',
-    role: 'admin'
-  },
-  logout: () => window.location.href = '/'
-});
-
-const usePermissions = () => ({
-  canDeleteEmails: true,
-  canViewAudits: true
-});
-
-const useWebSocket = () => ({
-  isConnected: false
-});
-
-const useUpdateEmailStatus = () => ({
-  mutate: async () => {},
-  mutateAsync: async (params: any) => {},
-  isLoading: false,
-  isPending: false
-});
-
-const useDeleteEmail = () => ({
-  mutate: async () => {},
-  mutateAsync: async (emailId: any) => {},
-  isLoading: false,
-  isPending: false
-});
-
-const useBulkUpdateEmails = () => ({
-  mutate: async () => {},
-  mutateAsync: async (params: any) => {},
-  isLoading: false,
-  isPending: false
-});
-
-const OAuthService = {
-  checkStatus: async () => ({ 
-    isAuthenticated: true, 
-    user: { 
-      email: 'propam5553@gmail.com',
-      name: 'User',
-      username: 'propam5553',
-      role: 'admin'
-    }, 
-    status: 'connected' 
-  }),
-  getUserStatus: async () => ({ 
-    isAuthenticated: true, 
-    user: { 
-      email: 'propam5553@gmail.com',
-      name: 'User',
-      username: 'propam5553',
-      role: 'admin'
-    }, 
-    status: 'connected' 
-  }),
-  logout: async () => { window.location.href = '/'; }
-};
-
 const SOCDashboard = () => {
   // Hooks
   const { user, logout } = useAuth();
@@ -137,7 +120,7 @@ const SOCDashboard = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   
   // OAuth Status
-  const [oauthStatus, setOauthStatus] = useState<UserStatus | null>(null);
+  const [oauthStatus, setOauthStatus] = useState<OAuthUserStatus | null>(null);
   
   // UI State
   const {

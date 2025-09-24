@@ -1,20 +1,15 @@
-"""Security middleware for Gmail OAuth endpoints."""
+"""Enhanced OAuth security middleware for comprehensive protection."""
 
-import json
 import time
+import hashlib
 from typing import Dict, Any, Optional
-from datetime import datetime, timedelta
-import ipaddress
-
-from fastapi import Request, HTTPException, status
+from datetime import datetime
+from fastapi import Request, Response, HTTPException, status
 from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.types import ASGIApp
-import redis.asyncio as redis
+import logging
 
-from app.config.settings import settings
+from app.core.oauth_security_hardened import oauth_security_manager
 from app.config.logging import get_logger
-from app.core.redis_client import redis_client
 
 logger = get_logger(__name__)
 

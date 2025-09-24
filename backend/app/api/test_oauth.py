@@ -248,49 +248,183 @@ async def oauth_callback(code: str = None, state: str = None, error: str = None)
             print(f"ERROR: No email found in user info: {user_info}")
             return RedirectResponse(f"{frontend_url}?oauth_error=no_email")
         
-        # Store Gmail tokens in MongoDB for later use by Gmail service
-        print(f"DEBUG: Storing Gmail tokens for {user_email}")
+        # Create or get user in SQLAlchemy database and store tokens properly
+        print(f"DEBUG: Creating/updating user for {user_email}")
         
         try:
-            # Import MongoDB connection
+            # Import dependencies
+            from app.core.database import SessionLocal
+            from app.models.user import User, OAuthToken
             from app.db.mongodb import get_mongodb_db
+            from passlib.context import CryptContext
+            import jwt
+            from app.core.config import settings
             
-            mongo_db = await get_mongodb_db()
-            users_collection = mongo_db.users
+            # Get user info details
+            user_name = user_info.get('name', user_email.split('@')[0])
+            google_sub = user_info.get('id', '')
             
-            # Calculate token expiration
-            expires_in = tokens.get('expires_in', 3600)  # Default 1 hour
-            from datetime import datetime, timezone, timedelta
-            expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+            # Create user in SQLAlchemy database (for proper authentication)
+            with SessionLocal() as db:
+                try:
+                    # Check if user already exists by email or google_sub
+                    existing_user = db.query(User).filter(
+                        (User.email == user_email) | (User.google_sub == google_sub)
+                    ).first()
+                    
+                    if existing_user:
+                        # Update existing user
+                        user = existing_user
+                        user.google_sub = google_sub
+                        user.display_name = user_name
+                        user.gmail_email = user_email
+                        user.gmail_connected = True
+                        user.status = "connected"
+                        user.connected_at = datetime.now(timezone.utc)
+                        print(f"DEBUG: Updated existing user {user.id}")
+                    else:
+                        # Create new user
+                        user = User(
+                            email=user_email,
+                            username=user_email.split('@')[0],  # Use email prefix as username
+                            hashed_password="",  # OAuth users don't need password
+                            full_name=user_name,
+                            google_sub=google_sub,
+                            display_name=user_name,
+                            gmail_email=user_email,
+                            gmail_connected=True,
+                            status="connected",
+                            connected_at=datetime.now(timezone.utc),
+                            is_active=True,
+                            is_verified=True,
+                            role="user"
+                        )
+                        db.add(user)
+                        db.flush()  # Get user.id
+                        print(f"DEBUG: Created new user {user.id}")
+                    
+                    # Store OAuth tokens securely
+                    # Deactivate any existing tokens for this user
+                    existing_tokens = db.query(OAuthToken).filter(
+                        OAuthToken.user_id == user.id,
+                        OAuthToken.provider == "gmail",
+                        OAuthToken.is_active == True
+                    ).all()
+                    
+                    for token in existing_tokens:
+                        token.is_active = False
+                        token.revoked_at = datetime.now(timezone.utc)
+                    
+                    # Calculate token expiration
+                    expires_in = tokens.get('expires_in', 3600)  # Default 1 hour
+                    expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+                    
+                    # Create new OAuth token record
+                    oauth_token = OAuthToken(
+                        user_id=user.id,
+                        provider="gmail",
+                        encrypted_refresh_token=tokens.get("refresh_token", ""),  # In production, encrypt this
+                        encrypted_access_token=access_token,  # In production, encrypt this
+                        token_expires_at=expires_at,
+                        scope=tokens.get("scope", ""),
+                        is_active=True,
+                        created_at=datetime.now(timezone.utc)
+                    )
+                    db.add(oauth_token)
+                    
+                    db.commit()
+                    user_id = user.id
+                    print(f"DEBUG: Stored OAuth tokens for user {user_id}")
+                    
+                except Exception as db_error:
+                    db.rollback()
+                    raise db_error
             
-            # Store or update user with Gmail tokens
-            user_data = {
-                "email": user_email,
-                "gmail_access_token": access_token,
-                "gmail_refresh_token": tokens.get("refresh_token"),
-                "gmail_token_expires_at": expires_at,
-                "gmail_scopes": tokens.get("scope", "").split(" "),
-                "oauth_connected_at": datetime.now(timezone.utc),
-                "updated_at": datetime.now(timezone.utc)
-            }
+            # Also store in MongoDB for backward compatibility with existing Gmail service
+            try:
+                mongo_db = await get_mongodb_db()
+                users_collection = mongo_db.users
+                
+                user_data = {
+                    "email": user_email,
+                    "user_id": user_id,  # Link to SQLAlchemy user
+                    "gmail_access_token": access_token,
+                    "gmail_refresh_token": tokens.get("refresh_token"),
+                    "gmail_token_expires_at": expires_at,
+                    "gmail_scopes": tokens.get("scope", "").split(" "),
+                    "oauth_connected_at": datetime.now(timezone.utc),
+                    "updated_at": datetime.now(timezone.utc)
+                }
+                
+                await users_collection.update_one(
+                    {"email": user_email},
+                    {"$set": user_data},
+                    upsert=True
+                )
+                print(f"DEBUG: Also stored in MongoDB for backward compatibility")
+                
+            except Exception as mongo_error:
+                print(f"WARNING: Failed to store in MongoDB: {mongo_error}")
+                # Continue - SQLAlchemy is primary storage
             
-            # Upsert user document
-            await users_collection.update_one(
-                {"email": user_email},
-                {"$set": user_data},
-                upsert=True
-            )
-            
-            print(f"DEBUG: Successfully stored Gmail tokens for {user_email}")
+            print(f"DEBUG: Successfully processed user creation/update for {user_email}")
             
         except Exception as db_error:
-            print(f"WARNING: Failed to store tokens in database: {str(db_error)}")
-            # Continue anyway - OAuth still succeeded
+            print(f"ERROR: Failed to create/update user in database: {str(db_error)}")
+            import traceback
+            print(f"ERROR: Database error traceback: {traceback.format_exc()}")
+            return RedirectResponse(f"{frontend_url}?oauth_error=database_error")
+        
+        # Create JWT token for the user session
+        try:
+            from app.api.v1.auth import create_access_token, create_refresh_token
+            
+            # Create tokens for the authenticated user
+            access_token_jwt = create_access_token(data={"sub": user_email, "user_id": user_id})
+            refresh_token_jwt = create_refresh_token(data={"sub": user_email, "user_id": user_id})
+            
+            print(f"DEBUG: Created JWT tokens for user {user_email}")
+            
+        except Exception as token_error:
+            print(f"ERROR: Failed to create JWT tokens: {token_error}")
+            # Create simple JWT tokens as fallback
+            import jwt
+            from datetime import datetime, timedelta
+            
+            # Use a simple secret for now - in production use proper settings
+            secret = "your-secret-key"
+            
+            # Create access token (expires in 24 hours)
+            access_token_jwt = jwt.encode({
+                "sub": user_email,
+                "user_id": user_id,
+                "exp": datetime.utcnow() + timedelta(days=1)
+            }, secret, algorithm="HS256")
+            
+            # Create refresh token (expires in 30 days)  
+            refresh_token_jwt = jwt.encode({
+                "sub": user_email,
+                "user_id": user_id,
+                "exp": datetime.utcnow() + timedelta(days=30)
+            }, secret, algorithm="HS256")
+            
+            print(f"DEBUG: Created fallback JWT tokens for user {user_email}")
         
         print(f"DEBUG: Successfully processed OAuth for {user_email}, redirecting to frontend")
         
-        # Redirect to a success page instead of the main page
-        return RedirectResponse(f"{frontend_url}/connected?oauth_success=true&email={user_email}")
+        # Redirect to frontend auth callback with authentication tokens
+        redirect_params = {
+            "access_token": access_token_jwt,
+            "refresh_token": refresh_token_jwt,
+            "user_email": user_email
+        }
+        
+        # Build redirect URL with parameters - redirect to /auth/callback as expected by frontend
+        from urllib.parse import urlencode
+        redirect_url = f"{frontend_url}/auth/callback?{urlencode(redirect_params)}"
+        
+        print(f"DEBUG: Redirecting to: {redirect_url}")
+        return RedirectResponse(redirect_url)
         
     except Exception as e:
         print(f"ERROR: OAuth callback failed: {str(e)}")

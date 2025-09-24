@@ -1,12 +1,23 @@
-"""Real Gmail API endpoint for fetching user emails."""
+"""Real Gmail API endpoint for fetching user emails with proper authentication."""
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.orm import Session
 from typing import Dict, Any, Optional, List
 import datetime
 import httpx
 import asyncio
+import jwt
 
-# Import MongoDB directly
+# Import dependencies
+from app.core.database import get_db
+from app.models.user import User, OAuthToken
+from app.core.config import settings
+
+# Import real threat analyzer
+from app.analyzers.real_threat_analyzer import real_threat_analyzer
+
+# Import MongoDB for backward compatibility
 try:
     from ..db.mongodb import get_mongodb_db
     MONGODB_AVAILABLE = True
@@ -15,6 +26,46 @@ except ImportError:
     print("MongoDB not available for Gmail tokens")
 
 router = APIRouter(prefix="/api/gmail-simple", tags=["Gmail Test"])
+security = HTTPBearer(auto_error=False)
+
+async def get_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    db: Session = Depends(get_db)
+) -> Optional[User]:
+    """Get current authenticated user from JWT token."""
+    if not credentials:
+        return None
+    
+    try:
+        # Decode JWT token
+        token = credentials.credentials
+        payload = jwt.decode(
+            token, 
+            settings.SECRET_KEY, 
+            algorithms=["HS256"]
+        )
+        
+        # Get user_id from token
+        user_id = payload.get("user_id")
+        user_email = payload.get("sub")
+        
+        if not user_id and not user_email:
+            return None
+        
+        # Find user in database
+        if user_id:
+            user = db.query(User).filter(User.id == user_id).first()
+        else:
+            user = db.query(User).filter(User.email == user_email).first()
+        
+        if user and user.is_active and not user.disabled:
+            return user
+        
+        return None
+        
+    except Exception as e:
+        print(f"DEBUG: Token verification failed: {e}")
+        return None
 
 @router.get("/test")
 async def test_endpoint():
@@ -22,12 +73,45 @@ async def test_endpoint():
     return {"status": "ok", "message": "Gmail simple endpoint is working"}
 
 @router.get("/check-tokens/{user_email}")
-async def check_user_tokens(user_email: str):
-    """Check if user has stored Gmail tokens."""
+async def check_user_tokens(
+    user_email: str,
+    current_user: Optional[User] = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Check if user has stored Gmail tokens - now user-specific."""
+    # Check if authenticated user has access to request tokens for this email
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    # Only allow users to check their own tokens or admin users
+    if current_user.email != user_email and not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="Can only check your own tokens")
+    
+    # First check SQLAlchemy OAuth tokens (primary)
+    oauth_token = (
+        db.query(OAuthToken)
+        .filter(
+            OAuthToken.user_id == current_user.id,
+            OAuthToken.provider == 'google',
+            OAuthToken.is_active == True
+        )
+        .first()
+    )
+    
+    if oauth_token:
+        return {
+            "has_tokens": True,
+            "user_email": user_email,
+            "token_source": "oauth",
+            "token_created": oauth_token.created_at,
+            "scopes": oauth_token.scope.split(' ') if oauth_token.scope else []
+        }
+    
+    # Fallback to MongoDB for backward compatibility
+    if not MONGODB_AVAILABLE:
+        return {"has_tokens": False, "user_email": user_email, "error": "No authentication tokens found"}
+    
     try:
-        if not MONGODB_AVAILABLE:
-            return {"error": "MongoDB not available"}
-        
         mongo_db = await get_mongodb_db()
         users_collection = mongo_db.users
         
@@ -60,76 +144,109 @@ async def gmail_health():
     return {"status": "ok", "service": "gmail_simple", "mongodb_available": MONGODB_AVAILABLE}
 
 @router.post("/analyze")
-async def analyze_user_emails(request: Optional[Dict[str, Any]] = None):
+async def analyze_user_emails(
+    request: Optional[Dict[str, Any]] = None,
+    current_user: Optional[User] = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
     Analyze user's Gmail emails for phishing indicators.
     
-    This fetches real emails from the user's Gmail account using stored OAuth tokens.
+    This fetches real emails from the authenticated user's Gmail account using stored OAuth tokens.
     """
     try:
-        # Get user email from request
-        user_email = request.get("user_email") if request else None
+        # Check authentication
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        
+        # Get request parameters
         max_emails = request.get("max_emails", 10) if request else 10
+        user_email = current_user.email
         
-        # Validate user email
-        if not user_email:
-            return {
-                "error": "user_email is required",
-                "total_emails": 0,
-                "emails": []
-            }
+        print(f"Fetching emails for authenticated user: {user_email}")
         
-        print(f"Fetching emails for user: {user_email}")
+        # First try to get access token from SQLAlchemy OAuth tokens (primary)
+        oauth_token = (
+            db.query(OAuthToken)
+            .filter(
+                OAuthToken.user_id == current_user.id,
+                OAuthToken.provider == 'google',
+                OAuthToken.is_active == True
+            )
+            .first()
+        )
         
-        # Check if MongoDB is available for token storage
-        if not MONGODB_AVAILABLE:
-            print("MongoDB not available, returning mock data")
-            return get_mock_emails_response()
+        gmail_access_token = None
+        token_source = None
         
-        # Try to get user's Gmail tokens from MongoDB
-        try:
-            print(f"Connecting to MongoDB for user: {user_email}")
-            mongo_db = await get_mongodb_db()
-            users_collection = mongo_db.users
-            
-            print(f"Attempting to find user document for: {user_email}")
-            user_doc = await users_collection.find_one({"email": user_email})
-            print(f"MongoDB query result: {user_doc is not None}")
-            
-            if user_doc is None:
-                print(f"No user document found for {user_email}")
-                return get_mock_emails_response()
-            
-            # Check if user has Gmail tokens
-            gmail_access_token = user_doc.get("gmail_access_token")
-            print(f"Gmail access token found: {gmail_access_token is not None}")
-            
-            if not gmail_access_token:
-                print(f"No Gmail access token found for {user_email}")
-                print(f"Available fields in user doc: {list(user_doc.keys()) if user_doc else 'None'}")
-                return get_mock_emails_response()
-            
-            print(f"Found Gmail token for {user_email}, fetching real emails...")
-            
-            # Fetch real Gmail emails
-            real_emails = await fetch_gmail_emails(gmail_access_token, max_emails)
-            
-            if real_emails:
-                print(f"Successfully fetched {len(real_emails)} real emails")
-                return {
-                    "total_emails": len(real_emails),
-                    "emails": real_emails
-                }
+        if oauth_token:
+            # Use the new token refresh functionality
+            gmail_access_token = await oauth_token.get_valid_access_token(db)
+            if gmail_access_token:
+                token_source = "oauth"
+                print(f"Using OAuth access token for {user_email}")
             else:
-                print("No real emails found or API call failed, returning mock data")
-                return get_mock_emails_response()
-                
-        except Exception as mongodb_error:
-            print(f"MongoDB error: {mongodb_error}")
-            import traceback
-            print(f"MongoDB error traceback: {traceback.format_exc()}")
+                print(f"OAuth token refresh failed for {user_email}")
+        else:
+            # Fallback to MongoDB for backward compatibility
+            if MONGODB_AVAILABLE:
+                try:
+                    print(f"Trying MongoDB fallback for user: {user_email}")
+                    mongo_db = await get_mongodb_db()
+                    users_collection = mongo_db.users
+                    
+                    user_doc = await users_collection.find_one({"email": user_email})
+                    
+                    if user_doc and user_doc.get("gmail_access_token"):
+                        gmail_access_token = user_doc.get("gmail_access_token")
+                        token_source = "mongodb"
+                        print(f"Using MongoDB access token for {user_email}")
+                    else:
+                        print(f"No Gmail access token found in MongoDB for {user_email}")
+                        
+                except Exception as mongodb_error:
+                    print(f"MongoDB error: {mongodb_error}")
+        
+        if not gmail_access_token:
+            print(f"No Gmail access token found for {user_email} in either OAuth or MongoDB")
             return get_mock_emails_response()
         
+        print(f"Found Gmail token for {user_email} from {token_source}, fetching real emails...")
+        
+        # Fetch real Gmail emails with pagination
+        gmail_result = await fetch_gmail_emails(gmail_access_token, max_emails)
+        
+        # Handle token expiration with one retry
+        if gmail_result.get("error") == "token_expired" and oauth_token:
+            print(f"Token expired, attempting refresh for {user_email}")
+            if await oauth_token.refresh_access_token(db):
+                print("Token refreshed successfully, retrying email fetch")
+                gmail_access_token = oauth_token.decrypt_access_token()
+                gmail_result = await fetch_gmail_emails(gmail_access_token, max_emails)
+            else:
+                print("Token refresh failed")
+                return get_mock_emails_response()
+        
+        if gmail_result.get("emails"):
+            real_emails = gmail_result["emails"]
+            print(f"Successfully fetched {len(real_emails)} real emails")
+            return {
+                "total_emails": gmail_result.get("total_available", len(real_emails)),
+                "fetched_emails": len(real_emails),
+                "next_page_token": gmail_result.get("next_page_token"),
+                "token_source": token_source,
+                "user_email": user_email,
+                "emails": real_emails
+            }
+        else:
+            error = gmail_result.get("error")
+            if error:
+                print(f"Gmail API error: {error}")
+            print("No real emails found or API call failed, returning mock data")
+            return get_mock_emails_response()
+        
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions
     except Exception as e:
         print(f"Error in analyze_user_emails: {e}")
         import traceback
@@ -137,71 +254,107 @@ async def analyze_user_emails(request: Optional[Dict[str, Any]] = None):
         return get_mock_emails_response()
 
 
-async def fetch_gmail_emails(access_token: str, max_emails: int = 10) -> List[Dict[str, Any]]:
-    """Fetch emails directly from Gmail API."""
+async def fetch_gmail_emails(access_token: str, max_emails: int = 10, page_token: Optional[str] = None) -> Dict[str, Any]:
+    """Fetch emails directly from Gmail API with pagination support."""
     try:
-        print(f"Starting Gmail API call with max_emails: {max_emails}")
+        print(f"Starting Gmail API call with max_emails: {max_emails}, page_token: {page_token}")
         
         headers = {
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json"
         }
         
-        # Get list of message IDs
+        # Get list of message IDs with pagination support
         async with httpx.AsyncClient() as client:
-            messages_url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults={max_emails}"
-            print(f"Calling Gmail API: {messages_url}")
+            # Build URL with proper parameters
+            params = {
+                "maxResults": min(max_emails, 100),  # Gmail API supports up to 500 but let's be conservative
+                "q": "in:inbox"
+            }
+            if page_token:
+                params["pageToken"] = page_token
             
-            messages_response = await client.get(messages_url, headers=headers)
+            messages_url = "https://gmail.googleapis.com/gmail/v1/users/me/messages"
+            print(f"Calling Gmail API: {messages_url} with params: {params}")
+            
+            messages_response = await client.get(messages_url, headers=headers, params=params)
             
             print(f"Gmail API response status: {messages_response.status_code}")
             
-            if messages_response.status_code != 200:
+            if messages_response.status_code == 401:
+                print("Gmail API returned 401 - access token likely expired")
+                return {"error": "token_expired", "emails": [], "next_page_token": None}
+            elif messages_response.status_code != 200:
                 print(f"Failed to get message list: {messages_response.status_code}")
                 print(f"Response text: {messages_response.text}")
-                return []
+                return {"error": f"gmail_api_error_{messages_response.status_code}", "emails": [], "next_page_token": None}
             
             messages_data = messages_response.json()
             messages = messages_data.get("messages", [])
+            next_page_token = messages_data.get("nextPageToken")
             
             print(f"Found {len(messages)} messages from Gmail API")
+            print(f"Next page token: {next_page_token}")
             
             if not messages:
                 print("No messages found in Gmail")
-                return []
+                return {"emails": [], "next_page_token": None, "total_fetched": 0}
             
-            # Fetch detailed email data
+            # Fetch detailed email data in batches for better performance
             emails = []
-            for i, message in enumerate(messages[:max_emails]):
-                message_id = message["id"]
-                print(f"Fetching email {i+1}/{len(messages[:max_emails])}: {message_id}")
+            batch_size = 10  # Process emails in smaller batches to avoid timeouts
+            
+            for i in range(0, len(messages), batch_size):
+                batch = messages[i:i + batch_size]
+                print(f"Processing batch {i//batch_size + 1}: emails {i+1}-{min(i+batch_size, len(messages))}")
                 
-                # Get full message details
-                message_url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}"
-                message_response = await client.get(message_url, headers=headers)
+                # Process batch in parallel for better performance
+                batch_tasks = []
+                for message in batch:
+                    message_id = message["id"]
+                    message_url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}"
+                    batch_tasks.append(client.get(message_url, headers=headers))
                 
-                print(f"Email {i+1} response status: {message_response.status_code}")
+                # Execute batch requests in parallel
+                batch_responses = await asyncio.gather(*batch_tasks, return_exceptions=True)
                 
-                if message_response.status_code == 200:
-                    message_data = message_response.json()
-                    email_info = parse_gmail_message(message_data)
-                    if email_info:
-                        print(f"Successfully parsed email: {email_info.get('subject', 'No subject')}")
-                        emails.append(email_info)
+                # Process email parsing in parallel too
+                parse_tasks = []
+                for j, response in enumerate(batch_responses):
+                    if isinstance(response, Exception):
+                        print(f"Error fetching email {batch[j]['id']}: {response}")
+                        continue
+                        
+                    if response.status_code == 200:
+                        message_data = response.json()
+                        parse_tasks.append(parse_gmail_message(message_data))
                     else:
-                        print(f"Failed to parse email {message_id}")
-                else:
-                    print(f"Failed to fetch email {message_id}: {message_response.status_code}")
+                        print(f"Failed to fetch email {batch[j]['id']}: {response.status_code}")
+                
+                # Wait for all parsing to complete
+                if parse_tasks:
+                    parsed_emails = await asyncio.gather(*parse_tasks, return_exceptions=True)
+                    for email_info in parsed_emails:
+                        if isinstance(email_info, Exception):
+                            print(f"Error parsing email: {email_info}")
+                            continue
+                        if email_info:
+                            emails.append(email_info)
             
             print(f"Successfully processed {len(emails)} emails")
-            return emails
+            return {
+                "emails": emails,
+                "next_page_token": next_page_token,
+                "total_fetched": len(emails),
+                "total_available": len(messages)
+            }
             
     except Exception as e:
         print(f"Error fetching Gmail emails: {e}")
-        return []
+        return {"emails": [], "next_page_token": None, "total_fetched": 0, "error": str(e)}
 
 
-def parse_gmail_message(message_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+async def parse_gmail_message(message_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Parse Gmail message data into our format."""
     try:
         payload = message_data.get("payload", {})
@@ -240,8 +393,8 @@ def parse_gmail_message(message_data: Dict[str, Any]) -> Optional[Dict[str, Any]
                 except:
                     email_info["received_at"] = value
         
-        # Basic phishing analysis
-        email_info["phishing_analysis"] = analyze_email_for_phishing(email_info)
+        # Real phishing analysis using advanced threat detection
+        email_info["phishing_analysis"] = await analyze_email_for_phishing(email_info)
         
         return email_info
         
@@ -250,43 +403,35 @@ def parse_gmail_message(message_data: Dict[str, Any]) -> Optional[Dict[str, Any]
         return None
 
 
-def analyze_email_for_phishing(email_info: Dict[str, Any]) -> Dict[str, Any]:
-    """Simple phishing analysis for real emails."""
-    indicators = []
-    risk_score = 0
-    
-    subject = email_info.get("subject", "").lower()
-    sender = email_info.get("sender", "").lower()
-    snippet = email_info.get("snippet", "").lower()
-    
-    # Check for phishing indicators
-    suspicious_words = ["urgent", "verify", "suspend", "click here", "act now", "limited time"]
-    for word in suspicious_words:
-        if word in subject or word in snippet:
-            indicators.append(f"Suspicious phrase: '{word}'")
-            risk_score += 15
-    
-    # Check sender domain
-    if any(domain in sender for domain in ["suspicious", "fake", "phishing"]):
-        indicators.append("Suspicious sender domain")
-        risk_score += 25
-    
-    # Determine risk level
-    if risk_score >= 70:
-        risk_level = "HIGH"
-    elif risk_score >= 40:
-        risk_level = "MEDIUM"
-    elif risk_score >= 20:
-        risk_level = "LOW"
-    else:
-        risk_level = "SAFE"
-    
-    return {
-        "risk_score": min(risk_score, 100),
-        "risk_level": risk_level,
-        "indicators": indicators,
-        "summary": f"Real Gmail email analysis - {risk_level.lower()} risk"
-    }
+async def analyze_email_for_phishing(email_info: Dict[str, Any]) -> Dict[str, Any]:
+    """Real phishing analysis for emails using advanced threat detection."""
+    try:
+        # Extract email components
+        subject = email_info.get("subject", "")
+        sender = email_info.get("sender", "")
+        snippet = email_info.get("snippet", "")
+        headers = email_info.get("headers", {})
+        
+        # Use real threat analyzer instead of mock analysis
+        analysis_result = await real_threat_analyzer.analyze_email_threat(
+            subject=subject,
+            sender=sender,
+            body="",  # Gmail API provides snippet instead of full body
+            headers=headers,
+            snippet=snippet
+        )
+        
+        return analysis_result
+        
+    except Exception as e:
+        print(f"Real threat analysis failed: {e}")
+        # Fallback to safe default instead of mock
+        return {
+            "risk_score": 25,
+            "risk_level": "LOW",
+            "indicators": ["analysis_error"],
+            "summary": "Threat analysis failed - email requires manual review"
+        }
 
 def get_mock_emails_response():
     """Return mock emails as fallback."""

@@ -95,8 +95,8 @@ class EnhancedEmailOrchestrator:
                 logger.error(f"Threat intel analysis failed: {threat_results}")
                 threat_results = []
             
-            # Step 5: Combine all results and calculate final score
-            analysis_summary = await self._combine_analysis_results(
+            # Step 5: Use deterministic threat aggregator for consistent scoring
+            analysis_summary = await self._combine_analysis_results_deterministic(
                 email, sanitization_results, link_results, ai_results, threat_results, db
             )
             
@@ -353,6 +353,242 @@ class EnhancedEmailOrchestrator:
             logger.warning(f"Failed to convert analysis results to response models: {str(e)}")
         
         return summary
+    
+    async def _combine_analysis_results_deterministic(self, email: Email, sanitization_results: Dict[str, Any],
+                                      link_results: List[LinkAnalysis], ai_results: Optional[EmailAIResults],
+                                      threat_results: List[EmailIndicators], db: Session) -> EmailAnalysisSummary:
+        """
+        Combine all analysis results using deterministic threat aggregator.
+        Provides consistent, explainable scoring with full traceability.
+        """
+        try:
+            from app.services.enhanced_scoring_service import calculate_enhanced_score
+            
+            # Prepare email data for deterministic analysis
+            email_data = {
+                "id": email.id,
+                "subject": email.subject or "",
+                "sender": email.sender or "",
+                "recipient": email.recipient or "",
+                "content": email.raw_text or "",
+                "html_content": email.sanitized_html or "",
+                "received_at": email.received_at.isoformat() if email.received_at else "",
+                "headers": email.headers or {}
+            }
+            
+            # Prepare analysis components for deterministic aggregator
+            analysis_components = {
+                "url_analysis": self._prepare_url_analysis_data(link_results, sanitization_results),
+                "content_analysis": self._prepare_content_analysis_data(ai_results, sanitization_results),
+                "sender_analysis": self._prepare_sender_analysis_data(email, threat_results),
+                "attachment_analysis": self._prepare_attachment_analysis_data(sanitization_results),
+                "context_analysis": self._prepare_context_analysis_data(email, threat_results)
+            }
+            
+            # Calculate enhanced threat score using deterministic aggregator
+            enhanced_score = await calculate_enhanced_score(email_data, analysis_components)
+            
+            # Create comprehensive analysis summary
+            summary = EmailAnalysisSummary(
+                email_id=email.id,
+                overall_risk_score=enhanced_score.final_score,
+                risk_level=enhanced_score.threat_level,
+                analysis_status="completed",
+                ai_analysis=ai_results,
+                total_links=len(link_results),
+                suspicious_links=len([link for link in link_results if link.risk_score > 0.5]),
+                malicious_indicators=len([ind for ind in threat_results if (ind.reputation_score or 0.0) > 0.7]),
+                risk_factors=enhanced_score.evidence,
+                recommendations=enhanced_score.recommendations[:5]  # Limit recommendations
+            )
+            
+            # Add enhanced scoring metadata
+            summary.enhanced_analysis = {
+                "deterministic_score": enhanced_score.final_score,
+                "threat_category": enhanced_score.threat_category,
+                "confidence_score": enhanced_score.confidence_score,
+                "confidence_level": enhanced_score.confidence_level,
+                "explanation": enhanced_score.explanation,
+                "key_indicators": enhanced_score.key_indicators,
+                "component_breakdown": enhanced_score.component_breakdown,
+                "algorithm_version": enhanced_score.algorithm_version,
+                "input_hash": enhanced_score.input_hash,
+                "processing_time": enhanced_score.processing_time
+            }
+            
+            # Add original analysis results for compatibility
+            try:
+                from app.schemas.analysis import LinkAnalysisResponse, EmailIndicatorsResponse
+                
+                summary.link_analysis = [
+                    LinkAnalysisResponse.from_orm(link) for link in link_results
+                ]
+                summary.threat_intel = [
+                    EmailIndicatorsResponse.from_orm(indicator) for indicator in threat_results
+                ]
+            except Exception as e:
+                logger.warning(f"Failed to convert analysis results to response models: {str(e)}")
+            
+            logger.info(f"Deterministic analysis completed for email {email.id}: "
+                       f"score={enhanced_score.final_score:.3f}, "
+                       f"category={enhanced_score.threat_category}, "
+                       f"confidence={enhanced_score.confidence_score:.3f}")
+            
+            return summary
+            
+        except Exception as e:
+            logger.error(f"Deterministic analysis failed for email {email.id}: {e}")
+            # Fallback to traditional analysis
+            logger.info(f"Falling back to traditional analysis for email {email.id}")
+            return await self._combine_analysis_results(
+                email, sanitization_results, link_results, ai_results, threat_results, db
+            )
+    
+    def _prepare_url_analysis_data(self, link_results: List[LinkAnalysis], sanitization_results: Dict[str, Any]) -> Dict[str, Any]:
+        """Prepare URL analysis data for deterministic aggregator."""
+        
+        malicious_urls = []
+        suspicious_urls = []
+        safe_urls = []
+        
+        for link in link_results:
+            if link.risk_score >= 0.8:
+                malicious_urls.append(link.original_url)
+            elif link.risk_score >= 0.5:
+                suspicious_urls.append(link.original_url)
+            else:
+                safe_urls.append(link.original_url)
+        
+        # Check for typosquatting based on domains
+        domains = sanitization_results.get('domains', [])
+        typosquatting_detected = any(
+            self._is_typosquatting_domain(domain) for domain in domains
+        )
+        
+        overall_risk = max([link.risk_score for link in link_results], default=0.0)
+        
+        return {
+            "total_urls": len(link_results),
+            "malicious_urls": malicious_urls,
+            "suspicious_urls": suspicious_urls,
+            "safe_urls": safe_urls,
+            "typosquatting_detected": typosquatting_detected,
+            "risk_score": overall_risk,
+            "domains": domains
+        }
+    
+    def _prepare_content_analysis_data(self, ai_results: Optional[EmailAIResults], sanitization_results: Dict[str, Any]) -> Dict[str, Any]:
+        """Prepare content analysis data for deterministic aggregator."""
+        
+        if not ai_results:
+            return {
+                "phishing_indicators": 0.0,
+                "phishing_evidence": [],
+                "urgency_score": 0.0,
+                "urgency_keywords": [],
+                "credential_harvesting": False,
+                "risk_score": 0.1
+            }
+        
+        # Extract phishing indicators from AI analysis
+        phishing_score = ai_results.ai_score if ai_results.ai_score > 0.3 else 0.0
+        
+        # Detect urgency language
+        urgency_keywords = ["urgent", "immediate", "expires", "suspend", "verify", "act now"]
+        content_lower = (ai_results.summary or "").lower()
+        detected_urgency = [kw for kw in urgency_keywords if kw in content_lower]
+        urgency_score = len(detected_urgency) / len(urgency_keywords)
+        
+        # Detect credential harvesting patterns
+        credential_patterns = ["login", "password", "verify account", "update payment", "confirm identity"]
+        credential_harvesting = any(pattern in content_lower for pattern in credential_patterns)
+        
+        return {
+            "phishing_indicators": phishing_score,
+            "phishing_evidence": [ai_results.summary] if ai_results.summary else [],
+            "urgency_score": urgency_score,
+            "urgency_keywords": detected_urgency,
+            "credential_harvesting": credential_harvesting,
+            "risk_score": ai_results.ai_score
+        }
+    
+    def _prepare_sender_analysis_data(self, email: Email, threat_results: List[EmailIndicators]) -> Dict[str, Any]:
+        """Prepare sender analysis data for deterministic aggregator."""
+        
+        sender_domain = email.sender.split('@')[-1] if email.sender and '@' in email.sender else ""
+        
+        # Check for sender spoofing based on threat intelligence
+        spoofing_detected = any(
+            indicator.indicator_type == "domain" and indicator.value == sender_domain
+            for indicator in threat_results
+        )
+        
+        # Calculate domain reputation from threat intelligence
+        domain_reputation = 1.0  # Start with good reputation
+        for indicator in threat_results:
+            if indicator.indicator_type == "domain" and indicator.value == sender_domain:
+                domain_reputation = min(domain_reputation, 1.0 - (indicator.reputation_score or 0.0))
+        
+        return {
+            "sender": email.sender or "",
+            "sender_domain": sender_domain,
+            "spoofing_detected": spoofing_detected,
+            "domain_reputation": domain_reputation,
+            "risk_score": 1.0 - domain_reputation
+        }
+    
+    def _prepare_attachment_analysis_data(self, sanitization_results: Dict[str, Any]) -> Dict[str, Any]:
+        """Prepare attachment analysis data for deterministic aggregator."""
+        
+        # For now, use sanitization results as proxy for attachment analysis
+        security_issues = sanitization_results.get('security_issues', [])
+        suspicious_files = [issue for issue in security_issues if 'attachment' in issue.lower()]
+        
+        return {
+            "total_attachments": 0,  # Would be populated by actual attachment analysis
+            "suspicious_files": suspicious_files,
+            "risk_score": 0.1 if not suspicious_files else 0.6
+        }
+    
+    def _prepare_context_analysis_data(self, email: Email, threat_results: List[EmailIndicators]) -> Dict[str, Any]:
+        """Prepare context analysis data for deterministic aggregator."""
+        
+        # Analyze email timing, frequency, and context
+        return {
+            "received_at": email.received_at.isoformat() if email.received_at else "",
+            "headers": email.headers or {},
+            "threat_indicators_count": len(threat_results),
+            "risk_score": 0.0  # Placeholder for future context analysis
+        }
+    
+    def _is_typosquatting_domain(self, domain: str) -> bool:
+        """Simple typosquatting detection."""
+        
+        # Common legitimate domains to check against
+        legitimate_domains = [
+            "amazon.com", "google.com", "microsoft.com", "apple.com", 
+            "paypal.com", "ebay.com", "facebook.com", "twitter.com"
+        ]
+        
+        # Simple character substitution check
+        for legit_domain in legitimate_domains:
+            if self._calculate_domain_similarity(domain, legit_domain) > 0.8:
+                return True
+        
+        return False
+    
+    def _calculate_domain_similarity(self, domain1: str, domain2: str) -> float:
+        """Calculate similarity between two domains."""
+        
+        # Simple Levenshtein-like similarity
+        if len(domain1) == 0 or len(domain2) == 0:
+            return 0.0
+        
+        # Character overlap ratio
+        common_chars = sum(1 for c in domain1 if c in domain2)
+        max_len = max(len(domain1), len(domain2))
+        
+        return common_chars / max_len
     
     def _calculate_sanitization_score(self, results: Dict[str, Any]) -> float:
         """Calculate risk score from sanitization results."""

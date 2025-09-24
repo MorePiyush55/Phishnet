@@ -1,53 +1,263 @@
-Deployment checklist for PhishNet
+# PhishNet Deployment Guide
 
-Frontend (Vercel)
-- Ensure `frontend/vercel.json` exists and maps environment variables to Vercel secrets.
-- Set Vercel Environment Variables (in Project Settings > Environment Variables):
-  - `NEXT_PUBLIC_GOOGLE_CLIENT_ID` -> value or add as a Vercel Secret `@google-client-id`
-  - `NEXT_PUBLIC_BACKEND_URL` -> your backend URL (e.g., https://phishnet-1ed1.onrender.com)
-- Connect your repo to Vercel and enable automatic deployments from the `main` branch.
-- If using Next.js, set build command `npm run build` and output directory as `out` for static build or use `next start` for server.
+## 🚀 Deployment Architecture
 
-Backend (Render)
-- For the FastAPI backend, ensure `backend/render.yaml` is present.
-- In Render Dashboard > Environment, set these values (do not commit secrets):
-  - `GOOGLE_CLIENT_ID`
-  - `GOOGLE_CLIENT_SECRET`
-  - `GOOGLE_REDIRECT_URI` = https://<your-backend>.onrender.com/api/v1/auth/google/callback
-  - `JWT_SECRET_KEY`
-  - `FRONTEND_URL` = https://phishnet-rouge.vercel.app
-  - `CORS_ORIGINS` include https://phishnet-rouge.vercel.app and https://localhost:3000 for dev
-- Enable Auto deploy from GitHub for the `main` branch.
+```
+Frontend (Vercel) ←→ Backend (Render) ←→ Database (Render PostgreSQL)
+     ↑                    ↑                      ↑
+   React/Vite         FastAPI/Python         PostgreSQL
+```
 
-Optional: Node backend
-- If you prefer the Node OAuth backend, add the example service entry in `backend/render.yaml` (see comments) and set secrets accordingly.
+## 📁 Project Structure for Deployment
 
-Domain & Google Cloud
-- Add production redirect URIs to the Google Cloud Console OAuth credentials:
-  - https://phishnet-rouge.vercel.app/auth/callback (frontend client redirects)
-  - https://phishnet-1ed1.onrender.com/api/v1/auth/google/callback (backend token exchange)
-- Update `CORS_ORIGINS` on backend(s) to include production domains.
+```
+phishnet-project/
+├── frontend/                 # → Deploy to Vercel
+│   ├── src/
+│   ├── package.json
+│   ├── vite.config.ts
+│   ├── vercel.json          # Vercel configuration
+│   └── .env.production
+│
+├── backend/                  # → Deploy to Render
+│   ├── app/                 # Main application code
+│   ├── alembic/             # Database migrations
+│   ├── requirements.txt     # Python dependencies
+│   ├── main.py             # Production entry point
+│   ├── Procfile            # Render process configuration
+│   ├── render.yaml         # Render deployment config
+│   └── .env.example        # Environment template
+│
+└── README.md
+```
 
-Testing checklist
-1. Development
-   - Start backend locally with environment variables.
-   - Start frontend Next dev server.
-   - Visit http://localhost:3000 -> click login -> ensure redirect to Google accounts URL with correct client_id and redirect_uri.
-2. OAuth flow
-   - Complete consent screen; verify the backend receives the code at `/api/v1/auth/google/callback`.
-   - Verify access token returned and refresh cookie set (httpOnly) in the backend response.
-   - Test `/api/v1/auth/refresh` to get a new access token using the cookie.
-3. Gmail API
-   - Using the granted access token, call the `/emails` or use `app.services.email_service.fetch_and_parse_messages` to fetch messages and ensure scopes were sufficient.
+## 🌐 Frontend Deployment (Vercel)
 
-Security checklist
-- Do not commit secrets.
-- Use httpOnly cookies for refresh tokens.
-- Limit CORS origins to production + developer hosts.
-- Validate OAuth state on callback.
-- Enforce minimal scopes and log access.
+### 1. Connect Repository
+1. Go to [Vercel Dashboard](https://vercel.com/dashboard)
+2. Click "New Project"
+3. Import your GitHub repository
+4. Set **Root Directory** to `frontend/`
 
-Troubleshooting
-- If OAuth redirects are incorrect, check the Google Cloud OAuth redirect URIs match exactly.
-- For CORS issues, ensure the backend's `CORS_ORIGINS` matches the frontend origin including protocol.
-- If tokens fail to exchange, verify `GOOGLE_CLIENT_SECRET` is correctly set in Render.
+### 2. Configure Build Settings
+```json
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "installCommand": "npm install",
+  "framework": "vite"
+}
+```
+
+### 3. Environment Variables
+Set these in Vercel Dashboard → Project → Settings → Environment Variables:
+
+```bash
+VITE_API_BASE_URL=https://your-backend.onrender.com
+VITE_WS_BASE_URL=wss://your-backend.onrender.com
+VITE_GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
+```
+
+### 4. Deploy
+- Automatic deployment on every git push to main branch
+- Custom domains supported
+- Preview deployments for branches
+
+## 🔥 Backend Deployment (Render)
+
+### 1. Connect Repository
+1. Go to [Render Dashboard](https://render.com/dashboard)
+2. Click "New +" → "Web Service"
+3. Connect your GitHub repository
+4. Set **Root Directory** to `backend/`
+
+### 2. Configure Service
+```yaml
+Environment: Python 3.13
+Build Command: pip install --no-cache-dir -r requirements.txt
+Start Command: python main.py
+```
+
+### 3. Environment Variables
+Set these in Render Dashboard → Service → Environment:
+
+```bash
+# Core Configuration
+DATABASE_URL=postgresql://... (Auto-generated by Render)
+SECRET_KEY=your-super-secret-key
+JWT_SECRET=your-jwt-secret
+ENVIRONMENT=production
+
+# Google OAuth
+GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+GOOGLE_REDIRECT_URI=https://your-backend.onrender.com/oauth2callback
+
+# Frontend URL
+FRONTEND_URL=https://your-frontend.vercel.app
+CORS_ORIGINS=https://your-frontend.vercel.app
+
+# Optional: Redis for sessions
+REDIS_URL=redis://...
+```
+
+### 4. Database Setup
+1. Create PostgreSQL database in Render
+2. Copy DATABASE_URL to your web service
+3. Run migrations: `alembic upgrade head`
+
+## 🔧 Production Configuration
+
+### Frontend Environment Variables
+
+#### Development (.env.local)
+```bash
+VITE_API_BASE_URL=http://localhost:8000
+VITE_WS_BASE_URL=ws://localhost:8000
+VITE_GOOGLE_CLIENT_ID=your-dev-client-id
+```
+
+#### Production (Vercel)
+```bash
+VITE_API_BASE_URL=https://your-backend.onrender.com
+VITE_WS_BASE_URL=wss://your-backend.onrender.com
+VITE_GOOGLE_CLIENT_ID=your-prod-client-id
+```
+
+### Backend Environment Variables
+
+#### Critical Variables
+```bash
+DATABASE_URL=postgresql://user:pass@host:port/db
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+SECRET_KEY=your-secret-key
+JWT_SECRET=your-jwt-secret
+FRONTEND_URL=https://your-frontend.vercel.app
+```
+
+## 🔐 Google OAuth Setup
+
+### 1. Google Cloud Console
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create new project or select existing
+3. Enable Gmail API
+4. Create OAuth 2.0 credentials
+
+### 2. OAuth Configuration
+```
+Authorized JavaScript origins:
+- https://your-frontend.vercel.app
+- http://localhost:3000 (for development)
+
+Authorized redirect URIs:
+- https://your-backend.onrender.com/oauth2callback
+- http://localhost:8000/oauth2callback (for development)
+```
+
+### 3. Environment Variables
+- Use the Client ID in frontend (public)
+- Use the Client Secret in backend (private)
+
+## 📊 Monitoring & Health Checks
+
+### Backend Health Check
+```
+GET https://your-backend.onrender.com/health
+```
+
+### Frontend Health Check
+```
+GET https://your-frontend.vercel.app/
+```
+
+### Database Monitoring
+- Monitor connection pools
+- Check query performance
+- Watch for migration issues
+
+## 🚀 Deployment Process
+
+### 1. Initial Deployment
+```bash
+# 1. Deploy backend first
+git push origin main
+# Wait for Render deployment
+
+# 2. Update frontend environment with backend URL
+# Set VITE_API_BASE_URL in Vercel
+
+# 3. Deploy frontend
+git push origin main
+# Vercel auto-deploys
+```
+
+### 2. Updates
+```bash
+# Both deploy automatically on git push
+git add .
+git commit -m "Update feature"
+git push origin main
+```
+
+### 3. Database Migrations
+```bash
+# Run in Render console or locally
+alembic upgrade head
+```
+
+## 🔍 Troubleshooting
+
+### Common Issues
+
+#### CORS Errors
+```bash
+# Check backend CORS_ORIGINS includes frontend URL
+CORS_ORIGINS=https://your-frontend.vercel.app
+```
+
+#### OAuth Redirect Issues
+```bash
+# Verify Google OAuth redirect URI matches backend URL
+GOOGLE_REDIRECT_URI=https://your-backend.onrender.com/oauth2callback
+```
+
+#### Database Connection
+```bash
+# Check DATABASE_URL format
+DATABASE_URL=postgresql://user:password@host:port/database
+```
+
+### Debugging
+
+#### Backend Logs
+- Check Render service logs
+- Monitor health check endpoint
+- Review application logs
+
+#### Frontend Logs
+- Check Vercel function logs
+- Monitor browser console
+- Review build logs
+
+## 📈 Scaling Considerations
+
+### Free Tier Limits
+- **Render**: 750 hours/month, sleeps after 15 min inactivity
+- **Vercel**: 100GB bandwidth, 6000 builds/month
+
+### Optimization
+- Enable Redis for session caching
+- Implement proper database indexing
+- Use connection pooling
+- Cache static assets
+
+## 🔒 Security Checklist
+
+- [ ] All secrets in environment variables
+- [ ] HTTPS enabled for all endpoints
+- [ ] CORS properly configured
+- [ ] Rate limiting implemented
+- [ ] Input validation on all endpoints
+- [ ] Database queries parameterized
+- [ ] Audit logging enabled

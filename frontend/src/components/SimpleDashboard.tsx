@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Shield, Mail, RefreshCw, Eye, LogOut } from 'lucide-react';
+import { Shield, Mail, RefreshCw, Eye, LogOut, Link, ExternalLink } from 'lucide-react';
 import { GmailEmailList } from './GmailEmailList';
+import { useNavigate } from 'react-router-dom';
 
 interface GmailEmail {
   id: string;
@@ -18,6 +19,7 @@ interface GmailEmail {
 
 const SimpleDashboard: React.FC = () => {
   const [selectedEmail, setSelectedEmail] = useState<GmailEmail | null>(null);
+  const navigate = useNavigate();
   const userEmail = localStorage.getItem('user_email') || '';
   const isOAuthUser = localStorage.getItem('oauth_success') === 'true';
 
@@ -45,6 +47,13 @@ const SimpleDashboard: React.FC = () => {
           </div>
           
           <div className="flex items-center space-x-4">
+            <button
+              onClick={() => navigate('/link-analysis')}
+              className="flex items-center space-x-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Link className="h-4 w-4" />
+              <span>Link Analysis</span>
+            </button>
             <div className="flex items-center space-x-2 text-sm text-gray-300">
               <Mail className="h-4 w-4" />
               <span>{userEmail}</span>
