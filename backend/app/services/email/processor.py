@@ -5,8 +5,6 @@ import time
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
 
-from sqlalchemy.orm import Session
-
 from app.ml.feature_extraction import FeatureExtractor
 from app.ml.classical_models import ModelManager
 from app.models.core.email import Email
@@ -45,8 +43,7 @@ class EmailProcessor(BaseProcessor, IEmailProcessor):
     async def analyze_email(
         self, 
         email_request: EmailRequest, 
-        user_id: int,
-        db: Session
+        user_id: int
     ) -> DetectionResult:
         """Analyze email for phishing detection."""
         start_time = time.time()
@@ -91,14 +88,12 @@ class EmailProcessor(BaseProcessor, IEmailProcessor):
                 content_type=email_request.content_type,
                 size_bytes=len(email_request.content.encode('utf-8'))
             )
-            db.add(email)
-            db.commit()
-            db.refresh(email)
+            email = await email.save()
             
             # Save detection result
             detection = Detection(
                 user_id=user_id,
-                email_id=email.id,
+                email_id=str(email.id),
                 is_phishing=bool(prediction),
                 confidence_score=confidence,
                 risk_level=risk_level,
@@ -108,9 +103,7 @@ class EmailProcessor(BaseProcessor, IEmailProcessor):
                 risk_factors=self._identify_risk_factors(features),
                 processing_time_ms=processing_time_ms
             )
-            db.add(detection)
-            db.commit()
-            db.refresh(detection)
+            detection = await detection.save()
             
             logger.info(
                 f"Email analysis completed",
@@ -212,20 +205,17 @@ class EmailProcessor(BaseProcessor, IEmailProcessor):
     async def get_detection_history(
         self, 
         user_id: int, 
-        db: Session,
         limit: int = 50,
         offset: int = 0
     ) -> List[DetectionResult]:
         """Get user's detection history."""
-        detections = db.query(Detection).filter(
+        detections = await Detection.find(
             Detection.user_id == user_id
-        ).order_by(
-            Detection.created_at.desc()
-        ).offset(offset).limit(limit).all()
+        ).sort(-Detection.created_at).skip(offset).limit(limit).to_list()
         
         return [
             DetectionResult(
-                detection_id=d.id,
+                detection_id=str(d.id),
                 is_phishing=d.is_phishing,
                 confidence_score=d.confidence_score,
                 risk_level=d.risk_level,
@@ -239,13 +229,13 @@ class EmailProcessor(BaseProcessor, IEmailProcessor):
             for d in detections
         ]
     
-    async def get_detection_stats(self, user_id: int, db: Session) -> Dict[str, Any]:
+    async def get_detection_stats(self, user_id: int) -> Dict[str, Any]:
         """Get detection statistics for user."""
-        total_detections = db.query(Detection).filter(
+        total_detections = await Detection.find(
             Detection.user_id == user_id
         ).count()
         
-        phishing_detections = db.query(Detection).filter(
+        phishing_detections = await Detection.find(
             Detection.user_id == user_id,
             Detection.is_phishing == True
         ).count()
@@ -253,16 +243,18 @@ class EmailProcessor(BaseProcessor, IEmailProcessor):
         legitimate_detections = total_detections - phishing_detections
         
         # Calculate average confidence
-        avg_confidence = db.query(Detection.confidence_score).filter(
+        detections = await Detection.find(
             Detection.user_id == user_id
-        ).scalar()
+        ).to_list()
+        
+        avg_confidence = sum(d.confidence_score for d in detections) / len(detections) if detections else 0.0
         
         return {
             "total_detections": total_detections,
             "phishing_detections": phishing_detections,
             "legitimate_detections": legitimate_detections,
             "detection_rate": phishing_detections / total_detections if total_detections > 0 else 0,
-            "average_confidence": float(avg_confidence) if avg_confidence else 0.0
+            "average_confidence": avg_confidence
         }
 
     # Interface methods implementation
