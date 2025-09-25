@@ -111,14 +111,12 @@ class Settings(BaseSettings):
     
     @validator('google_client_id')
     def validate_google_client_id(cls, v):
-        if not v:
-            raise ValueError('Google Client ID is required for OAuth functionality')
+        # Allow empty values for environments where OAuth is not configured
         return v
     
     @validator('google_client_secret')
     def validate_google_client_secret(cls, v):
-        if not v:
-            raise ValueError('Google Client Secret is required for OAuth functionality')
+        # Allow empty values for environments where OAuth is not configured
         return v
     
     @validator('default_retention_days')
