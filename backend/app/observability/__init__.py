@@ -29,13 +29,9 @@ try:
         SqlAlchemyIntegration = None
         SQLALCHEMY_INTEGRATION_AVAILABLE = False
     
-    # Optional Celery integration
-    try:
-        from sentry_sdk.integrations.celery import CeleryIntegration
-        CELERY_INTEGRATION_AVAILABLE = True
-    except ImportError:
-        CeleryIntegration = None
-        CELERY_INTEGRATION_AVAILABLE = False
+    # Optional Celery integration - disabled for deployment compatibility
+    CeleryIntegration = None
+    CELERY_INTEGRATION_AVAILABLE = False
         
 except ImportError:
     SENTRY_AVAILABLE = False
