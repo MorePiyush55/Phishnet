@@ -18,7 +18,6 @@ try:
     import sentry_sdk
     from sentry_sdk.integrations.logging import LoggingIntegration
     from sentry_sdk.integrations.redis import RedisIntegration
-    from sentry_sdk.integrations.celery import CeleryIntegration
     SENTRY_AVAILABLE = True
     
     # Optional SQLAlchemy integration
@@ -28,10 +27,19 @@ try:
     except ImportError:
         SqlAlchemyIntegration = None
         SQLALCHEMY_INTEGRATION_AVAILABLE = False
+    
+    # Optional Celery integration
+    try:
+        from sentry_sdk.integrations.celery import CeleryIntegration
+        CELERY_INTEGRATION_AVAILABLE = True
+    except ImportError:
+        CeleryIntegration = None
+        CELERY_INTEGRATION_AVAILABLE = False
         
 except ImportError:
     SENTRY_AVAILABLE = False
     SQLALCHEMY_INTEGRATION_AVAILABLE = False
+    CELERY_INTEGRATION_AVAILABLE = False
 
 try:
     from opentelemetry import trace
@@ -46,9 +54,17 @@ try:
 except ImportError:
     OPENTELEMETRY_AVAILABLE = False
 
-from backend.app.core.config import get_settings
+from app.core.config import get_settings
 
-settings = get_settings()
+# Lazy loading of settings - only load when needed
+_settings = None
+
+def get_cached_settings():
+    """Get cached settings, loading them only once."""
+    global _settings
+    if _settings is None:
+        _settings = get_settings()
+    return _settings
 
 class StructuredLogger:
     """Structured JSON logger for PhishNet."""
@@ -72,12 +88,14 @@ class StructuredLogger:
         self.logger.addHandler(console_handler)
         
         # File handler for production
+        settings = get_cached_settings()
         if hasattr(settings, 'LOG_FILE') and settings.LOG_FILE:
             file_handler = logging.FileHandler(settings.LOG_FILE)
             file_handler.setFormatter(formatter)
             self.logger.addHandler(file_handler)
             
         # Set level
+        settings = get_cached_settings()
         log_level = getattr(settings, 'LOG_LEVEL', 'INFO')
         self.logger.setLevel(getattr(logging, log_level))
     
@@ -170,6 +188,7 @@ class TracingManager:
         trace.set_tracer_provider(TracerProvider())
         
         # Configure Jaeger exporter
+        settings = get_cached_settings()
         jaeger_exporter = JaegerExporter(
             agent_host_name=getattr(settings, 'JAEGER_HOST', 'localhost'),
             agent_port=getattr(settings, 'JAEGER_PORT', 6831),
@@ -230,7 +249,8 @@ class ErrorCapture:
         """Configure Sentry error capture."""
         if not SENTRY_AVAILABLE:
             return
-            
+        
+        settings = get_cached_settings()
         sentry_dsn = getattr(settings, 'SENTRY_DSN', None)
         if not sentry_dsn:
             return
@@ -246,9 +266,9 @@ class ErrorCapture:
             environment=getattr(settings, 'ENVIRONMENT', 'development'),
             integrations=[
                 sentry_logging,
-                RedisIntegration(),
-                CeleryIntegration()
-            ] + ([SqlAlchemyIntegration()] if SQLALCHEMY_INTEGRATION_AVAILABLE and SqlAlchemyIntegration else []),
+                RedisIntegration()
+            ] + ([CeleryIntegration()] if CELERY_INTEGRATION_AVAILABLE and CeleryIntegration else []) + 
+            ([SqlAlchemyIntegration()] if SQLALCHEMY_INTEGRATION_AVAILABLE and SqlAlchemyIntegration else []),
             traces_sample_rate=getattr(settings, 'SENTRY_TRACES_SAMPLE_RATE', 0.1),
             send_default_pii=False,  # Privacy compliance
             before_send=self._filter_sensitive_data
@@ -436,8 +456,31 @@ class PerformanceMonitor:
                 
                 raise
 
-# Global performance monitor
-performance_monitor = PerformanceMonitor()
+# Module-level instances are created on first access only
+_performance_monitor = None
+_tracing_manager = None
+_error_capture = None
+
+def get_performance_monitor():
+    """Get global performance monitor instance."""
+    global _performance_monitor
+    if _performance_monitor is None:
+        _performance_monitor = PerformanceMonitor()
+    return _performance_monitor
+
+def get_tracing_manager():
+    """Get global tracing manager instance."""
+    global _tracing_manager
+    if _tracing_manager is None:
+        _tracing_manager = TracingManager()
+    return _tracing_manager
+
+def get_error_capture():
+    """Get global error capture instance."""
+    global _error_capture
+    if _error_capture is None:
+        _error_capture = ErrorCapture()
+    return _error_capture
 
 # Convenience functions
 def log_api_request(request_id: str, method: str, path: str, status_code: int, 
@@ -458,7 +501,7 @@ def log_api_request(request_id: str, method: str, path: str, status_code: int,
     
     # Alert on errors
     if status_code >= 500:
-        error_capture.capture_message(
+        get_error_capture().capture_message(
             f"API error: {method} {path} returned {status_code}",
             level='error',
             extra={
@@ -500,12 +543,22 @@ def log_ml_prediction(model_name: str, prediction: float, confidence: float,
 
 # Export public interface
 __all__ = [
+    # Main classes
+    'StructuredLogger',
+    'TracingManager', 
+    'ErrorCapture',
+    'PerformanceMonitor',
+    # Functions
     'get_logger',
     'trace_function',
-    'tracing_manager',
-    'error_capture',
-    'performance_monitor',
+    'get_tracing_manager', 
+    'get_error_capture',
+    'get_performance_monitor',
     'log_api_request',
     'log_scan_completion',
-    'log_ml_prediction'
+    'log_ml_prediction',
+    # Constants
+    'SENTRY_AVAILABLE',
+    'CELERY_INTEGRATION_AVAILABLE',
+    'SQLALCHEMY_INTEGRATION_AVAILABLE'
 ]
