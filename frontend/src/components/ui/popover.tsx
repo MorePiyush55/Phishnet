@@ -1,5 +1,5 @@
 import * as React from "react"
-import { cn } from "@/lib/utils"
+import { cn } from "../../lib/utils"
 
 const Popover = ({ children }: { children: React.ReactNode }) => {
   return <div className="relative">{children}</div>;
