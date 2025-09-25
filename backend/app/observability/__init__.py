@@ -20,10 +20,11 @@ try:
     from sentry_sdk.integrations.redis import RedisIntegration
     SENTRY_AVAILABLE = True
     
-    # Optional SQLAlchemy integration
+    # Optional SQLAlchemy integration - disabled for Python 3.13 compatibility
     try:
-        from sentry_sdk.integrations.sqlalchemy import SqlAlchemyIntegration
-        SQLALCHEMY_INTEGRATION_AVAILABLE = True
+        # from sentry_sdk.integrations.sqlalchemy import SqlAlchemyIntegration
+        SqlAlchemyIntegration = None
+        SQLALCHEMY_INTEGRATION_AVAILABLE = False
     except ImportError:
         SqlAlchemyIntegration = None
         SQLALCHEMY_INTEGRATION_AVAILABLE = False
