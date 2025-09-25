@@ -17,12 +17,21 @@ import functools
 try:
     import sentry_sdk
     from sentry_sdk.integrations.logging import LoggingIntegration
-    from sentry_sdk.integrations.sqlalchemy import SqlAlchemyIntegration
     from sentry_sdk.integrations.redis import RedisIntegration
     from sentry_sdk.integrations.celery import CeleryIntegration
     SENTRY_AVAILABLE = True
+    
+    # Optional SQLAlchemy integration
+    try:
+        from sentry_sdk.integrations.sqlalchemy import SqlAlchemyIntegration
+        SQLALCHEMY_INTEGRATION_AVAILABLE = True
+    except ImportError:
+        SqlAlchemyIntegration = None
+        SQLALCHEMY_INTEGRATION_AVAILABLE = False
+        
 except ImportError:
     SENTRY_AVAILABLE = False
+    SQLALCHEMY_INTEGRATION_AVAILABLE = False
 
 try:
     from opentelemetry import trace
@@ -237,10 +246,9 @@ class ErrorCapture:
             environment=getattr(settings, 'ENVIRONMENT', 'development'),
             integrations=[
                 sentry_logging,
-                SqlAlchemyIntegration(),
                 RedisIntegration(),
                 CeleryIntegration()
-            ],
+            ] + ([SqlAlchemyIntegration()] if SQLALCHEMY_INTEGRATION_AVAILABLE and SqlAlchemyIntegration else []),
             traces_sample_rate=getattr(settings, 'SENTRY_TRACES_SAMPLE_RATE', 0.1),
             send_default_pii=False,  # Privacy compliance
             before_send=self._filter_sensitive_data

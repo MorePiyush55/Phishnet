@@ -293,7 +293,7 @@ export const useApiCache = <T = any>(
   ): Promise<R> => {
     const cached = cache.get(key);
     if (cached) {
-      return cached as R;
+      return cached as unknown as R;
     }
 
     try {
