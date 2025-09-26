@@ -3,6 +3,7 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
+from datetime import datetime, timedelta
 import os
 import secrets
 
@@ -248,14 +249,12 @@ async def oauth_callback(code: str = None, state: str = None, error: str = None)
             print(f"ERROR: No email found in user info: {user_info}")
             return RedirectResponse(f"{frontend_url}?oauth_error=no_email")
         
-        # Create or get user in SQLAlchemy database and store tokens properly
+        # Create or get user in MongoDB and store tokens properly
         print(f"DEBUG: Creating/updating user for {user_email}")
         
         try:
-            # Import dependencies
-            from app.core.database import SessionLocal
-            from app.models.user import User, OAuthToken
-            from app.db.mongodb import get_mongodb_db
+            # Import MongoDB models instead of SQLAlchemy
+            from app.models.production_models import User, OAuthCredentials
             from passlib.context import CryptContext
             import jwt
             from app.core.config import settings
@@ -264,116 +263,81 @@ async def oauth_callback(code: str = None, state: str = None, error: str = None)
             user_name = user_info.get('name', user_email.split('@')[0])
             google_sub = user_info.get('id', '')
             
-            # Create user in SQLAlchemy database (for proper authentication)
-            with SessionLocal() as db:
-                try:
-                    # Check if user already exists by email or google_sub
-                    existing_user = db.query(User).filter(
-                        (User.email == user_email) | (User.google_sub == google_sub)
-                    ).first()
-                    
-                    if existing_user:
-                        # Update existing user
-                        user = existing_user
-                        user.google_sub = google_sub
-                        user.display_name = user_name
-                        user.gmail_email = user_email
-                        user.gmail_connected = True
-                        user.status = "connected"
-                        user.connected_at = datetime.now(timezone.utc)
-                        print(f"DEBUG: Updated existing user {user.id}")
-                    else:
-                        # Create new user
-                        user = User(
-                            email=user_email,
-                            username=user_email.split('@')[0],  # Use email prefix as username
-                            hashed_password="",  # OAuth users don't need password
-                            full_name=user_name,
-                            google_sub=google_sub,
-                            display_name=user_name,
-                            gmail_email=user_email,
-                            gmail_connected=True,
-                            status="connected",
-                            connected_at=datetime.now(timezone.utc),
-                            is_active=True,
-                            is_verified=True,
-                            role="user"
-                        )
-                        db.add(user)
-                        db.flush()  # Get user.id
-                        print(f"DEBUG: Created new user {user.id}")
-                    
-                    # Store OAuth tokens securely
-                    # Deactivate any existing tokens for this user
-                    existing_tokens = db.query(OAuthToken).filter(
-                        OAuthToken.user_id == user.id,
-                        OAuthToken.provider == "gmail",
-                        OAuthToken.is_active == True
-                    ).all()
-                    
-                    for token in existing_tokens:
-                        token.is_active = False
-                        token.revoked_at = datetime.now(timezone.utc)
-                    
-                    # Calculate token expiration
-                    expires_in = tokens.get('expires_in', 3600)  # Default 1 hour
-                    expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
-                    
-                    # Create new OAuth token record
-                    oauth_token = OAuthToken(
-                        user_id=user.id,
-                        provider="gmail",
-                        encrypted_refresh_token=tokens.get("refresh_token", ""),  # In production, encrypt this
-                        encrypted_access_token=access_token,  # In production, encrypt this
-                        token_expires_at=expires_at,
-                        scope=tokens.get("scope", ""),
-                        is_active=True,
-                        created_at=datetime.now(timezone.utc)
-                    )
-                    db.add(oauth_token)
-                    
-                    db.commit()
-                    user_id = user.id
-                    print(f"DEBUG: Stored OAuth tokens for user {user_id}")
-                    
-                except Exception as db_error:
-                    db.rollback()
-                    raise db_error
-            
-            # Also store in MongoDB for backward compatibility with existing Gmail service
+            # Create user in MongoDB (for proper authentication)
             try:
-                mongo_db = await get_mongodb_db()
-                users_collection = mongo_db.users
+                # Check if user already exists by email or google_sub
+                existing_user = await User.find_one({
+                    "$or": [
+                        {"email": user_email},
+                        {"google_sub": google_sub}
+                    ]
+                })
                 
-                user_data = {
-                    "email": user_email,
-                    "user_id": user_id,  # Link to SQLAlchemy user
-                    "gmail_access_token": access_token,
-                    "gmail_refresh_token": tokens.get("refresh_token"),
-                    "gmail_token_expires_at": expires_at,
-                    "gmail_scopes": tokens.get("scope", "").split(" "),
-                    "oauth_connected_at": datetime.now(timezone.utc),
-                    "updated_at": datetime.now(timezone.utc)
-                }
+                if existing_user:
+                    # Update existing user
+                    existing_user.google_sub = google_sub
+                    existing_user.display_name = user_name
+                    existing_user.status = "connected"
+                    existing_user.connected_at = datetime.now()
+                    user = await existing_user.save()
+                    print(f"DEBUG: Updated existing user {user.id}")
+                else:
+                    # Create new user
+                    user = User(
+                        email=user_email,
+                        username=user_email.split('@')[0],  # Use email prefix as username
+                        hashed_password="oauth_user",  # OAuth users get placeholder
+                        full_name=user_name,
+                        google_sub=google_sub,
+                        display_name=user_name,
+                        status="connected", 
+                        connected_at=datetime.now(),
+                        is_active=True,
+                        is_verified=True
+                    )
+                    user = await user.save()
+                    print(f"DEBUG: Created new user {user.id}")
                 
-                await users_collection.update_one(
-                    {"email": user_email},
-                    {"$set": user_data},
-                    upsert=True
+                # Store OAuth credentials securely 
+                # Deactivate any existing tokens for this user
+                existing_creds = await OAuthCredentials.find(
+                    OAuthCredentials.user_id == str(user.id),
+                    OAuthCredentials.provider == "gmail",
+                    OAuthCredentials.is_active == True
+                ).to_list()
+                
+                for cred in existing_creds:
+                    cred.is_active = False
+                    cred.revoked_at = datetime.now()
+                    await cred.save()
+                
+                # Calculate token expiration
+                expires_in = tokens.get('expires_in', 3600)  # Default 1 hour
+                expires_at = datetime.now() + timedelta(seconds=expires_in)
+                
+                # Create new OAuth credentials record
+                oauth_cred = OAuthCredentials(
+                    user_id=str(user.id),
+                    provider="gmail", 
+                    encrypted_refresh_token=tokens.get("refresh_token", ""),
+                    encrypted_access_token=access_token,
+                    token_expires_at=expires_at,
+                    scope=tokens.get("scope", ""),
+                    is_active=True,
+                    created_at=datetime.now()
                 )
-                print(f"DEBUG: Also stored in MongoDB for backward compatibility")
+                oauth_cred = await oauth_cred.save()
                 
-            except Exception as mongo_error:
-                print(f"WARNING: Failed to store in MongoDB: {mongo_error}")
-                # Continue - SQLAlchemy is primary storage
+                user_id = str(user.id)
+                print(f"DEBUG: Stored OAuth credentials for user {user_id}")
+                
+            except Exception as db_error:
+                print(f"ERROR: Failed to create/update user in database: {str(db_error)}")
+                import traceback
+                print(f"ERROR: Database error traceback: {traceback.format_exc()}")
+                return RedirectResponse(f"{frontend_url}?oauth_error=database_error")
             
             print(f"DEBUG: Successfully processed user creation/update for {user_email}")
-            
-        except Exception as db_error:
-            print(f"ERROR: Failed to create/update user in database: {str(db_error)}")
-            import traceback
-            print(f"ERROR: Database error traceback: {traceback.format_exc()}")
-            return RedirectResponse(f"{frontend_url}?oauth_error=database_error")
         
         # Create JWT token for the user session
         try:
