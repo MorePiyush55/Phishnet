@@ -5,8 +5,17 @@ import time
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
 
-from app.ml.feature_extraction import FeatureExtractor
-from app.ml.classical_models import ModelManager
+# Optional ML imports - graceful degradation if not available
+try:
+    from app.ml.feature_extraction import FeatureExtractor
+    from app.ml.classical_models import ModelManager
+    ML_AVAILABLE = True
+except ImportError as e:
+    print(f"ML dependencies not available: {e}")
+    FeatureExtractor = None
+    ModelManager = None
+    ML_AVAILABLE = False
+
 from app.models.core.email import Email
 from app.models.analysis.detection import Detection
 from app.schemas.email import EmailRequest, DetectionResult
@@ -23,18 +32,36 @@ class EmailProcessor(BaseProcessor, IEmailProcessor):
     def __init__(self):
         """Initialize email processor."""
         super().__init__()  # Initialize BaseProcessor
-        self.feature_extractor = FeatureExtractor()
-        self.model_manager = ModelManager()
+        
+        # Initialize ML components if available
+        if ML_AVAILABLE:
+            try:
+                self.feature_extractor = FeatureExtractor()
+                self.model_manager = ModelManager()
+                logger.info("ML components initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize ML components: {e}")
+                self.feature_extractor = None
+                self.model_manager = None
+        else:
+            logger.warning("ML dependencies not available - email processing will use basic analysis")
+            self.feature_extractor = None
+            self.model_manager = None
+        
         self.is_initialized = False
         self._processing_status = {}  # Track email processing status
     
     async def initialize(self):
         """Initialize the processor and load models."""
         try:
-            # Load pre-trained models
-            self.model_manager.load_models(settings.MODEL_PATH)
+            # Load pre-trained models if ML is available
+            if ML_AVAILABLE and self.model_manager:
+                self.model_manager.load_models(settings.MODEL_PATH)
+                logger.info("Email processor with ML models initialized successfully")
+            else:
+                logger.info("Email processor initialized in basic mode (no ML)")
+            
             self.is_initialized = True
-            logger.info("Email processor initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize email processor: {e}")
             # For development, we'll continue without pre-trained models
@@ -49,21 +76,26 @@ class EmailProcessor(BaseProcessor, IEmailProcessor):
         start_time = time.time()
         
         try:
-            # Extract features
-            features = self.feature_extractor.extract_features(
-                email_request.content,
-                email_request.subject or "",
-                email_request.sender or ""
-            )
-            
-            # Convert to feature vector
-            feature_vector = self.feature_extractor.get_feature_vector(features)
-            
-            # Make prediction
-            if self.is_initialized and self.model_manager.current_model:
-                prediction, confidence = self.model_manager.predict(feature_vector)
+            # Extract features if ML is available
+            if ML_AVAILABLE and self.feature_extractor:
+                features = self.feature_extractor.extract_features(
+                    email_request.content,
+                    email_request.subject or "",
+                    email_request.sender or ""
+                )
+                
+                # Convert to feature vector
+                feature_vector = self.feature_extractor.get_feature_vector(features)
+                
+                # Make prediction
+                if self.is_initialized and self.model_manager and self.model_manager.current_model:
+                    prediction, confidence = self.model_manager.predict(feature_vector)
+                else:
+                    # Fallback to rule-based detection
+                    prediction, confidence = self._rule_based_detection(features)
             else:
-                # Fallback to rule-based detection
+                # Use basic rule-based detection when ML is not available
+                features = self._extract_basic_features(email_request)
                 prediction, confidence = self._rule_based_detection(features)
             
             # Calculate processing time
@@ -130,6 +162,42 @@ class EmailProcessor(BaseProcessor, IEmailProcessor):
         except Exception as e:
             logger.error(f"Email analysis failed: {e}")
             raise
+    
+    def _extract_basic_features(self, email_request: EmailRequest) -> Dict[str, Any]:
+        """Extract basic features when ML is not available."""
+        content = email_request.content.lower()
+        subject = (email_request.subject or "").lower()
+        sender = (email_request.sender or "").lower()
+        
+        # Basic suspicious keywords
+        suspicious_keywords = [
+            'urgent', 'winner', 'lottery', 'congratulations', 'click here',
+            'verify account', 'suspended', 'update payment', 'confirm identity',
+            'act now', 'limited time', 'free money', 'nigerian prince'
+        ]
+        
+        # Count suspicious keywords
+        suspicious_count = sum(1 for keyword in suspicious_keywords 
+                              if keyword in content or keyword in subject)
+        
+        # Basic URL detection
+        import re
+        url_pattern = r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
+        urls = re.findall(url_pattern, content)
+        
+        # Shortened URL services
+        shortened_services = ['bit.ly', 'tinyurl', 'goo.gl', 't.co', 'short.link']
+        shortened_url_count = sum(1 for url in urls 
+                                 if any(service in url for service in shortened_services))
+        
+        return {
+            'suspicious_keyword_count': suspicious_count,
+            'url_count': len(urls),
+            'shortened_url_count': shortened_url_count,
+            'redirect_url_count': 0,  # Basic implementation
+            'has_attachments': False,  # Not available in basic mode
+            'content_length': len(content)
+        }
     
     def _rule_based_detection(self, features: Dict[str, Any]) -> Tuple[int, float]:
         """Rule-based phishing detection as fallback."""
