@@ -35,8 +35,8 @@ const App: React.FC = () => {
   const handleGoogleSignIn = () => {
     try {
       // Direct redirect to backend OAuth endpoint
-      const backendUrl = 'https://phishnet-backend-iuoc.onrender.com';
-      window.location.href = `${backendUrl}/api/test/auth/google`;
+      const backendUrl = 'https://phishnet-backend-juoc.onrender.com';
+      window.location.href = `${backendUrl}/api/rest/auth/google`;
     } catch (error) {
       console.error('OAuth error:', error);
     }

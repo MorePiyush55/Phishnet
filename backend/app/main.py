@@ -220,6 +220,14 @@ try:
 except Exception as e:
     logger.warning(f"OAuth v1 compatibility router failed to load: {e}")
 
+# Load REST compatibility router for OAuth
+try:
+    from app.api.test_oauth import rest_router
+    app.include_router(rest_router, tags=["OAuth REST Compatibility"])
+    logger.info("OAuth REST compatibility router loaded successfully")
+except Exception as e:
+    logger.warning(f"OAuth REST compatibility router failed to load: {e}")
+
 if router_errors:
     logger.error(f"Router loading errors: {router_errors}")
 

@@ -1,7 +1,7 @@
 import axios, { AxiosResponse } from 'axios';
 
 // Base API configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://phishnet-backend-iuoc.onrender.com';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://phishnet-backend-juoc.onrender.com';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
