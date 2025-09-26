@@ -17,8 +17,21 @@ import json
 import asyncio
 
 from app.db.session import get_db
-from app.ml.advanced_ensemble import advanced_ml_system, EnsembleResult
-from app.ml.monitoring import get_model_monitor, ModelPerformanceMetrics, ModelDriftMetrics
+
+# Optional ML imports - graceful degradation if not available
+try:
+    from app.ml.advanced_ensemble import advanced_ml_system, EnsembleResult
+    from app.ml.monitoring import get_model_monitor, ModelPerformanceMetrics, ModelDriftMetrics
+    ML_AVAILABLE = True
+except ImportError as e:
+    print(f"ML dependencies not available for ml_ensemble API: {e}")
+    advanced_ml_system = None
+    EnsembleResult = None
+    get_model_monitor = None
+    ModelPerformanceMetrics = None
+    ModelDriftMetrics = None
+    ML_AVAILABLE = False
+
 from app.config.logging import get_logger
 from app.auth.auth_handler import get_current_user
 from app.models.core.user import User

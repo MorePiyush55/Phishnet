@@ -9,8 +9,17 @@ import asyncio
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, func
 
-from app.ml.feature_extraction import FeatureExtractor
-from app.ml.classical_models import ModelManager
+# Optional ML imports - graceful degradation if not available
+try:
+    from app.ml.feature_extraction import FeatureExtractor
+    from app.ml.classical_models import ModelManager
+    ML_AVAILABLE = True
+except ImportError as e:
+    print(f"ML dependencies not available: {e}")
+    FeatureExtractor = None
+    ModelManager = None
+    ML_AVAILABLE = False
+
 from app.models.core.email import Email
 from app.models.analysis.detection import Detection
 from app.schemas.email import EmailRequest, DetectionResult
@@ -27,8 +36,21 @@ class EmailProcessor:
     
     def __init__(self):
         """Initialize email processor."""
-        self.feature_extractor = FeatureExtractor()
-        self.model_manager = ModelManager()
+        # Initialize ML components if available
+        if ML_AVAILABLE:
+            try:
+                self.feature_extractor = FeatureExtractor()
+                self.model_manager = ModelManager()
+                logger.info("ML components initialized successfully in email_processor")
+            except Exception as e:
+                logger.error(f"Failed to initialize ML components in email_processor: {e}")
+                self.feature_extractor = None
+                self.model_manager = None
+        else:
+            logger.warning("ML dependencies not available - email_processor will use basic analysis")
+            self.feature_extractor = None
+            self.model_manager = None
+            
         self.cache_manager = get_cache_manager()
         self.is_initialized = False
         
