@@ -9,6 +9,9 @@ import secrets
 
 router = APIRouter(prefix="/api/test", tags=["Test OAuth"])
 
+# Also handle the v1 auth path for backward compatibility  
+v1_router = APIRouter(prefix="/api/v1/auth", tags=["OAuth v1 Compatibility"])
+
 class OAuthTestResponse(BaseModel):
     success: bool
     message: str
@@ -20,12 +23,10 @@ async def test_oauth():
     try:
         # Get OAuth credentials from environment
         client_id = os.getenv("GMAIL_CLIENT_ID")
+        redirect_uri = os.getenv("GMAIL_REDIRECT_URI", "https://phishnet-backend-iuoc.onrender.com/api/test/oauth/callback")
         
         if not client_id:
             return {"success": False, "message": "OAuth credentials not configured"}
-        
-        # Use the correct redirect URI that matches our callback endpoint
-        redirect_uri = "https://phishnet-backend-iuoc.onrender.com/api/test/oauth/callback"
         
         # Generate state token
         state = secrets.token_urlsafe(32)
@@ -62,12 +63,10 @@ async def start_oauth_get():
     try:
         # Get OAuth credentials from environment
         client_id = os.getenv("GMAIL_CLIENT_ID")
+        redirect_uri = os.getenv("GMAIL_REDIRECT_URI", "https://phishnet-backend-iuoc.onrender.com/api/test/oauth/callback")
         
         if not client_id:
             raise HTTPException(status_code=500, detail="OAuth credentials not configured")
-        
-        # Use the correct redirect URI that matches our callback endpoint
-        redirect_uri = "https://phishnet-backend-iuoc.onrender.com/api/test/oauth/callback"
         
         # Generate state token
         state = secrets.token_urlsafe(32)
@@ -104,12 +103,10 @@ async def start_oauth():
     try:
         # Get OAuth credentials from environment
         client_id = os.getenv("GMAIL_CLIENT_ID")
+        redirect_uri = os.getenv("GMAIL_REDIRECT_URI", "https://phishnet-backend-iuoc.onrender.com/api/test/oauth/callback")
         
         if not client_id:
             raise HTTPException(status_code=500, detail="OAuth credentials not configured")
-        
-        # Use the correct redirect URI that matches our callback endpoint
-        redirect_uri = "https://phishnet-backend-iuoc.onrender.com/api/test/oauth/callback"
         
         # Generate state token
         state = secrets.token_urlsafe(32)
@@ -339,6 +336,12 @@ async def oauth_callback(code: str = None, state: str = None, error: str = None)
             
             print(f"DEBUG: Successfully processed user creation/update for {user_email}")
         
+        except Exception as oauth_error:
+            print(f"ERROR: OAuth processing failed: {str(oauth_error)}")
+            import traceback
+            print(f"ERROR: OAuth error traceback: {traceback.format_exc()}")
+            return RedirectResponse(f"{frontend_url}?oauth_error=processing_failed")
+        
         # Create JWT token for the user session
         try:
             from app.api.v1.auth import create_access_token, create_refresh_token
@@ -399,3 +402,33 @@ async def oauth_callback(code: str = None, state: str = None, error: str = None)
         # Redirect to frontend with detailed error
         error_msg = str(e).replace(' ', '_').replace('&', 'and')[:50]  # URL-safe error
         return RedirectResponse(f"{frontend_url}?oauth_error={error_msg}")
+
+
+# V1 Compatibility Routes
+@v1_router.get("/gmail/callback")
+async def v1_gmail_callback(code: str = None, state: str = None, error: str = None):
+    """
+    V1 compatibility endpoint - redirects to the main callback.
+    This handles the GMAIL_REDIRECT_URI environment variable path.
+    """
+    from fastapi import Request
+    from starlette.requests import Request as StarletteRequest
+    import urllib.parse
+    
+    # Construct query parameters
+    params = {}
+    if code:
+        params['code'] = code
+    if state:
+        params['state'] = state
+    if error:
+        params['error'] = error
+        
+    # Build redirect URL to main callback
+    query_string = urllib.parse.urlencode(params) if params else ""
+    redirect_url = f"https://phishnet-backend-iuoc.onrender.com/api/test/oauth/callback"
+    if query_string:
+        redirect_url += f"?{query_string}"
+    
+    print(f"DEBUG: V1 compatibility redirect: {redirect_url}")
+    return RedirectResponse(redirect_url)

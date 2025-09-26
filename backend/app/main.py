@@ -212,6 +212,14 @@ try:
 except Exception as e:
     logger.warning(f"Main router could not be loaded: {e}")
 
+# Load v1 compatibility router for OAuth
+try:
+    from app.api.test_oauth import v1_router
+    app.include_router(v1_router, tags=["OAuth v1 Compatibility"])
+    logger.info("OAuth v1 compatibility router loaded successfully")
+except Exception as e:
+    logger.warning(f"OAuth v1 compatibility router failed to load: {e}")
+
 if router_errors:
     logger.error(f"Router loading errors: {router_errors}")
 
