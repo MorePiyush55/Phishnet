@@ -59,8 +59,9 @@ except ImportError:
     DOCUMENT_MODELS = []
 
 try:
-    from app.api import health, test_oauth  # Minimal APIs for testing
-    from app.api import gmail_simple  # Add our real analyzer test endpoint
+    from app.api.health import router as health_router  # Direct import to avoid __init__.py
+    from app.api.test_oauth import router as oauth_router  # Direct import to avoid conflicts
+    # Note: Avoiding "from app.api import" to prevent SQLAlchemy model conflicts
     # Temporarily disabled: gmail_oauth, simple_oauth, simple_analysis, auth_simple, gmail_api
 except ImportError:
     # Create minimal router if imports fail
@@ -177,10 +178,25 @@ app.add_middleware(
 # Include essential API routers
 router_errors = []
 
-# Add routers directly with robust error handling
+# Load essential routers manually (avoiding SQLAlchemy conflicts)
+try:
+    app.include_router(health_router, tags=["Health"])
+    logger.info("Health router loaded successfully")
+except Exception as e:
+    logger.error(f"Health router failed to load: {e}")
+    router_errors.append(f"Health: {e}")
+
+try:
+    app.include_router(oauth_router, tags=["OAuth"])
+    logger.info("OAuth router loaded successfully")  
+except Exception as e:
+    logger.error(f"OAuth router failed to load: {e}")
+    router_errors.append(f"OAuth: {e}")
+
+# Add routers directly with robust error handling (excluding manually loaded ones)
 routers_to_add = [
-    ("app.api.health", "Health"),
-    ("app.api.test_oauth", "Test OAuth"),
+    # ("app.api.health", "Health"),  # Loaded manually above
+    # ("app.api.test_oauth", "Test OAuth"),  # Loaded manually above
     ("app.api.gmail_api", "Gmail Analysis"),
     ("app.api.gmail_simple", "Gmail Simple"),
     ("app.api.auth_simple", "Authentication"),
@@ -189,7 +205,7 @@ routers_to_add = [
     ("app.api.simple_analysis", "Email Analysis"),
     ("app.api.async_analysis", "Async Email Analysis"),
     ("app.api.websockets", "WebSocket Updates"),
-    ("app.api.link_analysis", "Link Redirect Analysis"),
+    # ("app.api.link_analysis", "Link Redirect Analysis"),  # Causes SQLAlchemy conflicts
     ("app.api.threat_intelligence", "Threat Intelligence"),
     ("app.api.workers", "Worker Management"),
     ("app.observability.routes", "Observability"),
