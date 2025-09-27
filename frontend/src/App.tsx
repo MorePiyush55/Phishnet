@@ -34,8 +34,9 @@ const queryClient = new QueryClient({
 const App: React.FC = () => {
   const handleGoogleSignIn = () => {
     try {
-      // Direct redirect to backend OAuth endpoint
-      const backendUrl = 'https://phishnet-backend-juoc.onrender.com';
+      // For testing: Use local backend (switch back to production later)
+      const backendUrl = 'http://127.0.0.1:8001'; // Local backend for testing
+      // const backendUrl = 'https://phishnet-backend-juoc.onrender.com'; // Production (currently broken)
       window.location.href = `${backendUrl}/api/rest/auth/google`;
     } catch (error) {
       console.error('OAuth error:', error);
