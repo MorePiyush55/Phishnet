@@ -24,12 +24,15 @@ To complete the OAuth setup, you need to update your Google OAuth Console:
 ### 3. Update OAuth Client Credentials
 - APIs & Services > Credentials
 - Click on your OAuth 2.0 Client ID
-- Update **Authorized redirect URIs** to include:
+- Update **Authorized redirect URIs** to include BOTH URLs for smooth transition:
 
 ```
 https://phishnet-backend-iuoc.onrender.com/api/v1/auth/gmail/callback
 https://phishnet-backend-iuoc.onrender.com/api/auth/gmail/callback
+https://phishnet-backend-iuoc.onrender.com/api/test/oauth/callback
 ```
+
+**IMPORTANT**: Add the test OAuth callback URL to allow testing the OAuth flow.
 
 ### 4. Environment Variables for Render
 Set these environment variables in your Render dashboard:
