@@ -26,7 +26,7 @@ async def test_oauth():
     try:
         # Get OAuth credentials from environment
         client_id = os.getenv("GMAIL_CLIENT_ID")
-        redirect_uri = os.getenv("GMAIL_REDIRECT_URI", "https://phishnet-backend-juoc.onrender.com/api/test/oauth/callback")
+        redirect_uri = os.getenv("GMAIL_REDIRECT_URI", "https://phishnet-backend-iuoc.onrender.com/api/test/oauth/callback")
         
         if not client_id:
             return {"success": False, "message": "OAuth credentials not configured"}
@@ -66,7 +66,7 @@ async def start_oauth_get():
     try:
         # Get OAuth credentials from environment
         client_id = os.getenv("GMAIL_CLIENT_ID")
-        redirect_uri = os.getenv("GMAIL_REDIRECT_URI", "https://phishnet-backend-juoc.onrender.com/api/test/oauth/callback")
+        redirect_uri = os.getenv("GMAIL_REDIRECT_URI", "https://phishnet-backend-iuoc.onrender.com/api/test/oauth/callback")
         
         if not client_id:
             raise HTTPException(status_code=500, detail="OAuth credentials not configured")
@@ -106,7 +106,7 @@ async def start_oauth():
     try:
         # Get OAuth credentials from environment
         client_id = os.getenv("GMAIL_CLIENT_ID")
-        redirect_uri = os.getenv("GMAIL_REDIRECT_URI", "https://phishnet-backend-juoc.onrender.com/api/test/oauth/callback")
+        redirect_uri = os.getenv("GMAIL_REDIRECT_URI", "https://phishnet-backend-iuoc.onrender.com/api/test/oauth/callback")
         
         if not client_id:
             raise HTTPException(status_code=500, detail="OAuth credentials not configured")
@@ -166,7 +166,7 @@ async def oauth_callback(code: str = None, state: str = None, error: str = None)
         # Get OAuth credentials from environment (same as start_oauth)
         client_id = os.getenv("GMAIL_CLIENT_ID")
         client_secret = os.getenv("GMAIL_CLIENT_SECRET")
-        base_url = os.getenv("BASE_URL", "https://phishnet-backend-juoc.onrender.com")
+        base_url = os.getenv("BASE_URL", "https://phishnet-backend-iuoc.onrender.com")
         
         print(f"DEBUG: client_id exists: {bool(client_id)}")
         print(f"DEBUG: client_secret exists: {bool(client_secret)}")
@@ -429,7 +429,7 @@ async def v1_gmail_callback(code: str = None, state: str = None, error: str = No
         
     # Build redirect URL to main callback
     query_string = urllib.parse.urlencode(params) if params else ""
-    redirect_url = f"https://phishnet-backend-juoc.onrender.com/api/test/oauth/callback"
+    redirect_url = f"https://phishnet-backend-iuoc.onrender.com/api/test/oauth/callback"
     if query_string:
         redirect_url += f"?{query_string}"
     
@@ -444,7 +444,7 @@ async def rest_google_oauth():
     try:
         # Get OAuth credentials from environment
         client_id = os.getenv("GMAIL_CLIENT_ID")
-        redirect_uri = os.getenv("GMAIL_REDIRECT_URI", "https://phishnet-backend-juoc.onrender.com/api/test/oauth/callback")
+        redirect_uri = os.getenv("GMAIL_REDIRECT_URI", "https://phishnet-backend-iuoc.onrender.com/api/test/oauth/callback")
         
         if not client_id:
             raise HTTPException(status_code=500, detail="OAuth credentials not configured")
@@ -499,7 +499,7 @@ async def rest_oauth_callback(code: str = None, state: str = None, error: str = 
         
     # Build redirect URL to main callback
     query_string = urllib.parse.urlencode(params) if params else ""
-    redirect_url = f"https://phishnet-backend-juoc.onrender.com/api/test/oauth/callback"
+    redirect_url = f"https://phishnet-backend-iuoc.onrender.com/api/test/oauth/callback"
     if query_string:
         redirect_url += f"?{query_string}"
     
