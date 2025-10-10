@@ -381,6 +381,7 @@ class MockRedisClient:
     def __init__(self):
         """Initialize mock client."""
         self._data = {}
+        # Fix: __init__ should not return anything
     
     def ping(self):
         """Mock ping."""
@@ -406,75 +407,6 @@ def get_redis_client() -> RedisClient:
     if _redis_client is None:
         _redis_client = RedisClient()
     return _redis_client
-
-
-class MockRedisClient:
-    """Mock Redis client for testing environments"""
-    
-    def __init__(self):
-        self._data = {}
-    
-    def get(self, key: str):
-        """Mock get."""
-        return self._data.get(key)
-    
-    def set(self, key: str, value: str) -> bool:
-        """Mock set."""
-        self._data[key] = value
-        return True
-    
-    def delete(self, key: str) -> bool:
-        """Mock delete."""
-        if key in self._data:
-            del self._data[key]
-            return True
-        return False
-    
-    def exists(self, key: str) -> bool:
-        """Mock exists."""
-        return key in self._data
-    
-    def ttl(self, key: str) -> int:
-        """Mock TTL."""
-        return -1 if key in self._data else -2
-    
-    def keys(self, pattern: str) -> list:
-        """Mock keys."""
-        return list(self._data.keys())
-    
-    def zadd(self, key: str, mapping: dict) -> int:
-        """Mock zadd."""
-        if key not in self._data:
-            self._data[key] = []
-        for item, score in mapping.items():
-            self._data[key].append((item, score))
-        return len(mapping)
-    
-    def zpopmin(self, key: str, count: int = 1) -> list:
-        """Mock zpopmin."""
-        if key not in self._data or not self._data[key]:
-            return []
-        
-        # Sort by score and return lowest
-        self._data[key].sort(key=lambda x: x[1])
-        result = []
-        for _ in range(min(count, len(self._data[key]))):
-            if self._data[key]:
-                item, score = self._data[key].pop(0)
-                result.append((item, score))
-        return result
-    
-    def bzpopmin(self, key: str, timeout: int = 0) -> Optional[tuple]:
-        """Mock bzpopmin."""
-        result = self.zpopmin(key, 1)
-        if result:
-            item, score = result[0]
-            return (key, item, score)
-        return None
-    
-    def zcard(self, key: str) -> int:
-        """Mock zcard."""
-        return len(self._data.get(key, []))
 
 
 # Global instances

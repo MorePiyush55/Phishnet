@@ -8,11 +8,12 @@ from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from sqlalchemy import Enum
+import enum
 
 from app.core.database import Base
 
 
-class ActionType(str, enum.Enum):
+class ScoringActionType(str, enum.Enum):
     """Types of actions that can be taken on emails."""
     QUARANTINE = "quarantine"
     UNQUARANTINE = "unquarantine"
@@ -57,7 +58,7 @@ class EmailAction(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     email_id = Column(Integer, ForeignKey("emails.id"), nullable=False, index=True)
-    action_type = Column(Enum(ActionType), nullable=False, index=True)
+    action_type = Column(Enum(ScoringActionType), nullable=False, index=True)
     status = Column(Enum(ActionStatus), default=ActionStatus.PENDING, index=True)
     
     # Action parameters (e.g., label name, reason, etc.)
