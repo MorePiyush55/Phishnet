@@ -26,7 +26,7 @@ async def test_oauth():
     try:
         # Get OAuth credentials from environment
         client_id = os.getenv("GMAIL_CLIENT_ID")
-        redirect_uri = os.getenv("GMAIL_REDIRECT_URI", "https://phishnet-backend-iuoc.onrender.com/api/test/oauth/callback")
+        redirect_uri = os.getenv("GMAIL_REDIRECT_URI", "https://phishnet-backend-iuoc.onrender.com/api/v1/auth/gmail/callback")
         
         if not client_id:
             return {"success": False, "message": "OAuth credentials not configured"}
@@ -180,7 +180,7 @@ async def oauth_callback(code: str = None, state: str = None, error: str = None)
             print(f"ERROR: {error_msg}")
             return RedirectResponse(f"{frontend_url}?oauth_error=missing_credentials")
         
-        redirect_uri = f"{base_url}/api/test/oauth/callback"
+        redirect_uri = f"{base_url}/api/v1/auth/gmail/callback"
         print(f"DEBUG: redirect_uri: {redirect_uri}")
         
         token_data = {
@@ -512,4 +512,29 @@ async def rest_oauth_callback(code: str = None, state: str = None, error: str = 
         redirect_url += f"?{query_string}"
     
     print(f"DEBUG: REST API compatibility redirect: {redirect_url}")
+    return RedirectResponse(redirect_url)
+
+@v1_router.get("/gmail/callback")
+async def v1_gmail_callback(code: str = None, state: str = None, error: str = None):
+    """V1 Gmail OAuth callback - matches Google Console redirect URI."""
+    import urllib.parse
+    
+    print(f"DEBUG: V1 Gmail callback received - code: {bool(code)}, state: {state}, error: {error}")
+    
+    # Build parameters for main callback
+    params = {}
+    if code:
+        params['code'] = code
+    if state:
+        params['state'] = state
+    if error:
+        params['error'] = error
+        
+    # Build redirect URL to main callback handler
+    query_string = urllib.parse.urlencode(params) if params else ""
+    redirect_url = f"https://phishnet-backend-iuoc.onrender.com/api/test/oauth/callback"
+    if query_string:
+        redirect_url += f"?{query_string}"
+    
+    print(f"DEBUG: V1 Gmail callback redirect: {redirect_url}")
     return RedirectResponse(redirect_url)
