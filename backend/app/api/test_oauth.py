@@ -3,7 +3,7 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 import secrets
 
@@ -273,68 +273,74 @@ async def oauth_callback(code: str = None, state: str = None, error: str = None)
             
             # Create user in MongoDB (for proper authentication)
             try:
-                # Check if user already exists by email or google_sub
-                existing_user = await User.find_one({
-                    "$or": [
-                        {"email": user_email},
-                        {"google_sub": google_sub}
-                    ]
-                })
+                # Check if user already exists by email
+                existing_user = await User.find_one({"email": user_email})
                 
                 if existing_user:
-                    # Update existing user
-                    existing_user.google_sub = google_sub
-                    existing_user.display_name = user_name
-                    existing_user.status = "connected"
-                    existing_user.connected_at = datetime.now()
+                    # Update existing user - only update fields that exist in the model
+                    existing_user.full_name = user_name
+                    existing_user.is_active = True
+                    existing_user.is_verified = True
+                    existing_user.last_login_at = datetime.now(timezone.utc)
+                    existing_user.updated_at = datetime.now(timezone.utc)
                     user = await existing_user.save()
                     print(f"DEBUG: Updated existing user {user.id}")
                 else:
-                    # Create new user
+                    # Create new user - only use fields that exist in the User model
                     user = User(
                         email=user_email,
                         username=user_email.split('@')[0],  # Use email prefix as username
                         hashed_password="oauth_user",  # OAuth users get placeholder
                         full_name=user_name,
-                        google_sub=google_sub,
-                        display_name=user_name,
-                        status="connected", 
-                        connected_at=datetime.now(),
                         is_active=True,
-                        is_verified=True
+                        is_verified=True,
+                        last_login_at=datetime.now(timezone.utc)
                     )
                     user = await user.save()
                     print(f"DEBUG: Created new user {user.id}")
                 
                 # Store OAuth credentials securely 
-                # Deactivate any existing tokens for this user
-                existing_creds = await OAuthCredentials.find(
-                    OAuthCredentials.user_id == str(user.id),
-                    OAuthCredentials.provider == "gmail",
-                    OAuthCredentials.is_active == True
-                ).to_list()
-                
-                for cred in existing_creds:
-                    cred.is_active = False
-                    cred.revoked_at = datetime.now()
-                    await cred.save()
+                # Check for existing OAuth credentials for this user and provider
+                existing_cred = await OAuthCredentials.find_one({
+                    "user_id": str(user.id),
+                    "provider": "gmail"
+                })
                 
                 # Calculate token expiration
                 expires_in = tokens.get('expires_in', 3600)  # Default 1 hour
-                expires_at = datetime.now() + timedelta(seconds=expires_in)
+                expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
                 
-                # Create new OAuth credentials record
-                oauth_cred = OAuthCredentials(
-                    user_id=str(user.id),
-                    provider="gmail", 
-                    encrypted_refresh_token=tokens.get("refresh_token", ""),
-                    encrypted_access_token=access_token,
-                    token_expires_at=expires_at,
-                    scope=tokens.get("scope", ""),
-                    is_active=True,
-                    created_at=datetime.now()
-                )
-                oauth_cred = await oauth_cred.save()
+                # Simple encryption for tokens (using base64 for now - in production use proper encryption)
+                import base64
+                encrypted_access_token = base64.b64encode(access_token.encode()).decode()
+                encrypted_refresh_token = ""
+                if tokens.get("refresh_token"):
+                    encrypted_refresh_token = base64.b64encode(tokens.get("refresh_token").encode()).decode()
+                
+                if existing_cred:
+                    # Update existing credentials
+                    existing_cred.encrypted_access_token = encrypted_access_token
+                    existing_cred.encrypted_refresh_token = encrypted_refresh_token
+                    existing_cred.expires_at = expires_at
+                    existing_cred.scope = tokens.get("scope", "").split() if tokens.get("scope") else []
+                    existing_cred.updated_at = datetime.now(timezone.utc)
+                    existing_cred.last_used_at = datetime.now(timezone.utc)
+                    oauth_cred = await existing_cred.save()
+                    print(f"DEBUG: Updated OAuth credentials for user {user.id}")
+                else:
+                    # Create new OAuth credentials record
+                    oauth_cred = OAuthCredentials(
+                        user_id=str(user.id),
+                        provider="gmail", 
+                        encrypted_access_token=encrypted_access_token,
+                        encrypted_refresh_token=encrypted_refresh_token,
+                        expires_at=expires_at,
+                        scope=tokens.get("scope", "").split() if tokens.get("scope") else [],
+                        encryption_key_id="simple_base64",  # Using simple encoding for now
+                        salt=secrets.token_hex(16)
+                    )
+                    oauth_cred = await oauth_cred.save()
+                    print(f"DEBUG: Created OAuth credentials for user {user.id}")
                 
                 user_id = str(user.id)
                 print(f"DEBUG: Stored OAuth credentials for user {user_id}")
