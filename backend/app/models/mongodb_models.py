@@ -234,12 +234,14 @@ class Detection(Document):
     is_phishing: bool
     confidence_score: float
     risk_level: str
-    model_version: str
-    model_type: str
+    detection_model_version: str  # renamed to avoid conflict
+    detection_model_type: str     # renamed to avoid conflict
     features: Optional[Dict[str, Any]] = None
     risk_factors: Optional[List[str]] = None
     processing_time_ms: int
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    
+    model_config = {"protected_namespaces": ()}  # Allow model_ fields if needed
     
     class Settings:
         name = "detections"
