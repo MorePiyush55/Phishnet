@@ -145,9 +145,10 @@ async def start_oauth():
 @router.get("/oauth/callback")
 async def oauth_callback(code: str = None, state: str = None, error: str = None):
     """OAuth callback endpoint - completes the OAuth flow and redirects to frontend."""
-    frontend_url = "https://phishnet-tau.vercel.app"
+    frontend_url = os.getenv("FRONTEND_URL", "https://phishnet-tau.vercel.app")
     
     print(f"DEBUG: OAuth callback received - code: {bool(code)}, state: {state}, error: {error}")
+    print(f"DEBUG: Frontend URL: {frontend_url}")
     
     if error:
         print(f"DEBUG: OAuth error received: {error}")
@@ -173,6 +174,8 @@ async def oauth_callback(code: str = None, state: str = None, error: str = None)
         print(f"DEBUG: base_url: {base_url}")
         
         if not client_id or not client_secret:
+            print("ERROR: Missing OAuth credentials")
+            return RedirectResponse(f"{frontend_url}?oauth_error=missing_credentials")
             error_msg = f"OAuth credentials not configured - client_id: {bool(client_id)}, client_secret: {bool(client_secret)}"
             print(f"ERROR: {error_msg}")
             return RedirectResponse(f"{frontend_url}?oauth_error=missing_credentials")
