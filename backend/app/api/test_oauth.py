@@ -192,6 +192,8 @@ async def oauth_callback(code: str = None, state: str = None, error: str = None)
         }
         
         print(f"DEBUG: Making token request to {token_url}")
+        print(f"DEBUG: Token request redirect_uri: {redirect_uri}")
+        print(f"DEBUG: Token request client_id: {client_id[:20]}...")
         
         # Use requests instead of httpx for better compatibility
         import requests
@@ -199,14 +201,17 @@ async def oauth_callback(code: str = None, state: str = None, error: str = None)
         try:
             token_response = requests.post(token_url, data=token_data, timeout=30)
             print(f"DEBUG: Token response status: {token_response.status_code}")
+            print(f"DEBUG: Token response headers: {dict(token_response.headers)}")
             
             if token_response.status_code != 200:
                 print(f"ERROR: Token exchange failed ({token_response.status_code}): {token_response.text}")
-                return RedirectResponse(f"{frontend_url}?oauth_error=token_exchange_failed")
+                # Add more specific error information
+                error_detail = f"status_{token_response.status_code}"
+                return RedirectResponse(f"{frontend_url}?oauth_error=token_exchange_failed&error_detail={error_detail}")
                 
         except requests.exceptions.RequestException as e:
             print(f"ERROR: Token request failed: {str(e)}")
-            return RedirectResponse(f"{frontend_url}?oauth_error=token_request_failed")
+            return RedirectResponse(f"{frontend_url}?oauth_error=token_request_failed&error_detail={str(e)[:50]}")
             
         try:
             tokens = token_response.json()
