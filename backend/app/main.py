@@ -108,10 +108,28 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Redis connection skipped: {e}")
         app.state.redis = None
     
+    # Initialize real-time monitoring
+    try:
+        from app.services.real_time_monitor import real_time_monitor
+        import asyncio
+        # Start monitoring in background
+        asyncio.create_task(real_time_monitor.start_monitoring())
+        logger.info("Real-time monitoring started")
+    except Exception as e:
+        logger.warning(f"Real-time monitoring initialization failed: {e}")
+    
     yield
     
     # Shutdown
     logger.info("Shutting down PhishNet application")
+    
+    # Stop real-time monitoring
+    try:
+        from app.services.real_time_monitor import real_time_monitor
+        await real_time_monitor.stop_monitoring()
+        logger.info("Real-time monitoring stopped")
+    except Exception as e:
+        logger.warning(f"Error stopping real-time monitoring: {e}")
     
     # Close MongoDB connection
     if MONGODB_AVAILABLE and MongoDBManager.client:
@@ -197,6 +215,8 @@ except Exception as e:
 routers_to_add = [
     # ("app.api.health", "Health"),  # Loaded manually above
     # ("app.api.test_oauth", "Test OAuth"),  # Loaded manually above
+    ("app.api.analytics", "Analytics Dashboard"),
+    ("app.api.websocket", "Real-time Monitoring"),
     ("app.api.gmail_api", "Gmail Analysis"),
     ("app.api.gmail_simple", "Gmail Simple"),
     ("app.api.auth_simple", "Authentication"),

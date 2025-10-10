@@ -204,10 +204,145 @@ class AuditLog(Document):
         ]
 
 
+class Email(Document):
+    """Email document for analytics dashboard."""
+    
+    user_id: int
+    subject: str
+    sender: str
+    recipients: str  # Comma-separated
+    content_hash: str
+    content: str
+    content_type: str = "text/html"
+    size_bytes: int
+    received_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    
+    class Settings:
+        name = "emails"
+        indexes = [
+            IndexModel([("user_id", ASCENDING)]),
+            IndexModel([("received_at", DESCENDING)]),
+            IndexModel([("content_hash", ASCENDING)]),
+        ]
+
+
+class Detection(Document):
+    """Threat detection results for analytics dashboard."""
+    
+    user_id: int
+    email_id: str
+    is_phishing: bool
+    confidence_score: float
+    risk_level: str
+    model_version: str
+    model_type: str
+    features: Optional[Dict[str, Any]] = None
+    risk_factors: Optional[List[str]] = None
+    processing_time_ms: int
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    
+    class Settings:
+        name = "detections"
+        indexes = [
+            IndexModel([("user_id", ASCENDING)]),
+            IndexModel([("created_at", DESCENDING)]),
+            IndexModel([("is_phishing", ASCENDING)]),
+            IndexModel([("risk_level", ASCENDING)]),
+        ]
+
+
+class Incident(Document):
+    """Security incident tracking for analytics dashboard."""
+    
+    title: str
+    description: str
+    incident_type: str
+    severity: str  # low, medium, high, critical
+    status: str  # open, investigating, resolved, closed
+    assigned_to: Optional[str] = None
+    escalated: bool = False
+    
+    # Detection details
+    detection_id: Optional[str] = None
+    threat_indicators: List[str] = Field(default_factory=list)
+    
+    # Timeline
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    first_response_at: Optional[datetime] = None
+    resolved_at: Optional[datetime] = None
+    
+    # Metadata
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    
+    class Settings:
+        name = "incidents"
+        indexes = [
+            IndexModel([("created_at", DESCENDING)]),
+            IndexModel([("status", ASCENDING)]),
+            IndexModel([("severity", ASCENDING)]),
+            IndexModel([("assigned_to", ASCENDING)]),
+        ]
+
+
+class WorkflowExecution(Document):
+    """Workflow execution tracking for performance analytics."""
+    
+    workflow_type: str
+    workflow_id: str
+    status: str  # pending, running, completed, failed
+    execution_time_ms: Optional[int] = None
+    
+    # Timestamps
+    started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    completed_at: Optional[datetime] = None
+    
+    # Details
+    input_data: Dict[str, Any] = Field(default_factory=dict)
+    output_data: Dict[str, Any] = Field(default_factory=dict)
+    error_message: Optional[str] = None
+    
+    class Settings:
+        name = "workflow_executions"
+        indexes = [
+            IndexModel([("started_at", DESCENDING)]),
+            IndexModel([("workflow_type", ASCENDING)]),
+            IndexModel([("status", ASCENDING)]),
+        ]
+
+
+class FileAnalysis(Document):
+    """File analysis results for security dashboard."""
+    
+    file_hash: str
+    file_name: str
+    file_size: int
+    file_type: str
+    analysis_result: str  # clean, suspicious, malicious
+    confidence_score: float
+    analysis_engine: str
+    
+    # Metadata
+    analysis_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    
+    class Settings:
+        name = "file_analyses"
+        indexes = [
+            IndexModel([("file_hash", ASCENDING)]),
+            IndexModel([("analysis_date", DESCENDING)]),
+            IndexModel([("analysis_result", ASCENDING)]),
+        ]
+
+
 # List of all document models for Beanie initialization
 DOCUMENT_MODELS = [
     User,
     EmailAnalysis,
+    Email,
+    Detection,
+    Incident,
+    WorkflowExecution,
+    FileAnalysis,
     ThreatIntelligence,
     AnalysisJob,
     AuditLog,
