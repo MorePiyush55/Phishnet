@@ -8,7 +8,30 @@
 [![Detection](https://img.shields.io/badge/accuracy-95%25+-blue.svg)](#ml-performance)
 [![Uptime](https://img.shields.io/badge/uptime-99.9%25-success.svg)](#observability)
 
-**PhishNet** is a production-ready email security platform that detects, analyzes, and responds to phishing threats in real-time. Built with enterprise-grade architecture including orchestration, observability, resilience patterns, and comprehensive security controls.
+**PhishNet** is a production-ready email security platform that detects, analyzes, and responds to phishing threats in real-time. Built with enterprise-grade architecture including advanced analytics dashboard, real-time monitoring, orchestration, observability, resilience patterns, and comprehensive security controls.
+
+## 🎯 **Latest Major Update - Analytics Dashboard & Phishing Playbook Integration**
+
+### 📊 **Advanced Analytics Dashboard** - *NEWLY COMPLETED*
+- ✅ **Real-time Security Operations Center**: Comprehensive threat monitoring with live updates
+- ✅ **Interactive Data Visualization**: Charts, graphs, and metrics for threat analysis
+- ✅ **WebSocket Live Streaming**: Real-time security events and alert notifications
+- ✅ **Multi-timeframe Analytics**: Configurable time ranges (1h, 24h, 7d, 30d) with trend analysis
+- ✅ **Performance Monitoring**: System metrics, API performance, and resource utilization tracking
+
+### 🛡️ **Enhanced Security Features** - *NEWLY COMPLETED*
+- ✅ **Phishing Playbook Integration**: Enterprise-grade workflows inspired by McAfee ATD, PhishTank, PhishMe
+- ✅ **Advanced File Analysis**: Static/dynamic analysis with reputation scoring
+- ✅ **Incident Management System**: Automated tracking, escalation, and SLA monitoring
+- ✅ **Threat Intelligence Integration**: Multi-source feeds with IOC tracking and reputation analysis
+- ✅ **Automated Response Workflows**: SOAR-inspired automation for faster incident response
+
+### 🔧 **Technical Enhancements** - *NEWLY COMPLETED*
+- ✅ **Enhanced MongoDB Models**: Optimized collections for analytics and incident tracking
+- ✅ **RESTful Analytics APIs**: Comprehensive endpoints for dashboard data and metrics
+- ✅ **Real-time Monitoring Service**: Background processing for live threat detection
+- ✅ **Advanced UI Components**: React-based dashboard with responsive design
+- ✅ **Comprehensive Testing**: Integration tests for all new analytics features
 
 ## 🎯 **Current Development Focus - Immediate Next Steps**
 
@@ -218,6 +241,20 @@ PhishNet follows enterprise patterns with single orchestrator design, comprehens
 - **Threat Intelligence**: Live feeds from VirusTotal, AbuseIPDB, custom sources
 
 ## 🚀 Features
+
+### 📊 Advanced Analytics Dashboard *(NEW)*
+- **Real-time Security Operations Center**: Live threat monitoring with interactive dashboards
+- **Multi-timeframe Analytics**: Configurable views (1h, 24h, 7d, 30d) with trend analysis and forecasting
+- **WebSocket Live Streaming**: Real-time security events, alerts, and threat feed updates
+- **Performance Monitoring**: System metrics, API performance, and resource utilization tracking
+- **Interactive Visualizations**: Charts, graphs, heat maps, and threat distribution analysis
+
+### 🛡️ Enhanced Security Features *(NEW)*
+- **Phishing Playbook Integration**: Enterprise workflows inspired by McAfee ATD, PhishTank, PhishMe
+- **Advanced File Analysis**: Static/dynamic analysis with reputation scoring and malware detection
+- **Incident Management System**: Automated tracking, escalation, SLA monitoring, and response workflows
+- **Threat Intelligence Feeds**: Multi-source IOC tracking with reputation analysis and actor attribution
+- **Automated Response Engine**: SOAR-inspired automation for rapid incident response and remediation
 
 ### 🎯 Core Threat Detection Engine
 - **Multi-Layer Analysis**: AI/LLM analysis + traditional ML + rule-based detection + behavioral patterns
