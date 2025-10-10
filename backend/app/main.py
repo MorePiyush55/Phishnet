@@ -216,18 +216,18 @@ routers_to_add = [
     # ("app.api.health", "Health"),  # Loaded manually above
     # ("app.api.test_oauth", "Test OAuth"),  # Loaded manually above
     ("app.api.analytics", "Analytics Dashboard"),
-    ("app.api.websocket", "Real-time Monitoring"),
-    ("app.api.gmail_api", "Gmail Analysis"),
-    ("app.api.gmail_simple", "Gmail Simple"),
+    # ("app.api.websocket", "Real-time Monitoring"),  # Temporarily disabled - SQLAlchemy conflict
+    # ("app.api.gmail_api", "Gmail Analysis"),  # Temporarily disabled - SQLAlchemy conflict
+    # ("app.api.gmail_simple", "Gmail Simple"),  # Temporarily disabled - SQLAlchemy conflict
     ("app.api.auth_simple", "Authentication"),
     ("app.api.simple_oauth", "Simple OAuth"),
-    ("app.api.gmail_oauth", "Gmail OAuth"),
+    # ("app.api.gmail_oauth", "Gmail OAuth"),  # Temporarily disabled - SQLAlchemy conflict
     ("app.api.simple_analysis", "Email Analysis"),
-    ("app.api.async_analysis", "Async Email Analysis"),
+    # ("app.api.async_analysis", "Async Email Analysis"),  # Temporarily disabled - enum conflict
     ("app.api.websockets", "WebSocket Updates"),
     # ("app.api.link_analysis", "Link Redirect Analysis"),  # Causes SQLAlchemy conflicts
-    ("app.api.threat_intelligence", "Threat Intelligence"),
-    ("app.api.workers", "Worker Management"),
+    # ("app.api.threat_intelligence", "Threat Intelligence"),  # Temporarily disabled - missing aiohttp
+    # ("app.api.workers", "Worker Management"),  # Temporarily disabled - Redis mock issue
     ("app.observability.routes", "Observability"),
     ("app.privacy.routes", "Privacy & Compliance")
 ]

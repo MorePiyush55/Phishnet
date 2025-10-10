@@ -16,8 +16,9 @@ sqlalchemy==2.0.35
 # Redis & Caching
 redis==4.6.0
 
-# Data Models & Validation
+# Data Models & Validation - Updated for Python 3.13
 pydantic==2.9.2
+pydantic-settings==2.5.2
 pydantic-settings==2.5.2
 
 # Essential Data Processing
