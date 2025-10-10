@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     # Gmail API
     GMAIL_CLIENT_ID: Optional[str] = None
     GMAIL_CLIENT_SECRET: Optional[str] = None
-    GMAIL_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/gmail/callback"
+    GMAIL_REDIRECT_URI: str = "https://phishnet-backend-iuoc.onrender.com/api/v1/auth/gmail/callback"
     GOOGLE_CLOUD_PROJECT: Optional[str] = None
     
     # OAuth Security Settings
@@ -177,7 +177,7 @@ class Settings(BaseSettings):
     # Gmail API
     GMAIL_CLIENT_ID: Optional[str] = None
     GMAIL_CLIENT_SECRET: Optional[str] = None
-    GMAIL_REDIRECT_URI: str = "http://localhost:8000/api/auth/gmail/callback"
+    GMAIL_REDIRECT_URI: str = "https://phishnet-backend-iuoc.onrender.com/api/auth/gmail/callback"
     
     # Monitoring
     ENABLE_METRICS: bool = True

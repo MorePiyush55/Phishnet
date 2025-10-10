@@ -12,27 +12,27 @@ def test_oauth_endpoints():
     endpoints_to_test = [
         {
             'name': 'Production Backend Health',
-            'url': 'https://phishnet-backend-juoc.onrender.com/health',
+            'url': 'https://phishnet-backend-iuoc.onrender.com/health',
             'expected_status': [200, 404]
         },
         {
             'name': 'Production Backend Root',
-            'url': 'https://phishnet-backend-juoc.onrender.com/',
+            'url': 'https://phishnet-backend-iuoc.onrender.com/',
             'expected_status': [200, 404, 405]
         },
         {
             'name': 'Production OAuth REST',
-            'url': 'https://phishnet-backend-juoc.onrender.com/api/rest/auth/google',
+            'url': 'https://phishnet-backend-iuoc.onrender.com/api/rest/auth/google',
             'expected_status': [200, 302, 404, 500]
         },
         {
             'name': 'Production OAuth Test',
-            'url': 'https://phishnet-backend-juoc.onrender.com/api/test/oauth',
+            'url': 'https://phishnet-backend-iuoc.onrender.com/api/test/oauth',
             'expected_status': [200, 302, 404, 500]
         },
         {
             'name': 'Production API Docs',
-            'url': 'https://phishnet-backend-juoc.onrender.com/docs',
+            'url': 'https://phishnet-backend-iuoc.onrender.com/docs',
             'expected_status': [200, 404]
         }
     ]
