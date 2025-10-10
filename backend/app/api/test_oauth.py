@@ -441,13 +441,13 @@ async def v1_gmail_callback(code: str = None, state: str = None, error: str = No
     if error:
         params['error'] = error
         
-    # Build redirect URL to main callback
+    # Build redirect URL to simple OAuth callback (our new bulletproof one)
     query_string = urllib.parse.urlencode(params) if params else ""
-    redirect_url = f"https://phishnet-backend-iuoc.onrender.com/api/test/oauth/callback"
+    redirect_url = f"https://phishnet-backend-iuoc.onrender.com/api/simple/oauth/callback"
     if query_string:
         redirect_url += f"?{query_string}"
     
-    print(f"DEBUG: V1 compatibility redirect: {redirect_url}")
+    print(f"DEBUG: V1 compatibility redirect to SIMPLE OAuth: {redirect_url}")
     return RedirectResponse(redirect_url)
 
 
@@ -511,39 +511,16 @@ async def rest_oauth_callback(code: str = None, state: str = None, error: str = 
     if error:
         params['error'] = error
         
-    # Build redirect URL to main callback
+    # Build redirect URL to simple OAuth callback (our new bulletproof one)
     query_string = urllib.parse.urlencode(params) if params else ""
-    redirect_url = f"https://phishnet-backend-iuoc.onrender.com/api/test/oauth/callback"
+    redirect_url = f"https://phishnet-backend-iuoc.onrender.com/api/simple/oauth/callback"
     if query_string:
         redirect_url += f"?{query_string}"
     
-    print(f"DEBUG: REST API compatibility redirect: {redirect_url}")
+    print(f"DEBUG: REST API compatibility redirect to SIMPLE OAuth: {redirect_url}")
     return RedirectResponse(redirect_url)
 
-@v1_router.get("/gmail/callback")
-async def v1_gmail_callback(code: str = None, state: str = None, error: str = None):
-    """V1 Gmail OAuth callback - matches Google Console redirect URI."""
-    import urllib.parse
-    
-    print(f"DEBUG: V1 Gmail callback received - code: {bool(code)}, state: {state}, error: {error}")
-    
-    # Build parameters for main callback
-    params = {}
-    if code:
-        params['code'] = code
-    if state:
-        params['state'] = state
-    if error:
-        params['error'] = error
-        
-    # Build redirect URL to main callback handler
-    query_string = urllib.parse.urlencode(params) if params else ""
-    redirect_url = f"https://phishnet-backend-iuoc.onrender.com/api/test/oauth/callback"
-    if query_string:
-        redirect_url += f"?{query_string}"
-    
-    print(f"DEBUG: V1 Gmail callback redirect: {redirect_url}")
-    return RedirectResponse(redirect_url)
+# Remove duplicate v1_gmail_callback - already defined above
 
 # Simple OAuth router without MongoDB complexity
 simple_router = APIRouter(prefix="/api/simple", tags=["Simple OAuth"])
