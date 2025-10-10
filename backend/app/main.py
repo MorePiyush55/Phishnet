@@ -272,6 +272,14 @@ try:
 except Exception as e:
     logger.warning(f"OAuth debug router failed to load: {e}")
 
+# Simple OAuth router without MongoDB complexity
+try:
+    from app.api.test_oauth import simple_router
+    app.include_router(simple_router, tags=["Simple OAuth"])
+    logger.info("Simple OAuth router loaded successfully")
+except Exception as e:
+    logger.warning(f"Simple OAuth router failed to load: {e}")
+
 if router_errors:
     logger.error(f"Router loading errors: {router_errors}")
 

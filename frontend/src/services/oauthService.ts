@@ -251,9 +251,9 @@ export class OAuthService {
    */
   static async startOAuth(): Promise<void> {
     try {
-      // Direct redirect to backend OAuth endpoint (no API call needed)
+      // Direct redirect to simple OAuth endpoint (bypasses MongoDB issues)
       const backendUrl = API_BASE_URL;
-      window.location.href = `${backendUrl}/api/test/oauth`;
+      window.location.href = `${backendUrl}/api/simple/oauth`;
     } catch (error: any) {
       console.error('OAuth redirect error:', error);
       throw new Error('Failed to start OAuth flow');

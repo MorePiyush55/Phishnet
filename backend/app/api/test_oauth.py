@@ -544,3 +544,121 @@ async def v1_gmail_callback(code: str = None, state: str = None, error: str = No
     
     print(f"DEBUG: V1 Gmail callback redirect: {redirect_url}")
     return RedirectResponse(redirect_url)
+
+# Simple OAuth router without MongoDB complexity
+simple_router = APIRouter(prefix="/api/simple", tags=["Simple OAuth"])
+
+@simple_router.get("/oauth")
+async def simple_oauth_start():
+    """Start OAuth flow - simple version without MongoDB."""
+    try:
+        client_id = os.getenv("GMAIL_CLIENT_ID")
+        redirect_uri = "https://phishnet-backend-iuoc.onrender.com/api/simple/oauth/callback"
+        
+        if not client_id:
+            return {"success": False, "message": "OAuth credentials not configured"}
+        
+        state = secrets.token_urlsafe(32)
+        scopes = ["openid", "email", "profile", "https://www.googleapis.com/auth/gmail.readonly"]
+        scope_string = " ".join(scopes)
+        
+        auth_url = (
+            f"https://accounts.google.com/o/oauth2/auth?"
+            f"client_id={client_id}&"
+            f"redirect_uri={redirect_uri}&"
+            f"scope={scope_string}&"
+            f"response_type=code&"
+            f"state={state}&"
+            f"access_type=offline&"
+            f"prompt=consent"
+        )
+        
+        print(f"DEBUG: Simple OAuth redirect to: {auth_url}")
+        return RedirectResponse(auth_url)
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"OAuth error: {str(e)}")
+
+@simple_router.get("/oauth/callback")
+async def simple_oauth_callback(code: str = None, state: str = None, error: str = None):
+    """Simple OAuth callback - no database operations."""
+    frontend_url = os.getenv("FRONTEND_URL", "https://phishnet-tau.vercel.app")
+    
+    print(f"DEBUG: Simple callback - code: {bool(code)}, error: {error}")
+    
+    if error:
+        return RedirectResponse(f"{frontend_url}?oauth_error={error}")
+    
+    if not code:
+        return RedirectResponse(f"{frontend_url}?oauth_error=no_code")
+    
+    try:
+        client_id = os.getenv("GMAIL_CLIENT_ID")
+        client_secret = os.getenv("GMAIL_CLIENT_SECRET")
+        
+        if not client_id or not client_secret:
+            return RedirectResponse(f"{frontend_url}?oauth_error=missing_credentials")
+        
+        # Exchange code for tokens
+        token_data = {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "code": code,
+            "grant_type": "authorization_code",
+            "redirect_uri": "https://phishnet-backend-iuoc.onrender.com/api/simple/oauth/callback"
+        }
+        
+        import requests
+        token_response = requests.post("https://oauth2.googleapis.com/token", data=token_data, timeout=30)
+        
+        if token_response.status_code != 200:
+            print(f"ERROR: Token failed ({token_response.status_code}): {token_response.text}")
+            return RedirectResponse(f"{frontend_url}?oauth_error=token_failed")
+        
+        tokens = token_response.json()
+        access_token = tokens.get("access_token")
+        
+        if not access_token:
+            return RedirectResponse(f"{frontend_url}?oauth_error=no_token")
+        
+        # Get user info
+        userinfo_response = requests.get(
+            f"https://www.googleapis.com/oauth2/v2/userinfo?access_token={access_token}",
+            timeout=30
+        )
+        
+        if userinfo_response.status_code != 200:
+            return RedirectResponse(f"{frontend_url}?oauth_error=userinfo_failed")
+        
+        user_info = userinfo_response.json()
+        user_email = user_info.get('email')
+        user_name = user_info.get('name', user_email)
+        
+        print(f"DEBUG: Simple OAuth success for: {user_email}")
+        
+        # Create simple JWT without database
+        import jwt
+        secret = os.getenv("JWT_SECRET", "simple-key")
+        
+        payload = {
+            "sub": user_email,
+            "name": user_name,
+            "email": user_email,
+            "exp": datetime.now(timezone.utc) + timedelta(days=1)
+        }
+        
+        token_jwt = jwt.encode(payload, secret, algorithm="HS256")
+        
+        success_url = (
+            f"{frontend_url}?"
+            f"oauth_success=true&"
+            f"access_token={token_jwt}&"
+            f"user_email={user_email}"
+        )
+        
+        print(f"DEBUG: Simple OAuth redirecting to success")
+        return RedirectResponse(success_url)
+        
+    except Exception as e:
+        print(f"ERROR: Simple OAuth failed: {str(e)}")
+        return RedirectResponse(f"{frontend_url}?oauth_error=simple_failed")
