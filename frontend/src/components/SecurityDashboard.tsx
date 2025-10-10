@@ -44,7 +44,7 @@ import {
   TrendingDown,
   Warning,
   CheckCircle,
-  Error,
+  Error as ErrorIcon,
   Speed,
   Analytics,
   Shield
@@ -154,8 +154,8 @@ const SecurityDashboard: React.FC = () => {
       const data = await response.json();
       setMetrics(data);
       setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error occurred');
+    } catch (err: any) {
+      setError(err?.message || 'Unknown error occurred');
     } finally {
       setLoading(false);
     }
