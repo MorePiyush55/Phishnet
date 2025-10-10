@@ -264,6 +264,14 @@ try:
 except Exception as e:
     logger.warning(f"OAuth REST compatibility router failed to load: {e}")
 
+# Debug router for OAuth configuration checking
+try:
+    from app.api.debug_oauth import router as debug_router
+    app.include_router(debug_router, tags=["Debug"])
+    logger.info("OAuth debug router loaded successfully")
+except Exception as e:
+    logger.warning(f"OAuth debug router failed to load: {e}")
+
 if router_errors:
     logger.error(f"Router loading errors: {router_errors}")
 
