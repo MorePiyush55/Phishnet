@@ -161,12 +161,18 @@ class EnhancedThreatOrchestrator:
         self.db_session = db_session
         self.initialized = False
         
+        # Playbook integration
+        self.playbook_engine = None
+        self.batch_processor = None
+        self.playbook_cache_extension = None
+        
         # Scoring weights for different analysis types
         self.scoring_weights = {
-            'url_analysis': 0.25,       # URLs are important for phishing
-            'ip_reputation': 0.20,      # IP reputation is important
-            'content_analysis': 0.30,   # Content analysis via LLM is key
-            'redirect_analysis': 0.25,  # Redirect analysis for phishing chains
+            'url_analysis': 0.20,       # URLs are important for phishing
+            'ip_reputation': 0.15,      # IP reputation is important
+            'content_analysis': 0.25,   # Content analysis via LLM is key
+            'redirect_analysis': 0.20,  # Redirect analysis for phishing chains
+            'playbook_analysis': 0.20,  # Playbook-based analysis
         }
         
         # Threat level thresholds
@@ -197,8 +203,11 @@ class EnhancedThreatOrchestrator:
             if self.db_session:
                 self.redirect_repository = RedirectAnalysisRepository(self.db_session)
             
+            # Initialize playbook integration
+            await self._initialize_playbook_integration()
+            
             self.initialized = True
-            logger.info("Enhanced threat orchestrator initialized with redirect analysis")
+            logger.info("Enhanced threat orchestrator initialized with redirect and playbook analysis")
             
             # Log available services
             analyzers = self.factory.get_analyzers()
@@ -208,6 +217,47 @@ class EnhancedThreatOrchestrator:
         except Exception as e:
             logger.error(f"Failed to initialize threat orchestrator: {e}")
             raise
+    
+    async def _initialize_playbook_integration(self):
+        """Initialize playbook engine and batch processor."""
+        try:
+            from app.integrations.playbooks import PlaybookEngine
+            from app.integrations.playbooks.batch_processor import BatchProcessor
+            from app.integrations.playbooks.cache_extensions import PlaybookCacheExtension
+            from app.integrations.caching import ThreatIntelligenceCache
+            from pathlib import Path
+            
+            # Initialize playbook engine
+            self.playbook_engine = PlaybookEngine(orchestrator=self)
+            
+            # Load playbook rules
+            rules_dir = Path(__file__).parent.parent / "integrations" / "playbooks" / "rules"
+            rules_dir.mkdir(parents=True, exist_ok=True)
+            loaded_count = self.playbook_engine.load_playbook_rules(str(rules_dir))
+            
+            if loaded_count > 0:
+                logger.info(f"Loaded {loaded_count} playbook rules")
+            
+            # Initialize batch processor with cache
+            cache = ThreatIntelligenceCache(
+                redis_url=settings.REDIS_URL if hasattr(settings, 'REDIS_URL') else "redis://localhost:6379"
+            )
+            self.batch_processor = BatchProcessor(
+                cache=cache,
+                max_concurrent_requests=10,
+                batch_size=25
+            )
+            
+            # Initialize cache extension
+            self.playbook_cache_extension = PlaybookCacheExtension(cache)
+            
+            logger.info("Playbook integration initialized successfully")
+            
+        except Exception as e:
+            logger.warning(f"Failed to initialize playbook integration: {e}")
+            # Continue without playbooks
+            self.playbook_engine = None
+            self.batch_processor = None
     
     async def analyze_threat(self, request: ThreatAnalysisRequest) -> EnhancedThreatResult:
         """
@@ -318,6 +368,120 @@ class EnhancedThreatOrchestrator:
                         self._safe_analyze(attachment['hash'], AnalysisType.FILE_HASH, f"file_{attachment.get('name', 'unknown')}")
                     )
         
+        # Playbook Analysis - Execute applicable playbooks
+        playbook_task = None
+        if self.playbook_engine:
+            playbook_task = self._execute_playbook_analysis(request)
+        
+        # Execute all analysis tasks in parallel
+        all_tasks = analysis_tasks + redirect_tasks
+        
+        if playbook_task:
+            all_tasks.append(playbook_task)
+        
+        if all_tasks:
+            logger.info(f"Executing {len(analysis_tasks)} service tasks, {len(redirect_tasks)} redirect tasks, and playbook analysis")
+            task_results = await asyncio.gather(*all_tasks, return_exceptions=True)
+            
+            # Process results
+            for i, result in enumerate(task_results):
+                if isinstance(result, Exception):
+                    logger.error(f"Analysis task {i} failed: {result}")
+                elif isinstance(result, tuple) and len(result) == 2:
+                    task_id, analysis_result = result
+                    if analysis_result:
+                        if task_id.startswith("redirect_"):
+                            redirect_results[task_id] = analysis_result
+                        elif task_id == "playbook":
+                            # Store playbook results separately
+                            service_results["playbook"] = analysis_result
+                        else:
+                            service_results[task_id] = analysis_result
+        
+        return service_results, redirect_results
+    
+    async def _execute_playbook_analysis(self, request: ThreatAnalysisRequest) -> Tuple[str, Optional[Any]]:
+        """Execute playbook analysis for the request."""
+        try:
+            from app.integrations.playbooks.playbook_engine import PlaybookExecutionContext
+            
+            # Create execution context
+            context = PlaybookExecutionContext(
+                scan_request_id=request.scan_request_id,
+                email_data={
+                    "sender_domain": request.sender_domain,
+                    "sender_ip": request.sender_ip,
+                    "subject_hash": request.subject_hash,
+                    "attachments": request.attachments or []
+                },
+                urls=request.urls_to_analyze or [],
+                ips=request.ip_addresses or [],
+                domains=[request.sender_domain] if request.sender_domain else [],
+                file_hashes=[att.get('hash', '') for att in (request.attachments or []) if 'hash' in att],
+                results={}
+            )
+            
+            # Execute applicable playbooks
+            playbook_results = await self.playbook_engine.execute_applicable_playbooks(context)
+            
+            # Convert to AnalysisResult format
+            if playbook_results:
+                # Aggregate playbook findings
+                all_findings = []
+                total_severity_score = 0.0
+                
+                for pb_result in playbook_results:
+                    all_findings.extend(pb_result.findings)
+                    # Map severity to score
+                    severity_map = {"low": 0.2, "medium": 0.5, "high": 0.75, "critical": 0.9}
+                    total_severity_score += severity_map.get(pb_result.severity_level, 0.5)
+                
+                avg_severity = total_severity_score / len(playbook_results) if playbook_results else 0.5
+                
+                # Create synthetic AnalysisResult
+                playbook_analysis = AnalysisResult(
+                    service_name="playbook_engine",
+                    analysis_type=AnalysisType.TEXT_ANALYSIS,
+                    resource_analyzed=request.scan_request_id,
+                    threat_score=avg_severity,
+                    confidence=0.8,
+                    status=ServiceStatus.AVAILABLE,
+                    indicators=all_findings,
+                    metadata={
+                        "playbooks_executed": len(playbook_results),
+                        "total_findings": len(all_findings),
+                        "execution_times": [pb.execution_time_ms for pb in playbook_results]
+                    }
+                )
+                
+                logger.info(f"Playbook analysis complete: {len(playbook_results)} playbooks, {len(all_findings)} findings")
+                return ("playbook", playbook_analysis)
+            
+            return ("playbook", None)
+            
+        except Exception as e:
+            logger.error(f"Playbook analysis failed: {e}")
+            return ("playbook", None)
+        if request.ip_addresses:
+            for ip in request.ip_addresses[:5]:  # Limit to 5 IPs
+                analysis_tasks.append(
+                    self._safe_analyze(ip, AnalysisType.IP_REPUTATION, f"ip_{hashlib.md5(ip.encode()).hexdigest()[:8]}")
+                )
+        
+        # Content Analysis (Gemini LLM)
+        if request.email_content and len(request.email_content.strip()) > 10:
+            analysis_tasks.append(
+                self._safe_analyze(request.email_content, AnalysisType.TEXT_ANALYSIS, "content")
+            )
+        
+        # File Hash Analysis (VirusTotal) - if attachments present
+        if request.attachments:
+            for attachment in request.attachments[:5]:  # Limit to 5 files
+                if 'hash' in attachment:
+                    analysis_tasks.append(
+                        self._safe_analyze(attachment['hash'], AnalysisType.FILE_HASH, f"file_{attachment.get('name', 'unknown')}")
+                    )
+        
         # Execute all analysis tasks in parallel
         all_tasks = analysis_tasks + redirect_tasks
         
@@ -404,6 +568,7 @@ class EnhancedThreatOrchestrator:
         url_results = []
         ip_results = []
         content_results = []
+        playbook_result = None
         
         services_used = []
         services_failed = []
@@ -412,7 +577,9 @@ class EnhancedThreatOrchestrator:
             if result:
                 services_used.append(result.service_name)
                 
-                if result.analysis_type == AnalysisType.URL_SCAN:
+                if task_id == "playbook":
+                    playbook_result = result
+                elif result.analysis_type == AnalysisType.URL_SCAN:
                     url_results.append(result)
                 elif result.analysis_type == AnalysisType.IP_REPUTATION:
                     ip_results.append(result)
@@ -431,16 +598,20 @@ class EnhancedThreatOrchestrator:
         # Calculate redirect analysis score
         redirect_analysis_score = self._calculate_redirect_component_score(redirect_results)
         
+        # Calculate playbook analysis score
+        playbook_analysis_score = playbook_result.threat_score if playbook_result else 0.0
+        
         # Add redirect analyzer to services used if we have redirect results
         if redirect_results:
             services_used.append("redirect_analyzer")
         
-        # Calculate weighted overall threat score
+        # Calculate weighted overall threat score (including playbook score)
         threat_score = (
             url_analysis_score * self.scoring_weights['url_analysis'] +
             ip_reputation_score * self.scoring_weights['ip_reputation'] +
             content_analysis_score * self.scoring_weights['content_analysis'] +
-            redirect_analysis_score * self.scoring_weights['redirect_analysis']
+            redirect_analysis_score * self.scoring_weights['redirect_analysis'] +
+            playbook_analysis_score * self.scoring_weights['playbook_analysis']
         )
         
         # Determine threat level
@@ -454,6 +625,13 @@ class EnhancedThreatOrchestrator:
         suspicious_ips = self._extract_suspicious_ips(ip_results)
         phishing_indicators = self._extract_phishing_indicators(service_results.values())
         redirect_findings = self._extract_redirect_findings(redirect_results)
+        
+        # Add playbook findings
+        if playbook_result and playbook_result.indicators:
+            phishing_indicators.extend([
+                f"Playbook: {ind.get('type', 'finding')}" 
+                for ind in playbook_result.indicators[:5]
+            ])
         
         # Generate explanations and recommendations
         explanation = self._generate_explanation(service_results, redirect_results, threat_score, threat_level)

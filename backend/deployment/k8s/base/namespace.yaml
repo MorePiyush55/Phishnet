@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: phishnet
+  labels:
+    app.kubernetes.io/name: phishnet
+    app.kubernetes.io/version: "1.0.0"
+    environment: production
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: phishnet-api
+  namespace: phishnet
+  labels:
+    app.kubernetes.io/name: phishnet
+    app.kubernetes.io/component: api
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: phishnet-worker
+  namespace: phishnet
+  labels:
+    app.kubernetes.io/name: phishnet
+    app.kubernetes.io/component: worker

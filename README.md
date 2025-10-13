@@ -10,6 +10,8 @@
 
 **PhishNet** is a production-ready email security platform that detects, analyzes, and responds to phishing threats in real-time. Built with enterprise-grade architecture including advanced analytics dashboard, real-time monitoring, orchestration, observability, resilience patterns, and comprehensive security controls.
 
+> **📁 Project Structure Update (Oct 2025)**: The project has been reorganized for better maintainability. Root directory now contains only `backend/`, `frontend/`, and `docs/` folders. See [PROJECT_STRUCTURE.md](./PROJECT_STRUCTURE.md) for complete details and [REORGANIZATION.md](./REORGANIZATION.md) for migration guide.
+
 ## 🎯 **Latest Major Update - Analytics Dashboard & Phishing Playbook Integration**
 
 ### 📊 **Advanced Analytics Dashboard** - *NEWLY COMPLETED*
@@ -919,6 +921,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 **PhishNet** - Protecting users from phishing attacks with AI-powered detection and federated learning.
+
 
 
 

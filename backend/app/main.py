@@ -211,6 +211,15 @@ except Exception as e:
     logger.error(f"OAuth router failed to load: {e}")
     router_errors.append(f"OAuth: {e}")
 
+# IMAP Email Integration Router (ThePhish-style forwarded emails)
+try:
+    from app.api.v1.imap_emails import router as imap_emails_router
+    app.include_router(imap_emails_router, prefix="/api/v1", tags=["IMAP Email Analysis"])
+    logger.info("IMAP email integration router loaded successfully")
+except Exception as e:
+    logger.warning(f"IMAP email router failed to load: {e}")
+    router_errors.append(f"IMAP Emails: {e}")
+
 # Add routers directly with robust error handling (excluding manually loaded ones)
 routers_to_add = [
     # ("app.api.health", "Health"),  # Loaded manually above

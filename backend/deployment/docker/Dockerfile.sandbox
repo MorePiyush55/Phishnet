@@ -1,0 +1,98 @@
+# Secure Sandbox Container for PhishNet
+# Isolated environment for safe execution of suspicious links and attachments
+
+FROM python:3.11-slim
+
+# Create non-root user for security
+RUN groupadd -r sandbox && useradd -r -g sandbox -u 1001 sandbox
+
+# Install system dependencies with minimal attack surface
+RUN apt-get update && apt-get install -y \
+    # Browser dependencies
+    wget \
+    gnupg \
+    ca-certificates \
+    fonts-liberation \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libdrm2 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    libgbm1 \
+    libxss1 \
+    libgconf-2-4 \
+    # Network tools for monitoring
+    tcpdump \
+    netstat-nat \
+    # Security tools
+    strace \
+    # Cleanup
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /tmp/* \
+    && rm -rf /var/tmp/*
+
+# Install Chromium browser with security flags
+RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
+    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
+    && apt-get update \
+    && apt-get install -y google-chrome-stable \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements-sandbox.txt /tmp/
+RUN pip install --no-cache-dir -r /tmp/requirements-sandbox.txt \
+    && rm /tmp/requirements-sandbox.txt
+
+# Install Playwright and browser
+RUN playwright install chromium \
+    && playwright install-deps chromium
+
+# Create sandbox directories with restricted permissions
+RUN mkdir -p /sandbox/{workdir,evidence,logs,temp} \
+    && chown -R sandbox:sandbox /sandbox \
+    && chmod 700 /sandbox
+
+# Create restricted network configuration
+COPY sandbox_network.conf /etc/sandbox_network.conf
+
+# Copy sandbox execution script
+COPY sandbox_executor.py /sandbox/
+COPY sandbox_config.py /sandbox/
+RUN chown sandbox:sandbox /sandbox/*.py \
+    && chmod 755 /sandbox/*.py
+
+# Set security limits
+RUN echo "sandbox soft nproc 64" >> /etc/security/limits.conf \
+    && echo "sandbox hard nproc 128" >> /etc/security/limits.conf \
+    && echo "sandbox soft nofile 1024" >> /etc/security/limits.conf \
+    && echo "sandbox hard nofile 2048" >> /etc/security/limits.conf
+
+# Configure seccomp profile for additional security
+COPY seccomp-sandbox.json /etc/docker/seccomp-sandbox.json
+
+# Switch to non-root user
+USER sandbox
+WORKDIR /sandbox/workdir
+
+# Set security environment variables
+ENV CHROME_NO_SANDBOX=true
+ENV DISPLAY=:99
+ENV PYTHONPATH=/sandbox
+ENV SANDBOX_MODE=true
+ENV NO_PROXY_CACHE=true
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import sys; sys.exit(0)"
+
+# Default command
+CMD ["python", "/sandbox/sandbox_executor.py"]
+
+# Security labels
+LABEL security.isolation="strict"
+LABEL security.network="restricted" 
+LABEL security.capabilities="minimal"
+LABEL maintainer="phishnet-security@example.com"

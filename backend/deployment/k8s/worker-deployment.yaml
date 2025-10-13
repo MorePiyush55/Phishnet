@@ -1,0 +1,466 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: phishnet-worker
+  namespace: phishnet
+  labels:
+    app: phishnet-worker
+    component: worker
+    version: v1
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: phishnet-worker
+  template:
+    metadata:
+      labels:
+        app: phishnet-worker
+        component: worker
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8001"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: phishnet-worker
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: phishnet-worker
+        image: phishnet/worker:latest
+        imagePullPolicy: Always
+        command: ["python", "-m", "app.workers.email_processor"]
+        ports:
+        - containerPort: 8001
+          name: metrics
+          protocol: TCP
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: WORKER_TYPE
+          value: "email_processor"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: phishnet-secrets
+              key: database-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: phishnet-secrets
+              key: redis-url
+        - name: GOOGLE_GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: phishnet-secrets
+              key: gemini-api-key
+        - name: VIRUSTOTAL_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: phishnet-secrets
+              key: virustotal-api-key
+        
+        # Worker Health Probes
+        startupProbe:
+          httpGet:
+            path: /health/startup
+            port: 8001
+            scheme: HTTP
+          initialDelaySeconds: 15
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 12
+          successThreshold: 1
+        
+        livenessProbe:
+          httpGet:
+            path: /health/liveness
+            port: 8001
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+        
+        readinessProbe:
+          httpGet:
+            path: /health/readiness
+            port: 8001
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+          successThreshold: 1
+        
+        # Resource Management
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "300m"
+        
+        # Graceful Shutdown for Workers
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - |
+                echo "Stopping worker gracefully..."
+                # Signal worker to stop accepting new jobs
+                touch /tmp/worker_stop
+                # Wait for current jobs to complete
+                sleep 20
+        
+        terminationGracePeriodSeconds: 45
+        
+        # Volume Mounts
+        volumeMounts:
+        - name: worker-config
+          mountPath: /app/config
+          readOnly: true
+        - name: worker-logs
+          mountPath: /app/logs
+        - name: worker-tmp
+          mountPath: /tmp
+        
+        # Security Context
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+      
+      # Volumes
+      volumes:
+      - name: worker-config
+        configMap:
+          name: phishnet-worker-config
+      - name: worker-logs
+        emptyDir: {}
+      - name: worker-tmp
+        emptyDir: {}
+      
+      # Pod Anti-Affinity
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - phishnet-worker
+              topologyKey: kubernetes.io/hostname
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: phishnet-analysis-worker
+  namespace: phishnet
+  labels:
+    app: phishnet-analysis-worker
+    component: worker
+    worker-type: analysis
+    version: v1
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: phishnet-analysis-worker
+  template:
+    metadata:
+      labels:
+        app: phishnet-analysis-worker
+        component: worker
+        worker-type: analysis
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8002"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: phishnet-worker
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: phishnet-analysis-worker
+        image: phishnet/worker:latest
+        imagePullPolicy: Always
+        command: ["python", "-m", "app.workers.analysis_worker"]
+        ports:
+        - containerPort: 8002
+          name: metrics
+          protocol: TCP
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: WORKER_TYPE
+          value: "analysis"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: phishnet-secrets
+              key: database-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: phishnet-secrets
+              key: redis-url
+        - name: GOOGLE_GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: phishnet-secrets
+              key: gemini-api-key
+        - name: VIRUSTOTAL_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: phishnet-secrets
+              key: virustotal-api-key
+        
+        # Analysis Worker Health Probes
+        startupProbe:
+          httpGet:
+            path: /health/startup
+            port: 8002
+            scheme: HTTP
+          initialDelaySeconds: 20
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 15
+          successThreshold: 1
+        
+        livenessProbe:
+          httpGet:
+            path: /health/liveness
+            port: 8002
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+        
+        readinessProbe:
+          httpGet:
+            path: /health/readiness
+            port: 8002
+            scheme: HTTP
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+          successThreshold: 1
+        
+        # Resource Management (Analysis workers need more resources)
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        
+        # Graceful Shutdown
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - |
+                echo "Stopping analysis worker gracefully..."
+                touch /tmp/worker_stop
+                sleep 30  # Analysis jobs may take longer
+        
+        terminationGracePeriodSeconds: 60
+        
+        # Volume Mounts
+        volumeMounts:
+        - name: analysis-config
+          mountPath: /app/config
+          readOnly: true
+        - name: analysis-logs
+          mountPath: /app/logs
+        - name: analysis-tmp
+          mountPath: /tmp
+        
+        # Security Context
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+      
+      # Volumes
+      volumes:
+      - name: analysis-config
+        configMap:
+          name: phishnet-worker-config
+      - name: analysis-logs
+        emptyDir: {}
+      - name: analysis-tmp
+        emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: phishnet-worker-metrics
+  namespace: phishnet
+  labels:
+    app: phishnet-worker
+    component: metrics
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8001"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8001
+    targetPort: 8001
+    protocol: TCP
+    name: metrics
+  selector:
+    app: phishnet-worker
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: phishnet-analysis-worker-metrics
+  namespace: phishnet
+  labels:
+    app: phishnet-analysis-worker
+    component: metrics
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8002"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8002
+    targetPort: 8002
+    protocol: TCP
+    name: metrics
+  selector:
+    app: phishnet-analysis-worker
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: phishnet-worker-pdb
+  namespace: phishnet
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      component: worker
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: phishnet-worker-hpa
+  namespace: phishnet
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: phishnet-worker
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 80
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 85
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 25
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 120
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 60
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: phishnet-analysis-worker-hpa
+  namespace: phishnet
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: phishnet-analysis-worker
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 75
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 600
+      policies:
+      - type: Percent
+        value: 20
+        periodSeconds: 120
+    scaleUp:
+      stabilizationWindowSeconds: 180
+      policies:
+      - type: Percent
+        value: 75
+        periodSeconds: 60

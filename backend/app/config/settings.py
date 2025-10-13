@@ -58,6 +58,15 @@ class Settings(BaseSettings):
     GMAIL_REDIRECT_URI: str = "https://phishnet-backend-iuoc.onrender.com/api/v1/auth/gmail/callback"
     GOOGLE_CLOUD_PROJECT: Optional[str] = None
     
+    # IMAP Configuration (ThePhish-style email forwarding)
+    IMAP_ENABLED: bool = False
+    IMAP_HOST: str = "imap.gmail.com"
+    IMAP_PORT: int = 993
+    IMAP_USER: Optional[str] = None
+    IMAP_PASSWORD: Optional[str] = None
+    IMAP_FOLDER: str = "INBOX"
+    IMAP_POLL_INTERVAL: int = 60  # Poll every 60 seconds
+    
     # OAuth Security Settings
     OAUTH_RATE_LIMIT_REQUESTS: int = 20
     OAUTH_RATE_LIMIT_WINDOW: int = 3600  # 1 hour
