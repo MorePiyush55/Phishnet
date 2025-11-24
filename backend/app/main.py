@@ -211,7 +211,7 @@ except Exception as e:
     logger.error(f"OAuth router failed to load: {e}")
     router_errors.append(f"OAuth: {e}")
 
-# IMAP Email Integration Router (ThePhish-style forwarded emails)
+# IMAP Email Integration Router (ThePhish-style forwarded emails - Mode 1: Bulk Forward)
 try:
     from app.api.v1.imap_emails import router as imap_emails_router
     app.include_router(imap_emails_router, prefix="/api/v1", tags=["IMAP Email Analysis"])
@@ -220,23 +220,20 @@ except Exception as e:
     logger.warning(f"IMAP email router failed to load: {e}")
     router_errors.append(f"IMAP Emails: {e}")
 
+# On-Demand Email Check Router (Gmail API + Message ID - Mode 2: Privacy-First)
+# NOTE: This router is currently being implemented in Phase 2
+# try:
+#     from app.api.v2.on_demand import router as ondemand_router
+#     app.include_router(ondemand_router, prefix="/api/v2", tags=["On-Demand Email Check"])
+#     logger.info("On-demand email check router loaded successfully")
+# except Exception as e:
+#     logger.warning(f"On-demand email check router failed to load: {e}")
+#     router_errors.append(f"On-Demand Check: {e}")
+
 # Add routers directly with robust error handling (excluding manually loaded ones)
 routers_to_add = [
-    # ("app.api.health", "Health"),  # Loaded manually above
-    # ("app.api.test_oauth", "Test OAuth"),  # Loaded manually above
     ("app.api.analytics", "Analytics Dashboard"),
-    # ("app.api.websocket", "Real-time Monitoring"),  # Temporarily disabled - SQLAlchemy conflict
-    # ("app.api.gmail_api", "Gmail Analysis"),  # Temporarily disabled - SQLAlchemy conflict
-    # ("app.api.gmail_simple", "Gmail Simple"),  # Temporarily disabled - SQLAlchemy conflict
-    ("app.api.auth_simple", "Authentication"),
-    ("app.api.simple_oauth", "Simple OAuth"),
-    # ("app.api.gmail_oauth", "Gmail OAuth"),  # Temporarily disabled - SQLAlchemy conflict
-    ("app.api.simple_analysis", "Email Analysis"),
-    # ("app.api.async_analysis", "Async Email Analysis"),  # Temporarily disabled - enum conflict
     ("app.api.websockets", "WebSocket Updates"),
-    # ("app.api.link_analysis", "Link Redirect Analysis"),  # Causes SQLAlchemy conflicts
-    # ("app.api.threat_intelligence", "Threat Intelligence"),  # Temporarily disabled - missing aiohttp
-    # ("app.api.workers", "Worker Management"),  # Temporarily disabled - Redis mock issue
     ("app.observability.routes", "Observability"),
     ("app.privacy.routes", "Privacy & Compliance")
 ]
@@ -256,38 +253,6 @@ try:
     logger.info("Main router also loaded as fallback")
 except Exception as e:
     logger.warning(f"Main router could not be loaded: {e}")
-
-# Load v1 compatibility router for OAuth
-try:
-    from app.api.test_oauth import v1_router
-    app.include_router(v1_router, tags=["OAuth v1 Compatibility"])
-    logger.info("OAuth v1 compatibility router loaded successfully")
-except Exception as e:
-    logger.warning(f"OAuth v1 compatibility router failed to load: {e}")
-
-# Load REST compatibility router for OAuth
-try:
-    from app.api.test_oauth import rest_router
-    app.include_router(rest_router, tags=["OAuth REST Compatibility"])
-    logger.info("OAuth REST compatibility router loaded successfully")
-except Exception as e:
-    logger.warning(f"OAuth REST compatibility router failed to load: {e}")
-
-# Debug router for OAuth configuration checking
-try:
-    from app.api.debug_oauth import router as debug_router
-    app.include_router(debug_router, tags=["Debug"])
-    logger.info("OAuth debug router loaded successfully")
-except Exception as e:
-    logger.warning(f"OAuth debug router failed to load: {e}")
-
-# Simple OAuth router without MongoDB complexity
-try:
-    from app.api.test_oauth import simple_router
-    app.include_router(simple_router, tags=["Simple OAuth"])
-    logger.info("Simple OAuth router loaded successfully")
-except Exception as e:
-    logger.warning(f"Simple OAuth router failed to load: {e}")
 
 if router_errors:
     logger.error(f"Router loading errors: {router_errors}")

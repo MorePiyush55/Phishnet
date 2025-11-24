@@ -427,3 +427,7 @@ phishnet_env/
 *.swp
 *.swo
 *~
+
+# External project references (keep local only)
+ThePhish/
+email-phishing-detection-add-in/

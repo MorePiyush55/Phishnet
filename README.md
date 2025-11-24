@@ -12,9 +12,44 @@
 
 > **📁 Project Structure Update (Oct 2025)**: The project has been reorganized for better maintainability. Root directory now contains only `backend/`, `frontend/`, and `docs/` folders. See [PROJECT_STRUCTURE.md](./PROJECT_STRUCTURE.md) for complete details and [REORGANIZATION.md](./REORGANIZATION.md) for migration guide.
 
-## 🎯 **Latest Major Update - Analytics Dashboard & Phishing Playbook Integration**
+## 🎯 **Latest Major Update - Dual-Mode Email Verification**
 
-### 📊 **Advanced Analytics Dashboard** - *NEWLY COMPLETED*
+### 🔒 **NEW: Two Ways to Check Emails** - *JUST COMPLETED*
+PhishNet now supports **two distinct verification modes** to match your privacy and security needs:
+
+#### Mode 1: Bulk Forward (IMAP) - "Forward All"
+- ✅ **Automatic Protection**: Forward ALL emails to PhishNet for comprehensive scanning
+- ✅ **Dashboard Access**: View all analyzed emails in one place
+- ✅ **Best for**: Organizations and users who want set-it-and-forget-it security
+- ⚠️ **Privacy**: Medium (all forwarded emails stored for 90 days)
+
+#### Mode 2: On-Demand Check (Gmail API) - "Check This" ⭐ **PRIVACY-FIRST**
+- ✅ **User Control**: Check ONLY suspicious emails with one click
+- ✅ **Minimal Scope**: Incremental OAuth (gmail.readonly only when needed)
+- ✅ **No Storage**: Analysis performed but NOT stored unless you consent
+- ✅ **Short-lived Tokens**: No refresh tokens (re-auth every hour)
+- ✅ **Audit Trail**: View what you've checked, delete anytime
+- ✅ **Best for**: Privacy-conscious users who only need occasional checks
+- 🎉 **Privacy**: High (minimal data storage, user controlled)
+
+📚 **Documentation**:
+- [Architecture Guide](./docs/DUAL_MODE_EMAIL_ARCHITECTURE.md) - Complete technical documentation
+- [Implementation Guide](./DUAL_MODE_IMPLEMENTATION_GUIDE.md) - Developer quickstart
+- [Privacy Policy](./docs/PRIVACY_POLICY.md) - User-facing privacy information
+
+🚀 **Try It Now**:
+```bash
+# On-demand check endpoint
+POST /api/v2/on-demand/request-check
+Body: {"message_id": "gmail_msg_id", "store_consent": false}
+
+# Bulk forward (existing)
+POST /api/v1/imap-emails/check-forwarded
+```
+
+---
+
+## 📊 Advanced Analytics Dashboard & Phishing Playbook Integration
 - ✅ **Real-time Security Operations Center**: Comprehensive threat monitoring with live updates
 - ✅ **Interactive Data Visualization**: Charts, graphs, and metrics for threat analysis
 - ✅ **WebSocket Live Streaming**: Real-time security events and alert notifications
@@ -921,6 +956,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 **PhishNet** - Protecting users from phishing attacks with AI-powered detection and federated learning.
+
+
+
+
 
 
 

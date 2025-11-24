@@ -336,6 +336,77 @@ class FileAnalysis(Document):
         ]
 
 
+class OAuthCredentials(Document):
+    """OAuth credentials storage for on-demand email checking."""
+    
+    user_id: Indexed(str)
+    provider: str  # "gmail", "outlook", etc.
+    
+    # Encrypted tokens
+    encrypted_access_token: str
+    encrypted_refresh_token: Optional[str] = None  # Optional for privacy-first mode
+    expires_at: Optional[datetime] = None
+    
+    # Scope tracking
+    scope: List[str] = Field(default_factory=list)
+    
+    # Encryption metadata
+    encryption_key_id: str = "fernet_aes256"
+    salt: Optional[str] = None
+    
+    # Timestamps
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    last_used_at: Optional[datetime] = None
+    
+    class Settings:
+        name = "oauth_credentials"
+        indexes = [
+            IndexModel([("user_id", ASCENDING), ("provider", ASCENDING)], unique=True),
+            IndexModel([("expires_at", ASCENDING)]),
+        ]
+
+
+class OnDemandAnalysis(Document):
+    """
+    On-demand email analysis storage (privacy-first).
+    Only stores data when user explicitly consents.
+    """
+    
+    user_id: Indexed(str)
+    gmail_message_id: Indexed(str)
+    
+    # Analysis results
+    threat_score: float = Field(ge=0.0, le=1.0)
+    risk_level: str  # "LOW", "MEDIUM", "HIGH", "CRITICAL"
+    analysis_result: Dict[str, Any] = Field(default_factory=dict)
+    
+    # Email metadata (always stored)
+    email_metadata: Dict[str, Any] = Field(default_factory=dict)  # sender, subject, date
+    
+    # Raw email content (only if user consented)
+    raw_email_content: Optional[Dict[str, Any]] = None
+    
+    # Consent tracking
+    consent_given: bool = True  # This doc only exists if consent was given
+    consent_timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    
+    # Retention policy
+    retention_until: Optional[datetime] = None  # Auto-delete after this date
+    
+    # Timestamps
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    
+    class Settings:
+        name = "on_demand_analyses"
+        indexes = [
+            IndexModel([("user_id", ASCENDING), ("created_at", DESCENDING)]),
+            IndexModel([("gmail_message_id", ASCENDING)]),
+            IndexModel([("retention_until", ASCENDING)]),  # For auto-deletion
+            IndexModel([("risk_level", ASCENDING)]),
+        ]
+
+
 # List of all document models for Beanie initialization
 DOCUMENT_MODELS = [
     User,
@@ -348,4 +419,6 @@ DOCUMENT_MODELS = [
     ThreatIntelligence,
     AnalysisJob,
     AuditLog,
+    OAuthCredentials,
+    OnDemandAnalysis,
 ]
