@@ -8,11 +8,11 @@ import time
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 from celery import current_task
-from backend.app.workers.celery_config import celery_app
-from backend.app.models.production_models import ThreatIntelligence, EmailMeta
-from backend.app.services.enhanced_ml_analyzer import get_ml_analyzer
-from backend.app.core.database import get_db
-from backend.app.core.redis_client import get_redis_client
+from app.workers.celery_config import celery_app
+from app.models.production_models import ThreatIntelligence, EmailMeta
+from app.services.enhanced_ml_analyzer import get_ml_analyzer
+from app.core.database import get_db
+from app.core.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 

@@ -69,6 +69,7 @@ class EmailScanJob(Base):
     Tracks the complete lifecycle of an email scan through the pipeline.
     """
     __tablename__ = "email_scan_jobs"
+    __table_args__ = {'extend_existing': True}
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     request_id = Column(String(255), nullable=False, index=True)
@@ -224,7 +225,7 @@ class JobLog(Base):
     
     # Message content
     message = Column(Text, nullable=False)
-    metadata = Column(JSON, nullable=True)  # Additional structured data
+    job_metadata = Column(JSON, nullable=True)  # Additional structured data
     
     # Error tracking
     exception_type = Column(String(255), nullable=True)
@@ -267,7 +268,7 @@ class WorkerHealth(Base):
     # Metadata
     version = Column(String(50), nullable=True)
     hostname = Column(String(255), nullable=True)
-    metadata = Column(JSON, nullable=True)
+    job_metadata = Column(JSON, nullable=True)
     
     @property
     def is_healthy(self) -> bool:

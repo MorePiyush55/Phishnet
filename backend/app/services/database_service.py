@@ -39,7 +39,7 @@ class DatabaseService:
         
     def _get_or_create_encryption_key(self) -> bytes:
         """Get or generate encryption key for sensitive data."""
-        key_env = getattr(settings, 'ENCRYPTION_KEY', None)
+        key_env = getattr(settings, 'privacy_encryption_key', None)
         if key_env:
             return key_env.encode()
         

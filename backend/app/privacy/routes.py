@@ -11,14 +11,14 @@ from pydantic import BaseModel, Field
 import io
 import json
 
-from backend.app.privacy import (
+from app.privacy import (
     PrivacyComplianceManager,
     ConsentType,
     PrivacyRightType,
     redact_sensitive_data
 )
-from backend.app.core.config import get_settings
-from backend.app.observability import get_logger, trace_function
+from app.core.config import get_settings
+from app.observability import get_logger, trace_function
 
 router = APIRouter(prefix="/privacy", tags=["Privacy & Compliance"])
 logger = get_logger(__name__)
@@ -62,7 +62,7 @@ class PrivacyDashboard(BaseModel):
 async def get_privacy_manager() -> PrivacyComplianceManager:
     """Dependency to get privacy compliance manager."""
     # In production, this would be injected properly
-    from backend.app.db.mongodb import MongoDBManager
+    from app.db.mongodb import MongoDBManager
     encryption_key = getattr(settings, 'PRIVACY_ENCRYPTION_KEY', 'default-key-change-in-production')
     return PrivacyComplianceManager(MongoDBManager, encryption_key)
 

@@ -18,15 +18,15 @@ from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-from backend.app.models.consent import (
+from app.models.consent import (
     UserConsent, ConsentAuditLog, UserDataArtifact, ConsentTemplate,
     ConsentScope, DataProcessingType, RetentionPolicy
 )
-from backend.app.models.production_models import OAuthCredentials
-from backend.app.core.database import get_db
-from backend.app.core.config import get_settings
-from backend.app.core.redis_client import get_redis_client
-from backend.app.core.security import get_encryption_key
+from app.models.production_models import OAuthCredentials
+from app.core.database import get_db
+from app.core.config import get_settings
+from app.core.redis_client import get_redis_client
+from app.core.security import get_encryption_key
 
 logger = logging.getLogger(__name__)
 

@@ -39,7 +39,7 @@ class OAuthSecurityManager:
         """Get or create master encryption key using PBKDF2."""
         try:
             # Use environment variable or generate secure key
-            password = settings.ENCRYPTION_KEY.encode()
+            password = settings.privacy_encryption_key.encode()
             salt = settings.SECRET_KEY[:16].encode()  # Use first 16 chars of secret key as salt
             
             kdf = PBKDF2HMAC(

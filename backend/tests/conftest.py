@@ -686,7 +686,7 @@ def clean_db(db_session):
     """Clean database before each test."""
     # Clear all tables
     from app.models.email import Email
-    from app.models.detection import Detection
+    from app.models.analysis.detection import Detection
     from app.models.scoring import EmailScore, EmailAction
     from app.models.user import User
     

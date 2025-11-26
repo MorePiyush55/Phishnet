@@ -9,8 +9,8 @@ import secrets
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 
-from backend.app.privacy import PIIRedactor, ConsentType, PrivacyRightType
-from backend.app.observability import get_logger
+from app.privacy import PIIRedactor, ConsentType, PrivacyRightType
+from app.observability import get_logger
 
 logger = get_logger(__name__)
 

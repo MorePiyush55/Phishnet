@@ -174,7 +174,7 @@ async def get_detection(
     db: Session = Depends(get_db)
 ):
     """Get specific detection result."""
-    from app.models.detection import Detection
+    from app.models.analysis.detection import Detection
     
     detection = db.query(Detection).filter(
         Detection.id == detection_id,

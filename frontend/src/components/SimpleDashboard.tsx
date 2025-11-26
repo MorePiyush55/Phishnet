@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { Shield, Mail, RefreshCw, Eye, LogOut, Link, ExternalLink } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Shield, Mail, Eye, LogOut, Link, Activity } from 'lucide-react';
 import { GmailEmailList } from './GmailEmailList';
 import { useNavigate } from 'react-router-dom';
+import { useWebSocket } from '../hooks/useWebSocket';
 
 interface GmailEmail {
   id: string;
@@ -23,6 +24,17 @@ const SimpleDashboard: React.FC = () => {
   const userEmail = localStorage.getItem('user_email') || '';
   const isOAuthUser = localStorage.getItem('oauth_success') === 'true';
 
+  // WebSocket Connection
+  const { isConnected, lastMessage } = useWebSocket('ws://localhost:8002/ws');
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  useEffect(() => {
+    if (lastMessage?.type === 'ANALYSIS_COMPLETE') {
+      // Trigger refresh when new analysis arrives
+      setRefreshTrigger(prev => prev + 1);
+    }
+  }, [lastMessage]);
+
   const handleLogout = () => {
     // Clear authentication
     localStorage.removeItem('oauth_success');
@@ -31,7 +43,7 @@ const SimpleDashboard: React.FC = () => {
     localStorage.removeItem('isAuthenticated');
     localStorage.removeItem('authMethod');
     localStorage.removeItem('authTimestamp');
-    
+
     // Redirect to home
     window.location.href = '/';
   };
@@ -45,7 +57,7 @@ const SimpleDashboard: React.FC = () => {
             <Shield className="h-8 w-8 text-blue-400" />
             <h1 className="text-2xl font-bold">PhishNet SOC Dashboard</h1>
           </div>
-          
+
           <div className="flex items-center space-x-4">
             <button
               onClick={() => navigate('/link-analysis')}
@@ -54,6 +66,10 @@ const SimpleDashboard: React.FC = () => {
               <Link className="h-4 w-4" />
               <span>Link Analysis</span>
             </button>
+            <div className="flex items-center space-x-2 text-sm text-gray-300">
+              <Activity className={`h-4 w-4 ${isConnected ? 'text-green-400' : 'text-red-400'}`} />
+              <span className="hidden md:inline">{isConnected ? 'Live' : 'Offline'}</span>
+            </div>
             <div className="flex items-center space-x-2 text-sm text-gray-300">
               <Mail className="h-4 w-4" />
               <span>{userEmail}</span>
@@ -75,12 +91,13 @@ const SimpleDashboard: React.FC = () => {
           <div className="p-4 border-b border-gray-700">
             <h2 className="text-lg font-semibold">Email Analysis</h2>
           </div>
-          
+
           <div className="flex-1 overflow-y-auto">
             {isOAuthUser && userEmail ? (
-              <GmailEmailList 
-                userEmail={userEmail} 
+              <GmailEmailList
+                userEmail={userEmail}
                 onEmailSelect={setSelectedEmail}
+                refreshTrigger={refreshTrigger}
               />
             ) : (
               <div className="p-6 text-center text-gray-400">
@@ -97,7 +114,7 @@ const SimpleDashboard: React.FC = () => {
           <div className="p-4 border-b border-gray-700">
             <h2 className="text-lg font-semibold">Email Details</h2>
           </div>
-          
+
           <div className="flex-1 overflow-y-auto p-4">
             {selectedEmail ? (
               <div className="space-y-4">
@@ -119,12 +136,11 @@ const SimpleDashboard: React.FC = () => {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <span>Risk Level:</span>
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        selectedEmail.phishing_analysis.risk_level === 'HIGH' ? 'bg-red-900 text-red-300' :
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${selectedEmail.phishing_analysis.risk_level === 'HIGH' ? 'bg-red-900 text-red-300' :
                         selectedEmail.phishing_analysis.risk_level === 'MEDIUM' ? 'bg-orange-900 text-orange-300' :
-                        selectedEmail.phishing_analysis.risk_level === 'LOW' ? 'bg-yellow-900 text-yellow-300' :
-                        'bg-green-900 text-green-300'
-                      }`}>
+                          selectedEmail.phishing_analysis.risk_level === 'LOW' ? 'bg-yellow-900 text-yellow-300' :
+                            'bg-green-900 text-green-300'
+                        }`}>
                         {selectedEmail.phishing_analysis.risk_level}
                       </span>
                     </div>

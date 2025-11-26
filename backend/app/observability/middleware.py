@@ -9,7 +9,7 @@ from typing import Callable
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from backend.app.observability import (
+from app.observability import (
     get_logger, 
     tracing_manager, 
     performance_monitor,

@@ -4,7 +4,7 @@ Exposes PhishNet application metrics in Prometheus format.
 """
 
 from fastapi import APIRouter, Response
-from backend.app.observability.metrics import metrics
+from app.observability.metrics import metrics
 
 router = APIRouter()
 

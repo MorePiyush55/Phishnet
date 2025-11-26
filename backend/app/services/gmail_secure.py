@@ -60,11 +60,10 @@ class SecureGmailService:
     
     def _get_encryption_key(self) -> bytes:
         """Get encryption key from settings (must be 32 bytes)."""
-        key = settings.ENCRYPTION_KEY.encode()
-        if len(key) != 32:
-            # Generate a proper key from the provided key
-            return hashlib.sha256(key).digest()
-        return key
+        key = settings.privacy_encryption_key
+        if len(key) == 44:
+            return key.encode()
+        return base64.urlsafe_b64encode(hashlib.sha256(key.encode()).digest())
     
     def _encrypt_credentials(self, credentials_json: str) -> str:
         """Encrypt OAuth credentials for secure storage."""

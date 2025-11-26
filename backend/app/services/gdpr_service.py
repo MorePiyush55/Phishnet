@@ -13,16 +13,16 @@ import tempfile
 import os
 from enum import Enum
 
-from backend.app.models.consent import (
+from app.models.consent import (
     UserConsent, ConsentAuditLog, UserDataArtifact,
     DataProcessingType, RetentionPolicy
 )
-from backend.app.models.production_models import (
+from app.models.production_models import (
     EmailMeta, ScanResult, ThreatIntelligence, UserActivity
 )
-from backend.app.core.database import get_db
-from backend.app.core.config import get_settings
-from backend.app.core.redis_client import get_redis_client
+from app.core.database import get_db
+from app.core.config import get_settings
+from app.core.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 

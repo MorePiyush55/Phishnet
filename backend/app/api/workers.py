@@ -10,11 +10,11 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import HTMLResponse
 import json
 
-from backend.app.workers.worker_manager import WorkerManager
-from backend.app.workers.task_prioritizer import TaskPrioritizer, QueueOptimizer
-from backend.app.tasks.dlq_handler import get_dlq_stats, replay_dlq_task
-from backend.app.core.redis_client import get_redis_client
-from backend.app.workers.celery_config import celery_app
+from app.workers.worker_manager import WorkerManager
+from app.workers.task_prioritizer import TaskPrioritizer, QueueOptimizer
+from app.tasks.dlq_handler import get_dlq_stats, replay_dlq_task
+from app.core.redis_client import get_redis_client
+from app.workers.celery_config import celery_app
 
 logger = logging.getLogger(__name__)
 

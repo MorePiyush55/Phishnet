@@ -23,16 +23,26 @@ from app.orchestrator.enhanced_threat_orchestrator import (
     EnhancedThreatOrchestrator
 )
 
-# Import sandbox components
-import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'sandbox'))
-
-from job_queue import SandboxJobQueue, SandboxJob, JobPriority, JobStatus
-from orchestrator import ThreatOrchestrator as SandboxOrchestrator
-from artifact_storage import get_artifact_manager
-
 logger = get_logger(__name__)
+
+# Import sandbox components
+try:
+    import sys
+    import os
+    sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'sandbox'))
+
+    from job_queue import SandboxJobQueue, SandboxJob, JobPriority, JobStatus
+    from orchestrator import ThreatOrchestrator as SandboxOrchestrator
+    from artifact_storage import get_artifact_manager
+    SANDBOX_AVAILABLE = True
+except ImportError:
+    logger.warning("Sandbox components not found. Sandbox integration disabled.")
+    SANDBOX_AVAILABLE = False
+    SandboxOrchestrator = None
+    SandboxJobQueue = None
+    SandboxJob = None
+    JobPriority = None
+    JobStatus = None
 
 
 @dataclass
@@ -87,7 +97,7 @@ class SandboxIntegratedOrchestrator(EnhancedThreatOrchestrator):
         """Initialize orchestrator with sandbox integration."""
         await super().initialize()
         
-        if self.sandbox_enabled:
+        if self.sandbox_enabled and SandboxOrchestrator:
             try:
                 self.sandbox_orchestrator = SandboxOrchestrator()
                 logger.info("Sandbox orchestrator initialized successfully")

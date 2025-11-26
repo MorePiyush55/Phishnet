@@ -12,7 +12,7 @@ from sqlalchemy import and_, or_
 from app.config.logging import get_logger
 from app.core.database import SessionLocal
 from app.models.core.email import Email, EmailStatus
-from app.models.analysis.scoring import EmailAction, ActionType, ActionStatus, EmailScore, ScoringRule
+from app.models.analysis.scoring import EmailAction, ScoringActionType as ActionType, ActionStatus, EmailScore, ScoringRule
 from app.models.analysis.link_analysis import LinkAnalysis, EmailAIResults, EmailIndicators
 from app.services.gmail import GmailService
 from app.services.audit import AuditService

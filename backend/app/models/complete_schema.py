@@ -12,7 +12,7 @@ from sqlalchemy.orm import relationship, Session
 from sqlalchemy.sql import func
 import enum
 
-from backend.app.core.database import Base
+from app.core.database import Base
 
 class UserRole(str, enum.Enum):
     ADMIN = "admin"
@@ -49,6 +49,7 @@ class IndicatorType(str, enum.Enum):
 class User(Base):
     """User accounts with role-based access control"""
     __tablename__ = "users"
+    __table_args__ = {'extend_existing': True}
     
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, nullable=False, index=True)

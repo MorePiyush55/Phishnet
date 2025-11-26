@@ -2,51 +2,8 @@ services:
   - type: web
     name: phishnet-backend
     env: python
-    plan: starter
-    buildCommand: pip install --no-cache-dir -r requirements.txt
+    buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
-        value: 3.13
-      - key: PORT
-        generateValue: true
-      - key: MONGODB_URI
-        value: mongodb+srv://Propam:Propam%405553@phisnet-db.4qvmhkw.mongodb.net/?retryWrites=true&w=majority&appName=PhisNet-DB
-      - key: SECRET_KEY
-        generateValue: true
-      - key: JWT_SECRET_KEY
-        generateValue: true
-      - key: FRONTEND_URL
-        value: https://phishnet-frontend.vercel.app
-      - key: ENVIRONMENT
-        value: production
-      - key: DEBUG
-        value: false
-      - key: CORS_ORIGINS
-        value: https://phishnet-frontend.vercel.app,https://localhost:3000,https://phishnet-rouge.vercel.app
-      - key: APP_NAME
-        value: PhishNet
-      - key: APP_VERSION
-        value: 1.0.0
-      - key: REDIS_URL
-        value: ""
-    healthCheckPath: /health
-
-# Optional Redis service (commented out for now)
-# - type: redis
-#   name: phishnet-redis
-#   plan: free
-
-# Environment Variables (Set in Render Dashboard)
-# GOOGLE_CLIENT_ID=your-google-client-id
-# GOOGLE_CLIENT_SECRET=your-google-client-secret
-# JWT_SECRET=your-jwt-secret-key
-# REDIS_URL=redis://your-redis-instance
-# SECRET_KEY=your-app-secret-key
-# ENVIRONMENT=production
-#      - key: GOOGLE_REDIRECT_URI
-#        value: https://phishnet-1ed1.onrender.com/auth/google/callback
-#      - key: FRONTEND_URL
-#        value: https://phishnet-rouge.vercel.app
-#      - key: NODE_ENV
-#        value: production
+        value: 3.11.0

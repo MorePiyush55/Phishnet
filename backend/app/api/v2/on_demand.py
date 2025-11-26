@@ -60,7 +60,9 @@ async def get_auth_url(user_id: str):
 
 @router.get("/auth/callback")
 async def auth_callback(code: str, state: str):
-    """Handle OAuth callback and return the access token."""
+    """
+    Handle OAuth callback and return the access token via HTML for the extension to scrape.
+    """
     try:
         # Verify state
         state_data = gmail_ondemand_service.verify_state_token(state)
@@ -68,12 +70,57 @@ async def auth_callback(code: str, state: str):
         # Exchange code
         tokens = await gmail_ondemand_service.exchange_code_for_token(code)
         
-        return {
-            "success": True,
-            "access_token": tokens["access_token"],
-            "expires_in": tokens["expires_in"],
-            "user_id": state_data["user_id"]
-        }
+        # Return HTML with token embedded
+        from fastapi.responses import HTMLResponse
+        
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>PhishNet Authentication Success</title>
+            <style>
+                body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #f0f2f5; margin: 0; }}
+                .container {{ text-align: center; background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
+                h1 {{ color: #1a73e8; }}
+                p {{ color: #5f6368; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>Authentication Successful!</h1>
+                <p>You can now close this tab and return to Gmail.</p>
+                <div id="phishnet-token-data" style="display: none;" 
+                     data-token="{tokens['access_token']}" 
+                     data-expires="{tokens['expires_in']}"
+                     data-user="{state_data['user_id']}"></div>
+            </div>
+        </body>
+        </html>
+        """
+        return HTMLResponse(content=html_content)
+
     except Exception as e:
         logger.error(f"Auth callback failed: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/history")
+async def get_check_history(user_id: str, limit: int = 50):
+    """
+    Get history of on-demand checks for a user.
+    Only returns checks where store_consent was True.
+    """
+    try:
+        from app.models.mongodb_models import OnDemandAnalysis
+        
+        history = await OnDemandAnalysis.find(
+            OnDemandAnalysis.user_id == user_id
+        ).sort("-created_at").limit(limit).to_list()
+        
+        return {
+            "success": True,
+            "count": len(history),
+            "history": history
+        }
+    except Exception as e:
+        logger.error(f"Failed to fetch history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

@@ -439,7 +439,7 @@ class AnalyzerWorker(BaseWorker):
         
         return result
     
-    @cached(ttl=3600)  # Cache API results for 1 hour
+    @cached(ttl_seconds=3600)  # Cache API results for 1 hour
     async def _call_api(self, api_name: str, resource: str, resource_type: str) -> Dict[str, Any]:
         """Call specific API with caching"""
         

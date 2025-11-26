@@ -9,9 +9,9 @@ from typing import Callable, Any, Dict
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from backend.app.privacy import PIIRedactor, redact_sensitive_data
-from backend.app.privacy.database import privacy_db
-from backend.app.observability import get_logger
+from app.privacy import PIIRedactor, redact_sensitive_data
+from app.privacy.database import privacy_db
+from app.observability import get_logger
 
 logger = get_logger(__name__)
 
@@ -222,7 +222,7 @@ class ConsentEnforcementMiddleware(BaseHTTPMiddleware):
             
             if user_id:
                 # Check if user has granted data processing consent
-                from backend.app.privacy import ConsentType
+                from app.privacy import ConsentType
                 # This would check the database for consent
                 # has_consent = await consent_manager.has_consent(user_id, ConsentType.DATA_PROCESSING)
                 

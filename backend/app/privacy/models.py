@@ -9,7 +9,7 @@ from enum import Enum
 from beanie import Document, Indexed
 from pydantic import Field
 
-from backend.app.privacy import ConsentType, PrivacyRightType, DataRetentionPeriod
+from app.privacy import ConsentType, PrivacyRightType, DataRetentionPeriod
 
 class ConsentRecord(Document):
     """MongoDB model for user consent records."""

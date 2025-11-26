@@ -6,7 +6,7 @@ Handles task queuing, prioritization, and distributed processing.
 import os
 from celery import Celery
 from kombu import Queue, Exchange
-from backend.app.core.config import get_settings
+from app.core.config import get_settings
 
 # Get settings
 settings = get_settings()
@@ -177,7 +177,7 @@ celery_app.conf.worker_autoscale_min = 2   # Min 2 workers per node
 @celery_app.task(bind=True)
 def task_failure_handler(self, task_id, error, traceback, einfo):
     """Handle task failures and route to DLQ if needed."""
-    from backend.app.tasks.dlq_handler import handle_task_failure
+    from app.tasks.dlq_handler import handle_task_failure
     return handle_task_failure.delay(task_id, str(error), traceback)
 
 # Custom task base class for enhanced error handling

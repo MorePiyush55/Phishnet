@@ -12,12 +12,12 @@ from fastapi.security import HTTPBearer
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
-from backend.app.core.database import get_db
-from backend.app.core.auth import get_current_user
-from backend.app.schemas.auth import TokenPayload
-from backend.app.services.consent_oauth_service import get_consent_oauth_service
-from backend.app.services.consent_tracking_service import get_consent_tracking_service
-from backend.app.models.consent import ConsentScope, DataProcessingType, RetentionPolicy
+from app.core.database import get_db
+from app.core.auth import get_current_user
+from app.schemas.auth import TokenPayload
+from app.services.consent_oauth_service import get_consent_oauth_service
+from app.services.consent_tracking_service import get_consent_tracking_service
+from app.models.consent import ConsentScope, DataProcessingType, RetentionPolicy
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/consent", tags=["consent-management"])

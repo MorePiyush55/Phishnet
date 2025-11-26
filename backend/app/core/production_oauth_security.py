@@ -59,7 +59,7 @@ class ProductionOAuthSecurityManager:
         """Get or create master encryption key using PBKDF2."""
         try:
             # Use configured encryption key or generate one
-            encryption_password = getattr(settings, 'ENCRYPTION_KEY', None)
+            encryption_password = getattr(settings, 'privacy_encryption_key', None)
             if not encryption_password:
                 encryption_password = settings.SECRET_KEY
             

@@ -13,6 +13,7 @@ from app.core.database import Base
 class UserRole(enum.Enum):
     VIEWER = "viewer"
     USER = "user"
+    ANALYST = "analyst"
     ADMIN = "admin"
     SUPERUSER = "superuser"
 
@@ -21,6 +22,7 @@ class User(Base):
     """User model for authentication and user management."""
     
     __tablename__ = "users"
+    __table_args__ = {'extend_existing': True}
     
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, index=True, nullable=False)

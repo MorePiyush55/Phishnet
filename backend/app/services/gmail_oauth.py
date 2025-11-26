@@ -93,10 +93,10 @@ class GmailOAuth2Service:
         
     def _get_encryption_key(self) -> bytes:
         """Get or generate encryption key for OAuth tokens."""
-        key = settings.ENCRYPTION_KEY.encode()
-        if len(key) != 32:
-            return hashlib.sha256(key).digest()
-        return key
+        key = settings.privacy_encryption_key
+        if len(key) == 44:
+            return key.encode()
+        return base64.urlsafe_b64encode(hashlib.sha256(key.encode()).digest())
     
     def _encrypt_token(self, token_data: str) -> str:
         """Encrypt OAuth token for secure storage."""

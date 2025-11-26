@@ -10,8 +10,8 @@ from sqlalchemy import desc, asc, and_, or_
 from app.core.database import get_db
 from app.api.auth import get_current_active_user, require_viewer, require_analyst
 from app.models.user import User
-from app.models.email import Email, EmailStatus
-from app.models.detection import Detection
+from app.models.core.email import Email, EmailStatus
+from app.models.analysis.detection import Detection
 from src.common.constants import ThreatLevel
 from app.schemas.email import (
     EmailResponse, EmailListResponse, EmailDetailResponse,

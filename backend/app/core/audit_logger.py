@@ -104,7 +104,7 @@ class AuditEvent:
     affected_resources: Optional[List[str]] = None
 
 # Database model for audit logs
-from backend.app.core.database import Base
+from app.core.database import Base
 
 class AuditLog(Base):
     """Database model for audit logs"""

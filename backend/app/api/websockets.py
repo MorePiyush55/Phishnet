@@ -12,8 +12,8 @@ import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from fastapi.websockets import WebSocketState
 
-from backend.app.workers.celery_config import celery_app
-from backend.app.core.redis_client import get_redis_client
+from app.workers.celery_config import celery_app
+from app.core.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 

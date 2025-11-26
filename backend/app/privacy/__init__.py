@@ -18,7 +18,7 @@ import base64
 import re
 import asyncio
 
-from backend.app.observability import get_logger, trace_function
+from app.observability import get_logger, trace_function
 
 logger = get_logger(__name__)
 

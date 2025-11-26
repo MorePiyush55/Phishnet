@@ -19,7 +19,7 @@ try:
 except ImportError:
     PROMETHEUS_AVAILABLE = False
 
-from backend.app.observability import get_logger
+from app.observability import get_logger
 
 logger = get_logger(__name__)
 

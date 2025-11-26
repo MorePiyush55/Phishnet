@@ -5,7 +5,7 @@ Handles CRUD operations for consent, audit logs, and data subject requests.
 
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
-from backend.app.privacy.models import (
+from app.privacy.models import (
     ConsentRecord,
     DataSubjectRequest,
     AuditLog,
@@ -14,8 +14,8 @@ from backend.app.privacy.models import (
     DataProcessingLog,
     ComplianceReport
 )
-from backend.app.privacy import ConsentType, PrivacyRightType, DataRetentionPeriod
-from backend.app.observability import get_logger, trace_function
+from app.privacy import ConsentType, PrivacyRightType, DataRetentionPeriod
+from app.observability import get_logger, trace_function
 
 logger = get_logger(__name__)
 

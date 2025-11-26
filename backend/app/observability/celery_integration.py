@@ -14,7 +14,7 @@ from celery.signals import (
     task_retry
 )
 
-from backend.app.observability import (
+from app.observability import (
     get_logger,
     tracing_manager, 
     error_capture,

@@ -10,21 +10,21 @@ import uuid
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from pydantic import BaseModel, Field
 
-from backend.app.workers.celery_config import celery_app
-from backend.app.tasks.scan_tasks import (
+from app.workers.celery_config import celery_app
+from app.tasks.scan_tasks import (
     quick_email_scan, full_email_scan, sandbox_analysis, 
     link_safety_check, deep_attachment_scan
 )
-from backend.app.tasks.analysis_tasks import (
+from app.tasks.analysis_tasks import (
     basic_threat_analysis, ml_threat_detection, 
     reputation_lookup, advanced_ml_analysis, threat_intelligence_lookup
 )
-from backend.app.workers.task_prioritizer import TaskPrioritizer
-from backend.app.core.redis_client import get_redis_client
+from app.workers.task_prioritizer import TaskPrioritizer
+from app.core.redis_client import get_redis_client
 
 # Import with fallbacks for auth
 try:
-    from backend.app.core.auth_simple import get_current_user
+    from app.core.auth_simple import get_current_user
 except ImportError:
     def get_current_user():
         return {"id": 1, "username": "demo"}

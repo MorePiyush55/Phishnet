@@ -27,9 +27,10 @@ interface GmailEmailsResponse {
 interface GmailEmailListProps {
   userEmail: string;
   onEmailSelect?: (email: GmailEmail) => void;
+  refreshTrigger?: number;
 }
 
-export const GmailEmailList: React.FC<GmailEmailListProps> = ({ userEmail, onEmailSelect }) => {
+export const GmailEmailList: React.FC<GmailEmailListProps> = ({ userEmail, onEmailSelect, refreshTrigger = 0 }) => {
   const [emails, setEmails] = useState<GmailEmail[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -89,21 +90,21 @@ export const GmailEmailList: React.FC<GmailEmailListProps> = ({ userEmail, onEma
 
     setLoading(true);
     setError(null);
-    
+
     try {
       console.log('Fetching Gmail emails for:', userEmail, pageToken ? `Page token: ${pageToken}` : 'Initial fetch');
-      
+
       const apiUrl = 'https://phishnet-backend-iuoc.onrender.com';
-      
+
       const requestBody: any = {
         user_email: userEmail,
         max_emails: 50  // Fetch reasonable number of emails
       };
-      
+
       if (pageToken) {
         requestBody.page_token = pageToken;
       }
-      
+
       const response = await fetch(`${apiUrl}/api/gmail-simple/analyze`, {
         method: 'POST',
         headers: {
@@ -121,14 +122,14 @@ export const GmailEmailList: React.FC<GmailEmailListProps> = ({ userEmail, onEma
         } catch (e) {
           errorData = { detail: await response.text() };
         }
-        
+
         console.error('Gmail API error response:', errorData);
         throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
       }
 
       const data: GmailEmailsResponse = await response.json();
       console.log('Gmail emails received:', data);
-      
+
       if (data && data.emails) {
         if (append) {
           setEmails(prev => [...prev, ...data.emails]);
@@ -144,16 +145,16 @@ export const GmailEmailList: React.FC<GmailEmailListProps> = ({ userEmail, onEma
         console.warn('No emails in response:', data);
         if (!append) setEmails([]);
       }
-      
+
     } catch (err) {
       console.error('Gmail email fetch error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch Gmail emails';
       setError(errorMessage);
-      
+
       // Fallback to mock data if API fails
       console.log('Using mock data fallback due to API error...');
       setEmails(mockEmails);
-      
+
     } finally {
       setLoading(false);
     }
@@ -179,7 +180,7 @@ export const GmailEmailList: React.FC<GmailEmailListProps> = ({ userEmail, onEma
       setEmails(mockEmails);
       setLoading(false);
     }
-  }, [userEmail]);
+  }, [userEmail, refreshTrigger]);
 
   const getRiskColor = (riskLevel: string) => {
     switch (riskLevel) {
@@ -298,23 +299,23 @@ export const GmailEmailList: React.FC<GmailEmailListProps> = ({ userEmail, onEma
                       <span className="ml-1">{email.phishing_analysis.risk_level}</span>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center space-x-4 text-sm text-gray-400 mb-2">
                     <span>From: {email.sender}</span>
                     <span>{formatDate(email.received_at)}</span>
                   </div>
-                  
+
                   <p className="text-sm text-gray-300 line-clamp-2">
                     {email.snippet}
                   </p>
-                  
+
                   {email.phishing_analysis.summary && (
                     <div className="mt-2 p-2 bg-gray-800 rounded text-xs text-gray-300">
                       <strong>Analysis:</strong> {email.phishing_analysis.summary}
                     </div>
                   )}
                 </div>
-                
+
                 <div className="ml-4 flex-shrink-0">
                   <div className="text-right">
                     <div className="text-sm font-medium text-white">
@@ -340,7 +341,7 @@ export const GmailEmailList: React.FC<GmailEmailListProps> = ({ userEmail, onEma
           <div className="text-center text-sm text-gray-400">
             Showing {fetchedEmails} of {totalEmails} emails
           </div>
-          
+
           {/* Load More Button */}
           {nextPageToken && (
             <div className="text-center">
@@ -355,7 +356,7 @@ export const GmailEmailList: React.FC<GmailEmailListProps> = ({ userEmail, onEma
               </button>
             </div>
           )}
-          
+
           {/* No More Emails Message */}
           {!nextPageToken && totalEmails > 0 && (
             <div className="text-center text-sm text-gray-500">

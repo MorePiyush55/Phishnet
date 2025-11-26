@@ -67,6 +67,15 @@ class Settings(BaseSettings):
     IMAP_FOLDER: str = "INBOX"
     IMAP_POLL_INTERVAL: int = 60  # Poll every 60 seconds
     
+    # SMTP Configuration (For sending replies)
+    SMTP_ENABLED: bool = False
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SMTP_FROM_EMAIL: str = "noreply@phishnet.ai"
+    SMTP_FROM_NAME: str = "PhishNet Security"
+    
     # OAuth Security Settings
     OAUTH_RATE_LIMIT_REQUESTS: int = 20
     OAUTH_RATE_LIMIT_WINDOW: int = 3600  # 1 hour

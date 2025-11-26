@@ -10,14 +10,14 @@ import json
 import secrets
 from enum import Enum
 
-from backend.app.models.consent import (
+from app.models.consent import (
     UserConsent, ConsentAuditLog, UserDataArtifact, ConsentTemplate,
     ConsentScope, DataProcessingType, RetentionPolicy,
     create_default_consent_template, calculate_artifact_expiry
 )
-from backend.app.core.database import get_db
-from backend.app.core.config import get_settings
-from backend.app.core.redis_client import get_redis_client
+from app.core.database import get_db
+from app.core.config import get_settings
+from app.core.redis_client import get_redis_client
 
 logger = logging.getLogger(__name__)
 

@@ -10,7 +10,7 @@ from typing import Dict, List, Optional, Any
 from enum import Enum
 import json
 
-from backend.app.core.database import Base
+from app.core.database import Base
 
 class ConsentScope(Enum):
     """OAuth scopes for Gmail access"""

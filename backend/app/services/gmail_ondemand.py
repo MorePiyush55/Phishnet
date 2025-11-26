@@ -44,10 +44,10 @@ class GmailOnDemandService:
         
     def _get_encryption_key(self) -> bytes:
         """Get encryption key for token storage."""
-        key = getattr(settings, 'ENCRYPTION_KEY', 'default-encryption-key-change-this').encode()
-        if len(key) != 32:
-            return hashlib.sha256(key).digest()
-        return key
+        key = getattr(settings, 'privacy_encryption_key', 'Eu8zqPoxLiuy-qAGUJzEHyOfJG08pgpxrF6TRI4hbtI=')
+        if len(key) == 44:
+            return key.encode()
+        return base64.urlsafe_b64encode(hashlib.sha256(key.encode()).digest())
     
     def _encrypt_token(self, token: str) -> str:
         """Encrypt access token for secure storage."""
@@ -97,8 +97,8 @@ class GmailOnDemandService:
             raise ValueError("GMAIL_CLIENT_ID not configured")
         
         if not redirect_uri:
-            base_url = getattr(settings, 'BASE_URL', 'http://localhost:8000')
-            redirect_uri = f"{base_url}/api/v2/on-demand/auth/callback"
+            base_url = getattr(settings, 'BASE_URL', 'http://localhost:8002')
+            redirect_uri = f"{base_url}/api/v2/auth/callback"
         
         params = {
             "client_id": client_id,
@@ -171,8 +171,8 @@ class GmailOnDemandService:
             raise ValueError("OAuth credentials not configured")
         
         if not redirect_uri:
-            base_url = getattr(settings, 'BASE_URL', 'http://localhost:8000')
-            redirect_uri = f"{base_url}/api/v2/on-demand/auth/callback"
+            base_url = getattr(settings, 'BASE_URL', 'http://localhost:8002')
+            redirect_uri = f"{base_url}/api/v2/auth/callback"
         
         token_data = {
             "client_id": client_id,
@@ -348,7 +348,6 @@ class GmailOnDemandService:
         Returns:
             Dict with analysis results or need_oauth flag
         """
-        from app.workers.threat_analyzer import analyze_email_content
         
         # Check if we have a valid access token
         if not access_token:
@@ -369,7 +368,23 @@ class GmailOnDemandService:
             email_content = self.extract_email_content(message)
             
             # Analyze email (pass to existing pipeline)
-            analysis_result = await analyze_email_content(email_content)
+            # Analyze email (pass to existing pipeline)
+            from app.core.orchestrator import get_orchestrator
+            orchestrator = get_orchestrator()
+            await orchestrator.start() # Ensure orchestrator is running
+            
+            orchestration_result = await orchestrator.orchestrate_email_processing(email_content)
+            
+            if orchestration_result.success:
+                analysis_result = orchestration_result.result
+            else:
+                logger.error(f"Orchestration failed: {orchestration_result.error}")
+                analysis_result = {
+                    "score": 0, 
+                    "risk_level": "UNKNOWN", 
+                    "error": orchestration_result.error,
+                    "details": "Analysis pipeline failed"
+                }
             
             # Build response
             response = {
@@ -476,40 +491,3 @@ class GmailOnDemandService:
 
 # Singleton instance
 gmail_ondemand_service = GmailOnDemandService()
-
-
-async def analyze_email_content(email_content: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Analyze email content using PhishNet pipeline.
-    This is a wrapper to the existing analysis pipeline.
-    """
-    from app.orchestrator.phishnet_orchestrator import PhishNetOrchestrator
-    
-    try:
-        orchestrator = PhishNetOrchestrator()
-        
-        # Convert email_content to expected format
-        analysis_request = {
-            "sender": email_content.get("sender", ""),
-            "subject": email_content.get("subject", ""),
-            "body": email_content.get("body_text", "") or email_content.get("body_html", ""),
-            "headers": email_content.get("headers", {}),
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
-        
-        # Run analysis
-        result = await orchestrator.analyze_email(analysis_request)
-        
-        return result
-        
-    except Exception as e:
-        logger.error(f"Email analysis failed: {e}")
-        return {
-            "threat_score": 0.0,
-            "risk_level": "ERROR",
-            "confidence": 0.0,
-            "indicators": [],
-            "reasons": [f"Analysis failed: {str(e)}"],
-            "recommendations": ["Unable to analyze email. Please try again."],
-            "processing_time_ms": 0
-        }

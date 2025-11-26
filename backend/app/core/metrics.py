@@ -454,3 +454,14 @@ class PerformanceTracker:
 
 # Global performance tracker instance
 performance_tracker = PerformanceTracker()
+
+class PerformanceMetrics:
+    emails_processed = emails_processed
+    cache_hits = cache_hits
+    cache_misses = cache_misses
+    processing_time = processing_time
+    analysis_errors = analysis_errors
+    threat_detections = threat_detections
+    false_positives = false_positives
+
+performance_metrics = PerformanceMetrics()

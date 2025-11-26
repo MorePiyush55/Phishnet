@@ -51,7 +51,10 @@ try:
 except ImportError:
     OPENTELEMETRY_AVAILABLE = False
 
-from app.core.config import get_settings
+try:
+    from app.config.settings import get_settings
+except ImportError:
+    from app.core.config import get_settings
 
 # Lazy loading of settings - only load when needed
 _settings = None

@@ -188,8 +188,8 @@ from alembic import context
 
 # Import your models here for autogenerate
 from app.models.core.user import User
-from app.models.email import Email
-from app.models.detection import Detection
+from app.models.core.email import Email
+from app.models.analysis.detection import Detection
 from app.models.federated import FederatedLearningSession
 
 # this is the Alembic Config object, which provides

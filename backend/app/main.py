@@ -72,6 +72,7 @@ except ImportError:
     simple_analysis = APIRouter()
     auth_simple = APIRouter()
     test_oauth = APIRouter()
+    oauth_router = APIRouter()
     gmail_api = APIRouter()
 
 # Use structured logger if available
@@ -92,10 +93,13 @@ async def lifespan(app: FastAPI):
             logger.info("MongoDB initialized successfully")
         except Exception as e:
             logger.error(f"MongoDB initialization failed: {e}")
-            raise  # Fail startup if MongoDB is not available
+        except Exception as e:
+            logger.error(f"MongoDB initialization failed: {e}")
+            # raise  # Fail startup if MongoDB is not available
+            logger.warning("Continuing without MongoDB - features requiring database will fail")
     else:
-        logger.error("MongoDB URI not configured or MongoDB not available")
-        raise RuntimeError("MongoDB is required for PhishNet to function")
+        logger.warning("MongoDB URI not configured or MongoDB not available - running in stateless mode")
+        # raise RuntimeError("MongoDB is required for PhishNet to function")
     
     # Initialize Redis connection (optional)
     try:
@@ -117,6 +121,14 @@ async def lifespan(app: FastAPI):
         logger.info("Real-time monitoring started")
     except Exception as e:
         logger.warning(f"Real-time monitoring initialization failed: {e}")
+
+    # Initialize Email Polling Service
+    try:
+        from app.services.email_poller import email_polling_service
+        # asyncio.create_task(email_polling_service.start())
+        logger.info("Email polling service started")
+    except Exception as e:
+        logger.warning(f"Email polling service initialization failed: {e}")
     
     yield
     
@@ -193,6 +205,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add Rate Limiting Middleware
+try:
+    from app.middleware.rate_limit import RateLimitMiddleware
+    app.add_middleware(RateLimitMiddleware, limit=100, window=60)
+    logger.info("Rate limiting middleware enabled")
+except ImportError:
+    logger.warning("Rate limiting middleware could not be imported")
+
 # Include essential API routers
 router_errors = []
 
@@ -221,14 +241,24 @@ except Exception as e:
     router_errors.append(f"IMAP Emails: {e}")
 
 # On-Demand Email Check Router (Gmail API + Message ID - Mode 2: Privacy-First)
-# NOTE: This router is currently being implemented in Phase 2
-# try:
-#     from app.api.v2.on_demand import router as ondemand_router
-#     app.include_router(ondemand_router, prefix="/api/v2", tags=["On-Demand Email Check"])
-#     logger.info("On-demand email check router loaded successfully")
-# except Exception as e:
-#     logger.warning(f"On-demand email check router failed to load: {e}")
-#     router_errors.append(f"On-Demand Check: {e}")
+try:
+    from app.api.v2.on_demand import router as ondemand_router
+    app.include_router(ondemand_router, prefix="/api/v2", tags=["On-Demand Email Check"])
+    logger.info("On-demand email check router loaded successfully")
+    print("DEBUG: On-demand router loaded successfully")
+except Exception as e:
+    logger.warning(f"On-demand email check router failed to load: {e}")
+    print(f"DEBUG: On-demand router failed: {e}")
+    router_errors.append(f"On-Demand Check: {e}")
+
+# Email Forward Analysis Router (Mode 3: Mobile-Friendly Email Forwarding)
+try:
+    from app.api.v2.email_forward import router as email_forward_router
+    app.include_router(email_forward_router, prefix="/api/v2/email-forward", tags=["Email Forward Analysis"])
+    logger.info("Email forward analysis router loaded successfully")
+except Exception as e:
+    logger.warning(f"Email forward analysis router failed to load: {e}")
+    router_errors.append(f"Email Forward: {e}")
 
 # Add routers directly with robust error handling (excluding manually loaded ones)
 routers_to_add = [

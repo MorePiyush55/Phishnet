@@ -47,7 +47,8 @@ class RedisClient:
         self._async_client: Optional[aioredis.Redis] = None
         self._connection_pool: Optional[redis.ConnectionPool] = None
         self._async_connection_pool: Optional[aioredis.ConnectionPool] = None
-    
+
+    def connect(self) -> redis.Redis:
         """Get or create Redis connection with connection pooling."""
         if self._client is None:
             try:

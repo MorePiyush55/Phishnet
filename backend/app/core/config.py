@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     # Google OAuth Configuration
     google_client_id: str = ""
     google_client_secret: str = ""
+    gmail_client_id: str = ""
+    gmail_client_secret: str = ""
     oauth_redirect_uri: str = "http://localhost:8000/api/v1/oauth/callback"
     
     # JWT Configuration
@@ -100,7 +102,7 @@ class Settings(BaseSettings):
     slow_ml_threshold_ms: float = 5000.0
     
     # Privacy and Compliance Configuration
-    privacy_encryption_key: str = "change-this-in-production-please"
+    privacy_encryption_key: str = "Eu8zqPoxLiuy-qAGUJzEHyOfJG08pgpxrF6TRI4hbtI="
     data_retention_default_days: int = 90
     gdpr_compliance_enabled: bool = True
     ccpa_compliance_enabled: bool = True
@@ -134,9 +136,11 @@ class Settings(BaseSettings):
             raise ValueError('OAuth redirect URI must be on the same domain as app_url')
         return v
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    model_config = {
+        "env_file": ".env",
+        "case_sensitive": False,
+        "extra": "ignore"
+    }
 
 # Global settings instance
 _settings = None

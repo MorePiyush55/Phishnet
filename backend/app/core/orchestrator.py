@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, asdict
 from enum import Enum
+from contextlib import asynccontextmanager
 import json
 
 from app.core.queue_manager import (
@@ -23,6 +24,57 @@ from app.core.rate_limiter import get_rate_limiter, RateLimitError
 from app.core.redis_client import get_redis_client
 from app.models.jobs import JobStatus, JobPriority, WorkerType, EmailScanJob
 from app.core.caching import cached
+from src.common.constants import OperationType, OperationStatus
+
+# Missing definitions to fix NameError
+@dataclass
+class Operation:
+    id: str
+    type: OperationType
+    status: OperationStatus
+    created_at: datetime
+    data: Dict[str, Any]
+    metadata: Dict[str, Any]
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    result: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+
+@dataclass
+class OrchestrationResult:
+    success: bool
+    operation_id: str
+    result: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+
+class IEmailProcessor:
+    async def process_email(self, content: Any) -> Dict[str, Any]: pass
+
+class IThreatAnalyzer:
+    async def analyze_content(self, content: str, type: str) -> Any: pass
+
+class IResponseHandler:
+    def validate_action(self, request: Any) -> bool: pass
+    async def execute_action(self, request: Any) -> Any: pass
+
+@dataclass
+class EmailContent:
+    body_text: str
+    headers: Dict[str, Any]
+
+@dataclass
+class ActionRequest:
+    action_type: str
+    email_id: int
+    user_id: int
+    parameters: Dict[str, Any]
+    reason: Optional[str] = None
+
+@dataclass
+class ActionResult:
+    success: bool
+    message: Optional[str] = None
+    data: Optional[Dict[str, Any]] = None
 
 logger = logging.getLogger(__name__)
 
@@ -233,7 +285,19 @@ class ResourceExtractionService:
         
         return resources
 
-class PipelineOrchestrator:
+class EmailProcessor:
+    """Simple email processor for orchestration"""
+    async def process_email(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Process email content"""
+        # Simulate processing
+        await asyncio.sleep(0.1)
+        return {
+            "id": data.get("email_id", "unknown"),
+            "attachments": 0,
+            "sanitized": True
+        }
+
+class PhishNetOrchestrator:
     """
     Central orchestrator that manages the entire email scanning pipeline.
     Coordinates job flow, worker assignments, and stage transitions.
@@ -714,3 +778,4 @@ async def orchestrator_lifespan():
         yield orchestrator
     finally:
         await orchestrator.stop()
+

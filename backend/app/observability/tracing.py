@@ -19,7 +19,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.resources import Resource, SERVICE_NAME, SERVICE_VERSION
-from opentelemetry.semantic_conventions.trace import SpanAttributes
+from opentelemetry.semconv.trace import SpanAttributes
 from opentelemetry.trace.status import Status, StatusCode
 
 from app.config.settings import settings
@@ -36,7 +36,7 @@ _emails_processed_counter: Optional[metrics.Counter] = None
 _scan_latency_histogram: Optional[metrics.Histogram] = None
 _api_error_counter: Optional[metrics.Counter] = None
 _external_api_failures_counter: Optional[metrics.Counter] = None
-_circuit_breaker_state_gauge: Optional[metrics.Gauge] = None
+_circuit_breaker_state_gauge: Optional[Any] = None
 
 
 def configure_resource() -> Resource:

@@ -407,6 +407,50 @@ class OnDemandAnalysis(Document):
         ]
 
 
+class ForwardedEmailAnalysis(Document):
+    """
+    Analysis of emails forwarded via email (mobile-friendly).
+    Users forward suspicious emails to phishnet@example.com for analysis.
+    """
+    
+    user_id: Indexed(str)  # Extracted from forwarding email address
+    forwarded_by: Indexed(str)  # Email address that forwarded
+    
+    # Original email metadata
+    original_sender: str
+    original_subject: str
+    
+    # Analysis results
+    threat_score: float = Field(ge=0.0, le=1.0)
+    risk_level: str  # "LOW", "MEDIUM", "HIGH", "CRITICAL"
+    analysis_result: Dict[str, Any] = Field(default_factory=dict)
+    
+    # Email metadata (always stored)
+    email_metadata: Dict[str, Any] = Field(default_factory=dict)
+    
+    # Raw email content (stored with consent)
+    raw_email_content: Optional[Dict[str, Any]] = None
+    
+    # Consent tracking (user forwarded = implicit consent)
+    consent_given: bool = True
+    
+    # Reply status
+    reply_sent: bool = False
+    reply_sent_at: Optional[datetime] = None
+    
+    # Timestamps
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    
+    class Settings:
+        name = "forwarded_email_analyses"
+        indexes = [
+            IndexModel([("user_id", ASCENDING), ("created_at", DESCENDING)]),
+            IndexModel([("forwarded_by", ASCENDING), ("created_at", DESCENDING)]),
+            IndexModel([("risk_level", ASCENDING)]),
+            IndexModel([("reply_sent", ASCENDING)]),
+        ]
+
+
 # List of all document models for Beanie initialization
 DOCUMENT_MODELS = [
     User,
@@ -421,4 +465,5 @@ DOCUMENT_MODELS = [
     AuditLog,
     OAuthCredentials,
     OnDemandAnalysis,
+    ForwardedEmailAnalysis,
 ]

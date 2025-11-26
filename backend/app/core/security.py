@@ -14,6 +14,8 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response as StarletteResponse
 from sqlalchemy.orm import Session
+import hashlib
+from pydantic import BaseModel
 
 from app.config.settings import settings
 from app.config.logging import get_logger
@@ -58,6 +60,12 @@ ROLE_PERMISSIONS = {
         Permission.READ_EMAILS
     ]
 }
+
+class TokenPair(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int
 
 # Security bearer for JWT tokens
 security = HTTPBearer()
@@ -139,6 +147,22 @@ class SecurityManager:
         """Get permissions for a user role"""
         permissions = ROLE_PERMISSIONS.get(role, [])
         return [p.value for p in permissions]
+
+    def get_current_user(self, credentials: HTTPAuthorizationCredentials) -> Dict[str, Any]:
+        """Get current user from JWT token"""
+        token = credentials.credentials
+        return self.verify_token(token)
+    
+    def check_role_permission(self, user_role: UserRole, required_role: UserRole) -> bool:
+        """Check if user role has permission for required role"""
+        role_hierarchy = {
+            UserRole.READONLY: 0,
+            UserRole.VIEWER: 1,
+            UserRole.ANALYST: 2,
+            UserRole.ADMIN: 3
+        }
+        
+        return role_hierarchy.get(user_role, 0) >= role_hierarchy.get(required_role, 0)
 
 
 # Global security manager instance
@@ -225,29 +249,24 @@ require_viewer = require_role(UserRole.VIEWER)
 require_email_analysis = require_permission(Permission.ANALYZE_EMAILS)
 require_user_management = require_permission(Permission.MANAGE_USERS)
 require_reports_access = require_permission(Permission.VIEW_REPORTS)
-        try:
-            payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
-            return payload
-        except jwt.ExpiredSignatureError:
-            raise HTTPException(status_code=401, detail="Token expired")
-        except jwt.JWTError:
-            raise HTTPException(status_code=401, detail="Invalid token")
-    
-    def get_current_user(self, credentials: HTTPAuthorizationCredentials) -> Dict[str, Any]:
-        """Get current user from JWT token"""
-        token = credentials.credentials
-        return self.verify_token(token)
-    
-    def check_role_permission(self, user_role: UserRole, required_role: UserRole) -> bool:
-        """Check if user role has permission for required role"""
-        role_hierarchy = {
-            UserRole.USER: 1,
-            UserRole.ANALYST: 2,
-            UserRole.ADMIN: 3,
-            UserRole.SYSTEM: 4
-        }
-        
-        return role_hierarchy.get(user_role, 0) >= role_hierarchy.get(required_role, 0)
+
+
+
+class Constants:
+    """Security constants"""
+    SECURITY_HEADERS = {
+        "X-Frame-Options": "DENY",
+        "X-Content-Type-Options": "nosniff",
+        "X-XSS-Protection": "1; mode=block",
+        "Referrer-Policy": "strict-origin-when-cross-origin"
+    }
+    CSP_POLICY = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: https:; "
+        "font-src 'self' data:;"
+    )
 
 
 class SecurityMiddleware(BaseHTTPMiddleware):
@@ -335,3 +354,16 @@ def get_current_user(credentials: HTTPAuthorizationCredentials) -> Dict[str, Any
 def check_role_permission(user_role: UserRole, required_role: UserRole) -> bool:
     """Check role permission using global security manager"""
     return get_security_manager().check_role_permission(user_role, required_role)
+
+# Alias for compatibility
+get_password_hash = hash_password
+
+def create_refresh_token(data: Dict[str, Any]) -> str:
+    """Create refresh token using global security manager"""
+    # Extract user_id from data if present, otherwise use 0 (should not happen in valid flow)
+    user_id = data.get("user_id", 0)
+    return get_security_manager().create_refresh_token(user_id)
+
+def hash_token(token: str) -> str:
+    """Hash a token for secure storage"""
+    return hashlib.sha256(token.encode()).hexdigest()

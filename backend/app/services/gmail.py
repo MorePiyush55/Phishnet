@@ -19,7 +19,7 @@ from app.config.settings import settings
 from app.config.logging import get_logger
 from app.core.database import get_db
 from app.models.user import User
-from app.models.email import Email, EmailStatus
+from app.models.core.email import Email, EmailStatus
 from app.orchestrator.utils import email_orchestrator
 
 logger = get_logger(__name__)

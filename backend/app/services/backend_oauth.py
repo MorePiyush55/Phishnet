@@ -37,7 +37,7 @@ class BackendOAuthService:
         self.client_id = settings.GMAIL_CLIENT_ID
         self.client_secret = settings.GMAIL_CLIENT_SECRET
         self.redirect_uri = settings.GMAIL_REDIRECT_URI
-        self.encryption_key = settings.ENCRYPTION_KEY
+        self.encryption_key = settings.privacy_encryption_key
         self.cipher_suite = Fernet(self.encryption_key.encode() if isinstance(self.encryption_key, str) else self.encryption_key)
         self.redis_client = get_redis_client()
         

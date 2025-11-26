@@ -9,7 +9,7 @@ import psutil
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 from celery import current_app
-from backend.app.workers.celery_config import celery_app
+from app.workers.celery_config import celery_app
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ class WorkerManager:
         """Get detailed queue status and metrics."""
         try:
             # Get queue lengths from Redis
-            from backend.app.core.redis_client import get_redis_client
+            from app.core.redis_client import get_redis_client
             redis_client = get_redis_client()
             
             queue_info = {}

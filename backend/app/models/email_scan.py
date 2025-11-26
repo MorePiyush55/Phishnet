@@ -151,7 +151,7 @@ class AnalysisComponentResult(Base):
     # Findings
     findings = Column(JSON, nullable=True)  # Component-specific findings
     indicators = Column(JSON, nullable=True)  # Specific indicators found
-    metadata = Column(JSON, nullable=True)  # Additional metadata
+    scan_metadata = Column(JSON, nullable=True)  # Additional metadata
     
     # Processing info
     execution_time_ms = Column(Integer, nullable=True)
