@@ -367,13 +367,54 @@ async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler."""
     logger.error(f"Unhandled exception: {exc}")
     
-    return JSONResponse(
-        status_code=500,
-        content={
-            "detail": "Internal server error",
-            "type": "internal_error"
-        }
     )
+
+
+@app.get("/debug-import")
+async def debug_import_error():
+    """Debug endpoint to show why on_demand router failed to load."""
+    import traceback
+    import sys
+    
+    results = {
+        "python_path": sys.path,
+        "cwd": os.getcwd(),
+        "directory_contents": os.listdir(os.getcwd()) if os.path.exists(os.getcwd()) else "N/A",
+        "app_directory": os.listdir(os.path.join(os.getcwd(), "app")) if os.path.exists(os.path.join(os.getcwd(), "app")) else "N/A",
+        "import_attempts": {}
+    }
+    
+    # Attempt 1: Import on_demand router
+    try:
+        from app.api.v2.on_demand import router
+        results["import_attempts"]["app.api.v2.on_demand"] = "SUCCESS"
+    except Exception as e:
+        results["import_attempts"]["app.api.v2.on_demand"] = {
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+    # Attempt 2: Import gmail_ondemand_service
+    try:
+        from app.services.gmail_ondemand import gmail_ondemand_service
+        results["import_attempts"]["app.services.gmail_ondemand"] = "SUCCESS"
+    except Exception as e:
+        results["import_attempts"]["app.services.gmail_ondemand"] = {
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+    # Attempt 3: Import orchestrator
+    try:
+        from app.core.orchestrator import get_orchestrator
+        results["import_attempts"]["app.core.orchestrator"] = "SUCCESS"
+    except Exception as e:
+        results["import_attempts"]["app.core.orchestrator"] = {
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+        
+    return results
 
 
 if __name__ == "__main__":
