@@ -24,14 +24,12 @@ from app.core.rate_limiter import get_rate_limiter, RateLimitError
 from app.core.redis_client import get_redis_client
 from app.models.jobs import JobStatus, JobPriority, WorkerType, EmailScanJob
 from app.core.caching import cached
-from src.common.constants import OperationType, OperationStatus
-
 # Missing definitions to fix NameError
 @dataclass
 class Operation:
     id: str
-    type: OperationType
-    status: OperationStatus
+    type: "OperationType"
+    status: "OperationStatus"
     created_at: datetime
     data: Dict[str, Any]
     metadata: Dict[str, Any]
@@ -39,6 +37,21 @@ class Operation:
     completed_at: Optional[datetime] = None
     result: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
+
+class OperationType(Enum):
+    EMAIL_INGEST = "email_ingest"
+    EMAIL_ANALYSIS = "email_analysis"
+    LINK_EXTRACTION = "link_extraction"
+    THREAT_INTEL = "threat_intel"
+    RISK_SCORING = "risk_scoring"
+    RESPONSE_ACTION = "response_action"
+
+class OperationStatus(Enum):
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
 
 @dataclass
 class OrchestrationResult:
