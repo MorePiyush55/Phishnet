@@ -387,6 +387,7 @@ async def debug_import_error():
         "cwd": os.getcwd(),
         "directory_contents": os.listdir(os.getcwd()) if os.path.exists(os.getcwd()) else "N/A",
         "app_directory": os.listdir(os.path.join(os.getcwd(), "app")) if os.path.exists(os.path.join(os.getcwd(), "app")) else "N/A",
+        "installed_packages": [p for p in os.popen('pip list').read().split('\n') if 'google' in p.lower()],
         "import_attempts": {}
     }
     
