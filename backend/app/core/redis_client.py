@@ -376,13 +376,11 @@ class QueueManager:
             return False
 
 
-class MockRedisClient:
-    """Mock Redis client for when Redis is not available."""
-    
     def __init__(self):
         """Initialize mock client."""
         self._data = {}
-        # Fix: __init__ should not return anything
+        self._sets = {}  # For sorted sets (queues)
+        self._expires = {}
     
     def ping(self):
         """Mock ping."""
@@ -391,11 +389,146 @@ class MockRedisClient:
     def setex(self, key: str, ttl: int, value: str) -> bool:
         """Mock setex."""
         self._data[key] = value
+        self._expires[key] = time.time() + ttl
+        return True
+    
+    def set(self, key: str, value: str) -> bool:
+        """Mock set."""
+        self._data[key] = value
         return True
     
     def get(self, key: str) -> Optional[str]:
         """Mock get."""
+        # Check expiry
+        if key in self._expires and time.time() > self._expires[key]:
+            del self._expires[key]
+            if key in self._data:
+                del self._data[key]
+            return None
         return self._data.get(key)
+
+    def delete(self, *keys: str) -> int:
+        """Mock delete."""
+        count = 0
+        for key in keys:
+            if key in self._data:
+                del self._data[key]
+                count += 1
+            if key in self._sets:
+                del self._sets[key]
+                count += 1
+        return count
+
+    def exists(self, key: str) -> int:
+        """Mock exists."""
+        return 1 if key in self._data or key in self._sets else 0
+
+    def ttl(self, key: str) -> int:
+        """Mock ttl."""
+        if key not in self._expires:
+            return -1
+        remaining = int(self._expires[key] - time.time())
+        return max(0, remaining)
+
+    def keys(self, pattern: str = "*") -> list:
+        """Mock keys (simple substring match)."""
+        # Very basic pattern matching
+        clean_pattern = pattern.replace("*", "")
+        return [k for k in self._data.keys() if clean_pattern in k]
+
+    # Sorted Set operations for Queues
+    def zadd(self, key: str, mapping: Dict[str, float]) -> int:
+        """Mock zadd."""
+        if key not in self._sets:
+            self._sets[key] = []
+        
+        count = 0
+        for member, score in mapping.items():
+            # Remove existing if present
+            self._sets[key] = [x for x in self._sets[key] if x[0] != member]
+            self._sets[key].append((member, score))
+            count += 1
+            
+        # Sort by score
+        self._sets[key].sort(key=lambda x: x[1])
+        return count
+
+    def zpopmin(self, key: str, count: int = 1) -> list:
+        """Mock zpopmin."""
+        if key not in self._sets or not self._sets[key]:
+            return []
+        
+        result = self._sets[key][:count]
+        self._sets[key] = self._sets[key][count:]
+        return result
+
+    def bzpopmin(self, key: str, timeout: int = 0) -> Optional[tuple]:
+        """Mock bzpopmin (non-blocking for mock)."""
+        # In a real mock we can't easily block, so just behave like zpopmin
+        res = self.zpopmin(key, 1)
+        if res:
+            return (key, res[0][0], res[0][1])
+        return None
+
+    def zcard(self, key: str) -> int:
+        """Mock zcard."""
+        return len(self._sets.get(key, []))
+
+    def zremrangebyscore(self, key: str, min_score: float, max_score: float) -> int:
+        """Mock zremrangebyscore."""
+        if key not in self._sets:
+            return 0
+        
+        original_len = len(self._sets[key])
+        self._sets[key] = [x for x in self._sets[key] if not (min_score <= x[1] <= max_score)]
+        return original_len - len(self._sets[key])
+
+    def zremrangebyrank(self, key: str, min_rank: int, max_rank: int) -> int:
+        """Mock zremrangebyrank."""
+        if key not in self._sets:
+            return 0
+            
+        # Handle negative indices
+        length = len(self._sets[key])
+        if min_rank < 0: min_rank += length
+        if max_rank < 0: max_rank += length
+        
+        # Adjust for slice (inclusive)
+        max_rank += 1
+        
+        to_remove = self._sets[key][min_rank:max_rank]
+        self._sets[key] = [x for x in self._sets[key] if x not in to_remove]
+        return len(to_remove)
+        
+    # Hash operations for Rate Limiter (Token Bucket)
+    def hmget(self, key: str, *fields: str) -> list:
+        """Mock hmget."""
+        data = self._data.get(key, {})
+        if not isinstance(data, dict): return [None] * len(fields)
+        return [data.get(f) for f in fields]
+
+    def hmset(self, key: str, mapping: Dict[str, Any]) -> bool:
+        """Mock hmset."""
+        if key not in self._data:
+            self._data[key] = {}
+        if not isinstance(self._data[key], dict):
+            self._data[key] = {} # Overwrite if not dict
+            
+        self._data[key].update(mapping)
+        return True
+        
+    def eval(self, script: str, numkeys: int, *args) -> Any:
+        """Mock eval - extremely basic support for rate limiter."""
+        # This is hard to mock fully. For now, we'll just return "allowed"
+        # to prevent rate limiter from crashing.
+        # Sliding window return: [allowed, remaining, reset_time, burst_used]
+        # Token bucket return: [allowed, tokens, wait_time]
+        
+        # Guess which script based on args
+        if "ZREMRANGEBYSCORE" in script: # Sliding window
+             return [1, 999, time.time() + 60, 0]
+        else: # Token bucket
+             return [1, 999, 0]
 
 
 # Global Redis client instance
