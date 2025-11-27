@@ -83,3 +83,4 @@ google-generativeai>=0.4.0
 
 # IMAP Support
 imap-tools==1.5.0
+playwright>=1.40.0
