@@ -30,6 +30,61 @@ router = APIRouter(prefix="/ondemand", tags=["On-Demand Analysis"])
 
 
 # ============================================================================
+# Public Health/Status Endpoints (No Auth Required)
+# ============================================================================
+
+@router.get("/health")
+async def ondemand_health():
+    """
+    Public health check for on-demand analysis system.
+    No authentication required - useful for monitoring.
+    """
+    try:
+        orchestrator = get_ondemand_orchestrator()
+        worker = get_email_polling_worker()
+        
+        # Test IMAP connection and get pending count
+        pending_emails = orchestrator.imap_service.get_pending_emails()
+        
+        return {
+            "status": "healthy",
+            "imap_connected": True,
+            "pending_emails": len(pending_emails),
+            "worker_state": worker.state.value,
+            "poll_interval_seconds": worker.poll_interval,
+            "message": f"System operational. {len(pending_emails)} emails awaiting analysis."
+        }
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return {
+            "status": "unhealthy",
+            "imap_connected": False,
+            "pending_emails": 0,
+            "error": str(e)
+        }
+
+
+@router.get("/stats")
+async def ondemand_stats():
+    """
+    Public statistics for on-demand analysis.
+    No authentication required.
+    """
+    try:
+        worker = get_email_polling_worker()
+        return {
+            "worker_state": worker.state.value,
+            "polls_completed": worker.metrics.polls_completed,
+            "emails_processed": worker.metrics.emails_processed,
+            "emails_failed": worker.metrics.emails_failed,
+            "last_poll": worker.metrics.last_poll_time.isoformat() if worker.metrics.last_poll_time else None,
+            "last_error": worker.metrics.last_error
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# ============================================================================
 # Response Models
 # ============================================================================
 
