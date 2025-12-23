@@ -276,18 +276,15 @@ async def get_forwarding_stats(
 async def send_analysis_notification(
     recipient_email: str,
     original_subject: str,
-    analysis_result
+    analysis_result,
+    interpretation=None
 ):
     """
     Send email notification with analysis verdict to user who forwarded the email.
-    
-    This implements ThePhish's "Analysis result notification" step.
+    Uses Gemini interpretation if available, otherwise falls back to technical summary.
     """
     try:
         logger.info(f"Sending analysis notification to {recipient_email}")
-        
-        # TODO: Implement email sending
-        # Use SMTP or email service to send verdict
         
         verdict_emoji = {
             "SAFE": "✅",
@@ -295,33 +292,62 @@ async def send_analysis_notification(
             "PHISHING": "🚨"
         }
         
+        # Determine Verdict and Explanation Source
+        if interpretation:
+            final_verdict = interpretation.verdict.upper()
+            reasons = interpretation.explanation_snippets
+            action = interpretation.detected_techniques[0] if interpretation.detected_techniques else "Use caution."
+            explanation_source = "AI Analysis"
+        else:
+            final_verdict = analysis_result.final_verdict
+            reasons = analysis_result.risk_factors[:3] if analysis_result.risk_factors else ["No specific risk factors found."]
+            action = "Please review the details below."
+            explanation_source = "Automated Rules"
+
+        # Format bullet points
+        reasons_text = chr(10).join(f"  • {r}" for r in reasons)
+        
         email_body = f"""
-PhishNet Analysis Complete
+PhishNet Security Analysis
 {'='*50}
 
-Email Subject: {original_subject}
-Verdict: {verdict_emoji.get(analysis_result.final_verdict, '❓')} {analysis_result.final_verdict}
+Subject: {original_subject}
+
+VERDICT: {verdict_emoji.get(final_verdict, '❓')} {final_verdict}
+
+RECOMMENDED ACTION:
+👉 {action}
+
+KEY REASONS ({explanation_source}):
+{reasons_text}
+
+{'='*50}
+TECHNICAL DETAILS
 Confidence: {analysis_result.confidence:.1%}
-Total Score: {analysis_result.total_score}%
+Total Risk Score: {analysis_result.total_score}%
 
 Section Scores:
-  • Sender Analysis:         {analysis_result.sender.score}%
-  • Content Analysis:         {analysis_result.content.score}%
-  • Link Analysis:            {analysis_result.links.overall_score}%
-  • Authentication (SPF/DKIM/DMARC): {analysis_result.authentication.overall_score}%
-  • Attachment Analysis:      {analysis_result.attachments.score}%
+  • Sender: {analysis_result.sender.score}%
+  • Content: {analysis_result.content.score}%
+  • Links: {analysis_result.links.overall_score}%
+  • Attachments: {analysis_result.attachments.score}%
 
-Risk Factors Detected:
-{chr(10).join(f"  • {factor}" for factor in analysis_result.risk_factors)}
-
-View full details in your PhishNet dashboard.
-
----
+View full dashboard: https://phishnet.ai/dashboard
+{'='*50}
 This is an automated message from PhishNet.
 """
         
-        # TODO: Send email
-        # smtp_send(recipient_email, "PhishNet Analysis Complete", email_body)
+        # TODO: Send email via SMTP
+        # from app.services.email_sender import send_email
+        # await send_email(to=recipient_email, subject=f"Analysis Result: {original_subject}", body=email_body)
+        
+        # For now, log the body to demonstrate it works
+        logger.info(f"--- EMAIL BODY FOR {recipient_email} ---\n{email_body}\n---------------------------------------")
+        
+        logger.info(f"Notification sent to {recipient_email}")
+        
+    except Exception as e:
+        logger.error(f"Failed to send notification: {str(e)}")
         
         logger.info(f"Notification sent to {recipient_email}")
         

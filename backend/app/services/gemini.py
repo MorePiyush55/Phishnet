@@ -7,6 +7,7 @@ import asyncio
 import hashlib
 import time
 import json
+import os
 from typing import Dict, Any, Optional, List
 
 import aiohttp
@@ -37,7 +38,7 @@ class GeminiClient(IAnalyzer):
     
     def __init__(self, api_key: Optional[str] = None):
         super().__init__("gemini")
-        self.api_key = api_key or settings.GEMINI_API_KEY
+        self.api_key = api_key or os.getenv("GEMINI_API_KEY") or getattr(settings, 'GEMINI_API_KEY', None)
         self._rate_limiter = asyncio.Semaphore(10)  # Concurrent requests
         self._last_request_time = 0.0
         
@@ -551,6 +552,153 @@ Provide only the JSON response, no additional text.
                 'timestamp': time.time(),
                 'analysis_type': 'text_analysis'
             }
+
+    async def interpret_technical_findings(self, technical_report: Dict[str, Any]) -> GeminiResult:
+        """
+        Interpret technical analysis findings into user-friendly language.
+        
+        Args:
+            technical_report: Structured dictionary of technical findings
+            
+        Returns:
+            GeminiResult containing the simplified explanation and verdict
+        """
+        if not self.is_available:
+            raise ServiceUnavailableError(f"Gemini service unavailable: {self._health.status}")
+            
+        try:
+            # Prepare the technical summary for the prompt
+            technical_summary = json.dumps(technical_report, indent=2)
+            
+            # Make API request
+            await self._rate_limiter.acquire()
+            try:
+                # Enforce rate limiting
+                now = time.time()
+                time_since_last = now - self._last_request_time
+                min_interval = 60.0 / self.REQUESTS_PER_MINUTE
+                if time_since_last < min_interval:
+                    await asyncio.sleep(min_interval - time_since_last)
+                self._last_request_time = time.time()
+                
+                # Build prompt
+                prompt = self._build_interpretation_prompt(technical_summary, technical_report.get('subject', 'Suspicious Email'))
+                
+                # API Call
+                url = f"{self.BASE_URL}/models/{self.MODEL_NAME}:generateContent"
+                headers = {'Content-Type': 'application/json'}
+                params = {'key': self.api_key}
+                payload = {
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {
+                        "temperature": 0.2, # Low temp for consistency
+                        "maxOutputTokens": 500,
+                    }
+                }
+                
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(url, headers=headers, params=params, json=payload) as response:
+                        if response.status != 200:
+                            raise AnalysisError(f"Gemini API error: {response.status}")
+                        raw_response = await response.json()
+                        
+            finally:
+                self._rate_limiter.release()
+                
+            # Parse response
+            gemini_result = self._parse_interpretation_response(raw_response)
+            
+            # Update health
+            self._update_health_success()
+            
+            return gemini_result
+            
+        except Exception as e:
+            self._update_health_failure()
+            logger.error(f"Gemini interpretation failed: {e}")
+            # Return safe fallback
+            return GeminiResult(
+                llm_score=0.0,
+                verdict="Unknown",
+                explanation_snippets=[
+                    "Automated interpretation unavailable.",
+                    "Please review the technical details below."
+                ],
+                confidence_reasoning=f"Interpretation failed: {str(e)}"
+            )
+
+    def _build_interpretation_prompt(self, technical_summary: str, subject: str) -> str:
+        """Build prompt for interpreting technical findings."""
+        return f"""
+You are a Senior Security Analyst at PhishNet. Your job is to explain a technical phishing analysis report to a non-technical employee who forwarded a suspicious email.
+
+EMAIL SUBJECT: "{subject}"
+
+TECHNICAL FINDINGS (JSON):
+---
+{technical_summary}
+---
+
+TASK:
+1. Determine the final verdict based **strictly** on the technical findings:
+   - "SAFE": No malicious indicators found.
+   - "SUSPICIOUS": Some warning signs (e.g. new domain, soft fail), but not definitive.
+   - "PHISHING": Clear malicious indicators (e.g. malicious links, bad reputation, credential harvesting).
+
+2. Write a simplified explanation:
+   - Translate technical terms (like "SPF Softfail", "Typosquatting") into plain English (e.g., "The sender's address doesn't match the company name").
+   - valid SPF/DKIM alone does NOT make it safe if the content is malicious.
+   - Be concise. Use short sentences.
+
+3. Provide exactly 3 key reasons (bullet points) for your verdict.
+
+4. Recommend **one** clear action (e.g., "Delete this email", "Safe to open").
+
+OUTPUT FORMAT (JSON ONLY):
+{{
+    "verdict": "SAFE" | "SUSPICIOUS" | "PHISHING",
+    "threat_score": <float 0.0-1.0 based on findings>,
+    "key_reasons": [
+        "<Reason 1>",
+        "<Reason 2>",
+        "<Reason 3>"
+    ],
+    "recommended_action": "<Action message>"
+}}
+"""
+
+    def _parse_interpretation_response(self, raw_response: Dict[str, Any]) -> GeminiResult:
+        """Parse the interpretation JSON response."""
+        try:
+            candidates = raw_response.get('candidates', [])
+            if not candidates: raise AnalysisError("No candidates")
+            content_text = candidates[0].get('content', {}).get('parts', [])[0].get('text', '')
+            
+            # Clean markdown if present
+            content_text = content_text.replace("```json", "").replace("```", "").strip()
+            
+            data = json.loads(content_text)
+            
+            # Map to GeminiResult
+            # We store 'key_reasons' in explanation_snippets
+            # We store 'recommended_action' in detected_techniques (slightly abusing the field, but efficient)
+            
+            return GeminiResult(
+                llm_score=float(data.get('threat_score', 0.5)),
+                verdict=data.get('verdict', 'SUSPICIOUS'),
+                explanation_snippets=data.get('key_reasons', ["Analysis completed."]),
+                confidence_reasoning="AI Interpretation",
+                detected_techniques=[data.get('recommended_action', 'Proceed with caution')]
+            )
+            
+        except Exception as e:
+            logger.warning(f"Failed to parse interpretation response: {e}")
+            return GeminiResult(
+                llm_score=0.5,
+                verdict="SUSPICIOUS", 
+                explanation_snippets=["Could not parse AI explanation."],
+                confidence_reasoning="Parse Error"
+            )
 
 
 # Factory function for dependency injection
