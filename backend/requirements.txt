@@ -61,6 +61,7 @@ opentelemetry-exporter-prometheus==0.42b0
 opentelemetry-instrumentation-requests==0.42b0
 opentelemetry-instrumentation-fastapi==0.42b0
 opentelemetry-instrumentation-redis==0.42b0
+opentelemetry-instrumentation-aiohttp-client==0.42b0
 sentry-sdk[fastapi]==1.40.6
 psutil==5.9.6
 

@@ -7,20 +7,34 @@ import os
 import logging
 from typing import Optional, Dict, Any
 
-from opentelemetry import trace, metrics
-from opentelemetry.exporter.jaeger.thrift import JaegerExporter
-from opentelemetry.exporter.prometheus import PrometheusMetricReader
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from opentelemetry.instrumentation.requests import RequestsInstrumentor
-from opentelemetry.instrumentation.aiohttp_client import AioHttpClientInstrumentor
-from opentelemetry.instrumentation.redis import RedisInstrumentor
-from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.sdk.resources import Resource, SERVICE_NAME, SERVICE_VERSION
-from opentelemetry.semconv.trace import SpanAttributes
-from opentelemetry.trace.status import Status, StatusCode
+# Make OpenTelemetry imports optional to prevent startup failures
+try:
+    from opentelemetry import trace, metrics
+    from opentelemetry.exporter.jaeger.thrift import JaegerExporter
+    from opentelemetry.exporter.prometheus import PrometheusMetricReader
+    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+    from opentelemetry.instrumentation.requests import RequestsInstrumentor
+    from opentelemetry.instrumentation.redis import RedisInstrumentor
+    from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    from opentelemetry.sdk.metrics import MeterProvider
+    from opentelemetry.sdk.resources import Resource, SERVICE_NAME, SERVICE_VERSION
+    from opentelemetry.semconv.trace import SpanAttributes
+    from opentelemetry.trace.status import Status, StatusCode
+    OPENTELEMETRY_AVAILABLE = True
+except ImportError:
+    OPENTELEMETRY_AVAILABLE = False
+    trace = None
+    metrics = None
+
+# Optional: aiohttp instrumentation (often missing)
+try:
+    from opentelemetry.instrumentation.aiohttp_client import AioHttpClientInstrumentor
+    AIOHTTP_INSTRUMENTATION_AVAILABLE = True
+except ImportError:
+    AIOHTTP_INSTRUMENTATION_AVAILABLE = False
+    AioHttpClientInstrumentor = None
 
 from app.config.settings import settings
 from app.config.logging import get_logger
@@ -130,13 +144,20 @@ def configure_metrics() -> None:
 
 def instrument_libraries() -> None:
     """Auto-instrument common libraries."""
+    if not OPENTELEMETRY_AVAILABLE:
+        logger.warning("OpenTelemetry not available, skipping library instrumentation")
+        return
+        
     try:
         # Instrument FastAPI
         FastAPIInstrumentor.instrument()
         
         # Instrument HTTP clients
         RequestsInstrumentor().instrument()
-        AioHttpClientInstrumentor().instrument()
+        
+        # Instrument aiohttp if available
+        if AIOHTTP_INSTRUMENTATION_AVAILABLE and AioHttpClientInstrumentor:
+            AioHttpClientInstrumentor().instrument()
         
         # Instrument Redis
         RedisInstrumentor().instrument()
