@@ -442,6 +442,16 @@ async def debug_import_error():
     return results
 
 
+@app.get("/debug/router-errors")
+async def get_router_errors():
+    """Return any errors that occurred while loading routers."""
+    return {
+        "count": len(router_errors),
+        "errors": router_errors,
+        "loaded_routes": [route.path for route in app.routes]
+    }
+
+
 if __name__ == "__main__":
     # Runner moved to single canonical entrypoint `backend/main.py`
     pass
