@@ -130,16 +130,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Email polling service initialization failed: {e}")
     
-    # Initialize On-Demand Email Polling Worker (optional - can be started via API)
+    # Initialize On-Demand Email Polling Worker (AUTO-START for production)
     try:
         from app.workers.email_polling_worker import get_email_polling_worker
-        # Note: Worker can be started via API at /api/v1/ondemand/worker/start
-        # Uncomment below to auto-start on application startup:
-        # worker = get_email_polling_worker()
-        # asyncio.create_task(worker.start())
-        logger.info("On-demand email polling worker initialized (start via API)")
+        worker = get_email_polling_worker()
+        asyncio.create_task(worker.start())
+        logger.info("On-demand email polling worker started automatically")
     except Exception as e:
-        logger.warning(f"On-demand email polling worker initialization failed: {e}")
+        logger.warning(f"On-demand email polling worker failed to start: {e}")
     
     yield
     
