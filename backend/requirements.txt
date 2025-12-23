@@ -14,7 +14,7 @@ beanie==1.23.6
 sqlalchemy==2.0.35
 
 # Redis & Caching
-redis==5.0.1
+redis==4.6.0
 
 # Data Models & Validation - Updated for Python 3.13
 pydantic==2.9.2
