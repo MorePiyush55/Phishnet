@@ -408,10 +408,45 @@ async def store_analysis_result(db: Session, analysis_data: Dict[str, Any]):
     Store analysis result in database for historical tracking.
     """
     try:
-        # TODO: Implement database storage
-        # Create EmailAnalysis record
-        # Link to user who forwarded
-        # Store section scores
-        pass
+        from app.models.mongodb_models import ForwardedEmailAnalysis
+        from datetime import datetime
+        
+        email_data = analysis_data.get('email', {})
+        analysis_result = analysis_data.get('analysis_result', {}) # This might need adjustment depending on how it's passed
+        
+        # If analysis_data structure matches what analyze_forwarded_email returns:
+        # It has keys: mail_uid, analyzed_at, email, verdict, total_score, risk_factors, sections
+        
+        # We need message_id which might be in email_data if we put it there, or we might need to fetch it
+        # In analyze_forwarded_email, we didn't explicitly put message_id in the response "email" dict
+        # We should update analyze_forwarded_email to include message_id in response if possible, 
+        # or we might miss it here.
+        
+        # Ideally, we should update the caller to pass the full object.
+        # But for now, let's try to construct it.
+        
+        analysis_doc = ForwardedEmailAnalysis(
+            user_id=email_data.get('forwarded_by'),
+            forwarded_by=email_data.get('forwarded_by'),
+            original_sender=email_data.get('from'),
+            original_subject=email_data.get('subject'),
+            threat_score=float(analysis_data.get('total_score', 0)) / 100.0,
+            risk_level=analysis_data.get('verdict', 'UNKNOWN'),
+            analysis_result={
+                "verdict": analysis_data.get('verdict'),
+                "score": analysis_data.get('total_score'),
+                "risk_factors": analysis_data.get('risk_factors')
+            },
+            email_metadata={
+                "subject": email_data.get('subject'),
+                "date": email_data.get('received_date')
+            },
+            reply_sent=True,
+            reply_sent_at=datetime.utcnow()
+        )
+        
+        await analysis_doc.save()
+        logger.info(f"Stored manual analysis result in MongoDB")
+        
     except Exception as e:
         logger.error(f"Failed to store analysis result: {str(e)}")

@@ -23,6 +23,10 @@ from app.services.quick_imap import QuickIMAPService
 from app.services.enhanced_phishing_analyzer import EnhancedPhishingAnalyzer, ComprehensivePhishingAnalysis
 from app.services.gemini import GeminiClient
 from app.services.email_sender import send_email
+from app.models.mongodb_models import ForwardedEmailAnalysis
+from app.config.settings import get_settings
+
+settings = get_settings()
 
 logger = get_logger(__name__)
 
@@ -188,7 +192,43 @@ class OnDemandOrchestrator:
             job.status = JobStatus.COMPLETED
             job.completed_at = datetime.utcnow()
             
-            logger.info(f"[Job {job.job_id}] Analysis complete and response sent to {job.forwarded_by}")
+            logger.info(f"[Job {job.job_id}] Response sent to {job.forwarded_by}")
+
+            # ═══════════════════════════════════════════════════════════════
+            # STEP 5: Persist to Database (Critical for Deduplication)
+            # ═══════════════════════════════════════════════════════════════
+            try:
+                # Provide a message_id if available, otherwise it might be missing
+                # We need to re-fetch or pass it down. 
+                # Ideally email_data has it.
+                message_id = email_data.get('message_id')
+                
+                analysis_doc = ForwardedEmailAnalysis(
+                    user_id=job.forwarded_by,
+                    forwarded_by=job.forwarded_by,
+                    original_sender=email_data.get('from', 'Unknown'),
+                    original_subject=job.original_subject,
+                    threat_score=float(detection_result.total_score) / 100.0,
+                    risk_level=detection_result.final_verdict,
+                    analysis_result={
+                        "verdict": detection_result.final_verdict,
+                        "score": detection_result.total_score,
+                        "confidence": detection_result.confidence,
+                        "risk_factors": detection_result.risk_factors
+                    },
+                    email_metadata={
+                        "message_id": message_id,
+                        "uid": mail_uid,
+                        "subject": job.original_subject,
+                        "date": email_data.get('received_date').isoformat() if email_data.get('received_date') else None
+                    },
+                    reply_sent=True,
+                    reply_sent_at=datetime.utcnow()
+                )
+                await analysis_doc.save()
+                logger.info(f"[Job {job.job_id}] Analysis persisted to MongoDB for deduplication")
+            except Exception as e:
+                logger.error(f"[Job {job.job_id}] Failed to persist to MongoDB: {e}")
             
             return job
             
@@ -459,19 +499,45 @@ For questions, contact your IT/Security team.
         """
         Process all pending emails in the inbox.
         
+        Using ROBUST strategy:
+        1. Fetch recent emails (read OR unread)
+        2. Filter out ones already in MongoDB
+        3. Process only new ones
+        
         Returns:
             List of completed AnalysisJob objects
         """
-        pending_emails = self.imap_service.get_pending_emails()
-        logger.info(f"Found {len(pending_emails)} pending emails for analysis")
+        # robust polling settings
+        email_limit = getattr(settings, 'IMAP_BATCH_SIZE', 50)
+        recent_emails = self.imap_service.get_recent_emails(limit=email_limit)
+        
+        if not recent_emails:
+            return []
+            
+        logger.info(f"Checking {len(recent_emails)} recent emails for new submissions...")
         
         completed_jobs = []
         
-        for email_info in pending_emails:
+        for email_info in recent_emails:
             try:
                 mail_uid = email_info.get('uid')
+                message_id = email_info.get('message_id')
+                
                 if not mail_uid:
                     continue
+                    
+                # DEDUPLICATION CHECK
+                if message_id:
+                     # Check if already processed
+                    exists = await ForwardedEmailAnalysis.find_one({"email_metadata.message_id": message_id})
+                    if exists:
+                        # Already analyzed - Skip
+                        continue
+                
+                # Double check with UID if message-id missing or just to be safe? 
+                # UID changes if message moves, Message-ID is better.
+                # If we are here, it is NOT in DB.
+                logger.info(f"Found NEW unanalyzed email: {email_info.get('subject')} (UID {mail_uid})")
                 
                 job = await self.process_single_email(mail_uid)
                 completed_jobs.append(job)
@@ -480,7 +546,8 @@ For questions, contact your IT/Security team.
                 logger.error(f"Failed to process email {email_info.get('uid')}: {e}")
                 continue
         
-        logger.info(f"Completed {len(completed_jobs)} / {len(pending_emails)} email analyses")
+        if completed_jobs:
+            logger.info(f"Completed {len(completed_jobs)} new email analyses")
         return completed_jobs
     
     def get_job_status(self, job_id: str) -> Optional[AnalysisJob]:

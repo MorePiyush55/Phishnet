@@ -55,23 +55,51 @@ class EmailPollingService:
         
     async def poll_and_analyze(self):
         """Check for pending emails and analyze them."""
-        # Get pending emails (synchronous IMAP call)
-        # In a real async app, we might want to run this in a thread executor
-        pending_emails = await asyncio.to_thread(self.imap_service.get_pending_emails)
-        
-        if not pending_emails:
-            return
+        try:
+            # Get RECENT emails (both SEEN and UNSEEN) - robust against accidental reads
+            email_limit = getattr(settings, 'IMAP_BATCH_SIZE', 50)
+            recent_emails = await asyncio.to_thread(self.imap_service.get_recent_emails, email_limit)
             
-        logger.info(f"Found {len(pending_emails)} pending emails for analysis")
-        
-        for email_meta in pending_emails:
-            try:
-                uid = email_meta['uid']
-                await self.process_email(uid)
-            except Exception as e:
-                logger.error(f"Failed to process email {email_meta.get('uid')}: {e}")
+            if not recent_emails:
+                return
                 
-    async def process_email(self, uid: str):
+            logger.info(f"Checking {len(recent_emails)} recent emails for new submissions...")
+            
+            # Use ForwardedEmailAnalysis model to check for duplicates
+            from app.models.mongodb_models import ForwardedEmailAnalysis
+            
+            processed_count = 0
+            
+            for email_meta in recent_emails:
+                try:
+                    uid = email_meta['uid']
+                    message_id = email_meta['message_id']
+                    
+                    if not message_id:
+                        logger.warning(f"Email UID {uid} has no Message-ID, skipping deduplication check")
+                        continue
+                        
+                    # Check if already processed
+                    exists = await ForwardedEmailAnalysis.find_one({"email_metadata.message_id": message_id})
+                    
+                    if exists:
+                        # Already analyzed - Skip
+                        continue
+                        
+                    logger.info(f"Found NEW unanalyzed email: {email_meta['subject']} (UID {uid})")
+                    await self.process_email(uid, message_id)
+                    processed_count += 1
+                    
+                except Exception as e:
+                    logger.error(f"Failed to process email {email_meta.get('uid')}: {e}")
+            
+            if processed_count > 0:
+                logger.info(f"Successfully processed {processed_count} new emails")
+                
+        except Exception as e:
+            logger.error(f"Error during poll_and_analyze: {e}")
+                
+    async def process_email(self, uid: str, message_id: str):
         """Process a single email by UID."""
         logger.info(f"Processing email UID {uid}")
         
@@ -90,9 +118,6 @@ class EmailPollingService:
         )
         
         # 3. Interpret (Gemini AI)
-        # Convert analysis_result to dict first (or pass relevant parts)
-        # We need a quick way to serialize the complex AnalysisResult object
-        # For now, we'll construct a simplified report dict
         technical_report = {
             "subject": email_data['subject'],
             "verdict": analysis_result.final_verdict,
@@ -116,6 +141,44 @@ class EmailPollingService:
                 interpretation = None
         else:
             interpretation = None
+        
+        # 4. Store Result in DB (Using ForwardedEmailAnalysis)
+        # This is CRITICAL for the deduplication to work next time
+        try:
+            from app.models.mongodb_models import ForwardedEmailAnalysis
+            from datetime import datetime
+            
+            # Serialize analysis result for storage
+            # Assuming analysis_result can be dumped to dict roughly, otherwise we need a helper
+            # For now, let's store the top-level scores and verdicts
+            
+            analysis_doc = ForwardedEmailAnalysis(
+                user_id=email_data['forwarded_by'], # Using email as ID for now
+                forwarded_by=email_data['forwarded_by'],
+                original_sender=email_data['from'],
+                original_subject=email_data['subject'],
+                threat_score=float(analysis_result.total_score) / 100.0,
+                risk_level=analysis_result.final_verdict,
+                analysis_result={
+                    "verdict": analysis_result.final_verdict,
+                    "score": analysis_result.total_score,
+                    "confidence": analysis_result.confidence,
+                    "risk_factors": analysis_result.risk_factors
+                },
+                email_metadata={
+                    "message_id": message_id,
+                    "subject": email_data['subject'],
+                    "date": email_data['received_date'].isoformat() if email_data['received_date'] else None
+                },
+                reply_sent=True,
+                reply_sent_at=datetime.utcnow()
+            )
+            await analysis_doc.save()
+            logger.info(f"Stored analysis for {message_id} in MongoDB")
+            
+        except Exception as e:
+            logger.error(f"Failed to store analysis in MongoDB: {e}")
+            # Do NOT return, still try to send notification
         
         # 4. Send Notification
         await send_analysis_notification(

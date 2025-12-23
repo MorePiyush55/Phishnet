@@ -66,6 +66,44 @@ class QuickIMAPService:
         except Exception as e:
             logger.error(f"Failed to fetch pending emails: {str(e)}")
             return []
+
+    def get_recent_emails(self, limit: int = 15) -> List[Dict[str, Any]]:
+        """
+        Get list of recent emails (both READ and UNREAD).
+        Used for robust polling that handles accidentally opened emails.
+        
+        Args:
+            limit: Number of recent emails to fetch
+        
+        Returns:
+            List of email metadata
+        """
+        if not self.user or not self.password:
+            logger.error("IMAP not configured")
+            return []
+        
+        try:
+            with MailBox(self.host).login(self.user, self.password, self.folder) as mailbox:
+                recent_emails = []
+                
+                # Fetch recent emails (reverse order to get newest first)
+                for msg in mailbox.fetch(limit=limit, reverse=True):
+                    recent_emails.append({
+                        'uid': msg.uid,
+                        'from': msg.from_,
+                        'subject': msg.subject,
+                        'date': msg.date.isoformat() if msg.date else None,
+                        'message_id': msg.headers.get('message-id', [''])[0],
+                        'size': msg.size,
+                        'flags': list(msg.flags)  # \\Seen, etc.
+                    })
+                
+                logger.info(f"Found {len(recent_emails)} recent emails (limit={limit})")
+                return recent_emails
+                
+        except Exception as e:
+            logger.error(f"Failed to fetch recent emails: {str(e)}")
+            return []
     
     def fetch_email_for_analysis(self, uid: str) -> Optional[Dict[str, Any]]:
         """
