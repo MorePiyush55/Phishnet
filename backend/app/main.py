@@ -130,6 +130,17 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Email polling service initialization failed: {e}")
     
+    # Initialize On-Demand Email Polling Worker (optional - can be started via API)
+    try:
+        from app.workers.email_polling_worker import get_email_polling_worker
+        # Note: Worker can be started via API at /api/v1/ondemand/worker/start
+        # Uncomment below to auto-start on application startup:
+        # worker = get_email_polling_worker()
+        # asyncio.create_task(worker.start())
+        logger.info("On-demand email polling worker initialized (start via API)")
+    except Exception as e:
+        logger.warning(f"On-demand email polling worker initialization failed: {e}")
+    
     yield
     
     # Shutdown
@@ -257,6 +268,15 @@ try:
 except Exception as e:
     logger.warning(f"IMAP email router failed to load: {e}")
     router_errors.append(f"IMAP Emails: {e}")
+
+# On-Demand Phishing Detection Router (New unified workflow)
+try:
+    from app.api.v1.ondemand import router as ondemand_v1_router
+    app.include_router(ondemand_v1_router, prefix="/api/v1", tags=["On-Demand Phishing Detection"])
+    logger.info("On-demand phishing detection router (v1) loaded successfully")
+except Exception as e:
+    logger.warning(f"On-demand phishing detection router failed to load: {e}")
+    router_errors.append(f"On-Demand Detection: {e}")
 
 # On-Demand Email Check Router (Gmail API + Message ID - Mode 2: Privacy-First)
 try:

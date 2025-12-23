@@ -1,0 +1,504 @@
+"""
+On-Demand Phishing Detection Orchestrator
+==========================================
+Coordinates the complete workflow for on-demand email analysis:
+1. Email intake (IMAP polling)
+2. Normalization & parsing  
+3. Detection (EnhancedPhishingAnalyzer)
+4. Interpretation (Gemini - explanation only, NOT verdict)
+5. Client response (SMTP reply)
+
+Architecture: Backend decides verdict → Gemini only translates findings to plain language.
+"""
+
+import asyncio
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
+from typing import Dict, Any, Optional, List
+import hashlib
+
+from app.config.logging import get_logger
+from app.services.quick_imap import QuickIMAPService
+from app.services.enhanced_phishing_analyzer import EnhancedPhishingAnalyzer, ComprehensivePhishingAnalysis
+from app.services.gemini import GeminiClient
+from app.services.email_sender import send_email
+
+logger = get_logger(__name__)
+
+
+class JobStatus(str, Enum):
+    """Analysis job states"""
+    RECEIVED = "received"
+    PARSED = "parsed"
+    ANALYZING = "analyzing"
+    INTERPRETING = "interpreting"
+    RESPONDING = "responding"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+@dataclass
+class InterpretationResult:
+    """Result from Gemini interpretation layer"""
+    verdict: str  # Same as backend verdict (passed through)
+    reasons: List[str]  # Plain-language explanations
+    guidance: List[str]  # Actionable safety tips
+    threat_score: float = 0.5
+
+
+@dataclass
+class AnalysisJob:
+    """Tracks an email analysis job through the pipeline"""
+    job_id: str
+    mail_uid: str
+    forwarded_by: str
+    original_subject: str
+    status: JobStatus = JobStatus.RECEIVED
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    completed_at: Optional[datetime] = None
+    
+    # Analysis results
+    detection_result: Optional[ComprehensivePhishingAnalysis] = None
+    interpretation: Optional[InterpretationResult] = None
+    
+    # Error tracking
+    error: Optional[str] = None
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert job to dictionary for API response"""
+        return {
+            "job_id": self.job_id,
+            "mail_uid": self.mail_uid,
+            "forwarded_by": self.forwarded_by,
+            "original_subject": self.original_subject,
+            "status": self.status.value,
+            "created_at": self.created_at.isoformat(),
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "error": self.error
+        }
+
+
+class OnDemandOrchestrator:
+    """
+    Orchestrates the complete on-demand phishing detection workflow.
+    
+    Key Design Principles:
+    - Backend detection logic is AUTHORITATIVE (decides verdict)
+    - Gemini is ONLY for interpretation (converts technical → plain language)
+    - Never pass raw email body to Gemini (prompt injection risk)
+    - Sanitize all output in client response
+    """
+    
+    def __init__(self):
+        self.imap_service = QuickIMAPService()
+        self.phishing_analyzer = EnhancedPhishingAnalyzer()
+        self.gemini_client = GeminiClient()
+        
+        # In-memory job tracking (use Redis/DB in production)
+        self._active_jobs: Dict[str, AnalysisJob] = {}
+    
+    def _generate_job_id(self, mail_uid: str) -> str:
+        """Generate unique job ID"""
+        timestamp = datetime.utcnow().isoformat()
+        return hashlib.sha256(f"{mail_uid}:{timestamp}".encode()).hexdigest()[:16]
+    
+    async def process_single_email(self, mail_uid: str) -> AnalysisJob:
+        """
+        Process a single forwarded email through the complete pipeline.
+        
+        Steps:
+        1. Fetch & parse email from IMAP
+        2. Run detection modules
+        3. Get Gemini interpretation
+        4. Send response to user
+        
+        Args:
+            mail_uid: IMAP UID of the email to process
+            
+        Returns:
+            AnalysisJob with complete results
+        """
+        job = AnalysisJob(
+            job_id=self._generate_job_id(mail_uid),
+            mail_uid=mail_uid,
+            forwarded_by="",
+            original_subject=""
+        )
+        self._active_jobs[job.job_id] = job
+        
+        try:
+            # ═══════════════════════════════════════════════════════════════
+            # STEP 1: Email Intake & Normalization
+            # ═══════════════════════════════════════════════════════════════
+            logger.info(f"[Job {job.job_id}] Starting analysis of email {mail_uid}")
+            
+            email_data = self.imap_service.fetch_email_for_analysis(mail_uid)
+            if not email_data:
+                raise ValueError(f"Email {mail_uid} not found or could not be parsed")
+            
+            job.forwarded_by = email_data.get('forwarded_by', '')
+            job.original_subject = email_data.get('subject', 'No Subject')
+            job.status = JobStatus.PARSED
+            
+            logger.info(f"[Job {job.job_id}] Parsed email from {job.forwarded_by}: {job.original_subject}")
+            
+            # ═══════════════════════════════════════════════════════════════
+            # STEP 2: Detection Phase (Backend is authoritative)
+            # ═══════════════════════════════════════════════════════════════
+            job.status = JobStatus.ANALYZING
+            
+            raw_email = email_data.get('raw_email')
+            if not raw_email:
+                raise ValueError("No raw email content available for analysis")
+            
+            detection_result = self.phishing_analyzer.analyze_email(raw_email)
+            job.detection_result = detection_result
+            
+            logger.info(
+                f"[Job {job.job_id}] Detection complete: "
+                f"Verdict={detection_result.final_verdict}, "
+                f"Score={detection_result.total_score}%, "
+                f"Confidence={detection_result.confidence:.1%}"
+            )
+            
+            # ═══════════════════════════════════════════════════════════════
+            # STEP 3: Interpretation Phase (Gemini translates, NOT decides)
+            # ═══════════════════════════════════════════════════════════════
+            job.status = JobStatus.INTERPRETING
+            
+            interpretation = await self._get_gemini_interpretation(
+                detection_result, 
+                job.original_subject
+            )
+            job.interpretation = interpretation
+            
+            logger.info(f"[Job {job.job_id}] Interpretation complete: {len(interpretation.reasons)} reasons")
+            
+            # ═══════════════════════════════════════════════════════════════
+            # STEP 4: Client Response (SMTP)
+            # ═══════════════════════════════════════════════════════════════
+            job.status = JobStatus.RESPONDING
+            
+            await self._send_analysis_response(job)
+            
+            # ═══════════════════════════════════════════════════════════════
+            # Complete
+            # ═══════════════════════════════════════════════════════════════
+            job.status = JobStatus.COMPLETED
+            job.completed_at = datetime.utcnow()
+            
+            logger.info(f"[Job {job.job_id}] Analysis complete and response sent to {job.forwarded_by}")
+            
+            return job
+            
+        except Exception as e:
+            job.status = JobStatus.FAILED
+            job.error = str(e)
+            job.completed_at = datetime.utcnow()
+            logger.error(f"[Job {job.job_id}] Analysis failed: {e}")
+            raise
+    
+    async def _get_gemini_interpretation(
+        self, 
+        detection_result: ComprehensivePhishingAnalysis,
+        subject: str
+    ) -> InterpretationResult:
+        """
+        Get Gemini to interpret technical findings into plain language.
+        
+        CRITICAL: Gemini does NOT decide the verdict. The verdict from
+        detection_result.final_verdict is passed through unchanged.
+        Gemini only rewrites the findings for non-technical users.
+        
+        Args:
+            detection_result: Complete analysis from EnhancedPhishingAnalyzer
+            subject: Original email subject (for context)
+            
+        Returns:
+            InterpretationResult with plain-language explanation
+        """
+        try:
+            # Build structured summary for Gemini (no raw email content!)
+            technical_report = self._build_technical_report(detection_result, subject)
+            
+            # Call Gemini interpretation
+            gemini_result = await self.gemini_client.interpret_technical_findings(technical_report)
+            
+            # Map to InterpretationResult
+            # The verdict from Gemini should match backend, but we use backend as authority
+            return InterpretationResult(
+                verdict=detection_result.final_verdict,  # Always use backend verdict!
+                reasons=gemini_result.explanation_snippets or self._default_reasons(detection_result),
+                guidance=gemini_result.detected_techniques or self._default_guidance(detection_result),
+                threat_score=gemini_result.llm_score
+            )
+            
+        except Exception as e:
+            logger.warning(f"Gemini interpretation failed, using fallback: {e}")
+            # Fallback to rule-based interpretation
+            return InterpretationResult(
+                verdict=detection_result.final_verdict,
+                reasons=self._default_reasons(detection_result),
+                guidance=self._default_guidance(detection_result),
+                threat_score=1.0 - (detection_result.total_score / 100)
+            )
+    
+    def _build_technical_report(
+        self, 
+        result: ComprehensivePhishingAnalysis, 
+        subject: str
+    ) -> Dict[str, Any]:
+        """
+        Build sanitized technical report for Gemini.
+        
+        Only includes structured findings, NOT raw email content.
+        This prevents prompt injection attacks.
+        """
+        return {
+            "subject": subject[:100],  # Truncate for safety
+            "verdict": result.final_verdict,
+            "total_score": result.total_score,
+            "confidence": result.confidence,
+            "risk_factors": result.risk_factors[:10],  # Top 10
+            "sections": {
+                "sender": {
+                    "score": result.sender.score,
+                    "indicators": result.sender.indicators[:5]
+                },
+                "content": {
+                    "score": result.content.score,
+                    "urgency_level": result.content.urgency_level,
+                    "keyword_count": result.content.keyword_count,
+                    "indicators": result.content.indicators[:5]
+                },
+                "links": {
+                    "score": result.links.overall_score,
+                    "total_links": result.links.total_links,
+                    "http_links": result.links.http_links,
+                    "redirect_links": result.links.redirect_links,
+                    "suspicious_tlds": result.links.suspicious_tlds[:3],
+                    "indicators": result.links.indicators[:5]
+                },
+                "authentication": {
+                    "score": result.authentication.overall_score,
+                    "spf": result.authentication.spf_result,
+                    "dkim": result.authentication.dkim_result,
+                    "dmarc": result.authentication.dmarc_result,
+                    "indicators": result.authentication.indicators[:5]
+                },
+                "attachments": {
+                    "score": result.attachments.score,
+                    "count": result.attachments.total_attachments,
+                    "dangerous_types": result.attachments.dangerous_extensions[:3],
+                    "indicators": result.attachments.indicators[:5]
+                }
+            }
+        }
+    
+    def _default_reasons(self, result: ComprehensivePhishingAnalysis) -> List[str]:
+        """Generate default plain-language reasons when Gemini unavailable"""
+        reasons = []
+        
+        if result.authentication.spf_result in ['fail', 'softfail']:
+            reasons.append("The sender's email address may be spoofed (failed SPF check).")
+        if result.authentication.dkim_result == 'fail':
+            reasons.append("The email signature could not be verified (failed DKIM).")
+        if result.content.urgency_level == 'HIGH':
+            reasons.append("The message uses urgent language to pressure you into acting quickly.")
+        if result.links.http_links > 0:
+            reasons.append(f"Contains {result.links.http_links} insecure link(s) that could be dangerous.")
+        if result.links.redirect_links > 0:
+            reasons.append("Contains links that redirect through unknown websites.")
+        if len(result.attachments.dangerous_extensions) > 0:
+            reasons.append(f"Contains potentially dangerous attachment(s): {', '.join(result.attachments.dangerous_extensions)}")
+        if result.sender.score < 50:
+            reasons.append("The sender's display name doesn't match their email address.")
+        if len(result.links.suspicious_tlds) > 0:
+            reasons.append(f"Contains links to suspicious domains ({', '.join(result.links.suspicious_tlds[:2])}).")
+        
+        # Ensure at least one reason
+        if not reasons:
+            if result.final_verdict == "PHISHING":
+                reasons.append("Multiple indicators suggest this email is attempting to deceive you.")
+            elif result.final_verdict == "SUSPICIOUS":
+                reasons.append("Some elements of this email raise concerns.")
+            else:
+                reasons.append("No major security concerns were detected.")
+        
+        return reasons[:6]  # Max 6 reasons
+    
+    def _default_guidance(self, result: ComprehensivePhishingAnalysis) -> List[str]:
+        """Generate default safety guidance when Gemini unavailable"""
+        verdict = result.final_verdict
+        
+        if verdict == "PHISHING":
+            return [
+                "Delete this email immediately.",
+                "Do NOT click any links or open attachments.",
+                "If you clicked a link, change your password immediately.",
+                "Report this email to your IT/Security team."
+            ]
+        elif verdict == "SUSPICIOUS":
+            return [
+                "Do not click links or open attachments.",
+                "Verify the sender through a known, trusted channel.",
+                "If unsure, forward to your IT/Security team for review."
+            ]
+        else:
+            return [
+                "This email appears safe, but always stay vigilant.",
+                "Verify unexpected requests through official channels."
+            ]
+    
+    async def _send_analysis_response(self, job: AnalysisJob) -> bool:
+        """
+        Send analysis results back to the user who forwarded the email.
+        
+        Security considerations:
+        - Never include clickable links from the original email
+        - Sanitize all content before including in response
+        - Use plain text to avoid HTML injection
+        """
+        if not job.forwarded_by:
+            logger.warning(f"[Job {job.job_id}] No recipient email, skipping response")
+            return False
+        
+        if not job.detection_result or not job.interpretation:
+            logger.warning(f"[Job {job.job_id}] Incomplete results, skipping response")
+            return False
+        
+        verdict = job.detection_result.final_verdict
+        interpretation = job.interpretation
+        detection = job.detection_result
+        
+        # Verdict emoji mapping
+        verdict_display = {
+            "PHISHING": "🚨 PHISHING",
+            "SUSPICIOUS": "⚠️ SUSPICIOUS", 
+            "SAFE": "✅ LIKELY SAFE"
+        }
+        
+        # Format reasons as bullets
+        reasons_text = "\n".join(f"  • {reason}" for reason in interpretation.reasons)
+        
+        # Format guidance as bullets
+        guidance_text = "\n".join(f"  👉 {tip}" for tip in interpretation.guidance)
+        
+        # Build email body (plain text for security)
+        email_body = f"""
+════════════════════════════════════════════════════════════
+                    PhishNet Analysis Report
+════════════════════════════════════════════════════════════
+
+ANALYZED EMAIL
+Subject: {self._sanitize_text(job.original_subject)}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VERDICT: {verdict_display.get(verdict, verdict)}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+KEY FINDINGS:
+{reasons_text}
+
+RECOMMENDED ACTIONS:
+{guidance_text}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TECHNICAL DETAILS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Risk Score: {detection.total_score}/100 (lower = more dangerous)
+Confidence: {detection.confidence:.0%}
+
+Section Scores:
+  • Sender Analysis:     {detection.sender.score}/100
+  • Content Analysis:    {detection.content.score}/100
+  • Link Analysis:       {detection.links.overall_score}/100
+  • Authentication:      {detection.authentication.overall_score}/100
+  • Attachment Analysis: {detection.attachments.score}/100
+
+Authentication Results:
+  • SPF:   {detection.authentication.spf_result.upper()}
+  • DKIM:  {detection.authentication.dkim_result.upper()}
+  • DMARC: {detection.authentication.dmarc_result.upper()}
+
+════════════════════════════════════════════════════════════
+This is an automated analysis by PhishNet.
+For questions, contact your IT/Security team.
+════════════════════════════════════════════════════════════
+"""
+        
+        # Send email
+        subject = f"PhishNet Analysis: {verdict_display.get(verdict, verdict)} — {self._sanitize_text(job.original_subject)[:50]}"
+        
+        success = await send_email(
+            to_email=job.forwarded_by,
+            subject=subject,
+            body=email_body,
+            html=False  # Plain text for security
+        )
+        
+        if success:
+            logger.info(f"[Job {job.job_id}] Response sent to {job.forwarded_by}")
+        else:
+            logger.error(f"[Job {job.job_id}] Failed to send response to {job.forwarded_by}")
+        
+        return success
+    
+    def _sanitize_text(self, text: str) -> str:
+        """Sanitize text for safe inclusion in response email"""
+        if not text:
+            return ""
+        # Remove potentially dangerous characters, limit length
+        sanitized = text.replace('\r', '').replace('\n', ' ')
+        # Remove any HTML-like content
+        sanitized = sanitized.replace('<', '&lt;').replace('>', '&gt;')
+        return sanitized[:200]
+    
+    async def process_all_pending(self) -> List[AnalysisJob]:
+        """
+        Process all pending emails in the inbox.
+        
+        Returns:
+            List of completed AnalysisJob objects
+        """
+        pending_emails = self.imap_service.get_pending_emails()
+        logger.info(f"Found {len(pending_emails)} pending emails for analysis")
+        
+        completed_jobs = []
+        
+        for email_info in pending_emails:
+            try:
+                mail_uid = email_info.get('uid')
+                if not mail_uid:
+                    continue
+                
+                job = await self.process_single_email(mail_uid)
+                completed_jobs.append(job)
+                
+            except Exception as e:
+                logger.error(f"Failed to process email {email_info.get('uid')}: {e}")
+                continue
+        
+        logger.info(f"Completed {len(completed_jobs)} / {len(pending_emails)} email analyses")
+        return completed_jobs
+    
+    def get_job_status(self, job_id: str) -> Optional[AnalysisJob]:
+        """Get status of a specific job"""
+        return self._active_jobs.get(job_id)
+    
+    def get_active_jobs(self) -> List[AnalysisJob]:
+        """Get all active/recent jobs"""
+        return list(self._active_jobs.values())
+
+
+# Singleton instance for dependency injection
+_orchestrator_instance: Optional[OnDemandOrchestrator] = None
+
+
+def get_ondemand_orchestrator() -> OnDemandOrchestrator:
+    """Get or create the singleton orchestrator instance"""
+    global _orchestrator_instance
+    if _orchestrator_instance is None:
+        _orchestrator_instance = OnDemandOrchestrator()
+    return _orchestrator_instance

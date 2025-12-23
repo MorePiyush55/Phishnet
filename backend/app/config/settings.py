@@ -122,6 +122,13 @@ class Settings(BaseSettings):
     ENABLE_LINK_ANALYSIS: bool = True
     ENABLE_THREAT_INTEL: bool = True
     
+    # Gemini AI Configuration
+    GEMINI_API_KEY: Optional[str] = None
+    GOOGLE_GEMINI_API_KEY: Optional[str] = None  # Alternative env var name
+    
+    # Email Polling Worker Configuration
+    EMAIL_POLL_INTERVAL: int = 30  # seconds between IMAP polls
+    
     # Playwright Configuration
     PLAYWRIGHT_HEADLESS: bool = True
     PLAYWRIGHT_TIMEOUT: int = 30000  # 30 seconds
@@ -286,6 +293,16 @@ class Settings(BaseSettings):
         except ImportError:
             # Fallback to environment variable if key manager not available
             return os.getenv('GOOGLE_API_KEY')
+    
+    def get_gemini_api_key(self) -> Optional[str]:
+        """Get Gemini API key securely."""
+        # Check settings first, then environment variables
+        if self.GEMINI_API_KEY:
+            return self.GEMINI_API_KEY
+        if self.GOOGLE_GEMINI_API_KEY:
+            return self.GOOGLE_GEMINI_API_KEY
+        # Fallback to environment variables
+        return os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_GEMINI_API_KEY')
     
     def validate_api_keys(self) -> Dict[str, bool]:
         """Validate all required API keys are available."""

@@ -30,7 +30,7 @@ class GeminiClient(IAnalyzer):
     """
     
     BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
-    MODEL_NAME = "gemini-pro"  # or "gemini-1.5-pro" for latest
+    MODEL_NAME = "gemini-2.0-flash"  # Current stable model for 2025
     
     # Rate limits for Gemini API (free tier)
     REQUESTS_PER_MINUTE = 60
@@ -38,7 +38,18 @@ class GeminiClient(IAnalyzer):
     
     def __init__(self, api_key: Optional[str] = None):
         super().__init__("gemini")
-        self.api_key = api_key or os.getenv("GEMINI_API_KEY") or getattr(settings, 'GEMINI_API_KEY', None)
+        # Try multiple sources for the API key
+        self.api_key = (
+            api_key 
+            or os.getenv("GEMINI_API_KEY") 
+            or os.getenv("GOOGLE_GEMINI_API_KEY")
+            or getattr(settings, 'GEMINI_API_KEY', None)
+            or getattr(settings, 'GOOGLE_GEMINI_API_KEY', None)
+        )
+        # Also try settings method if available
+        if not self.api_key and hasattr(settings, 'get_gemini_api_key'):
+            self.api_key = settings.get_gemini_api_key()
+            
         self._rate_limiter = asyncio.Semaphore(10)  # Concurrent requests
         self._last_request_time = 0.0
         
@@ -624,7 +635,8 @@ Provide only the JSON response, no additional text.
                     "Automated interpretation unavailable.",
                     "Please review the technical details below."
                 ],
-                confidence_reasoning=f"Interpretation failed: {str(e)}"
+                confidence_reasoning=f"Interpretation failed: {str(e)}",
+                detected_techniques=["Proceed with caution"]
             )
 
     def _build_interpretation_prompt(self, technical_summary: str, subject: str) -> str:
