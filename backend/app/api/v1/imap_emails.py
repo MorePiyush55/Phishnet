@@ -393,14 +393,29 @@ View full dashboard: https://phishnet.ai/dashboard
 This is an automated message from PhishNet.
 """
         
-        # Send email via SMTP
+        # Send email via SMTP with timeout
         from app.services.email_sender import send_email
-        await send_email(to_email=recipient_email, subject=f"Analysis Result: {original_subject}", body=email_body)
+        import asyncio
         
-        logger.info(f"Notification sent to {recipient_email}")
+        try:
+            # Add 30 second timeout to prevent hanging
+            success = await asyncio.wait_for(
+                send_email(to_email=recipient_email, subject=f"Analysis Result: {original_subject}", body=email_body),
+                timeout=30.0
+            )
+            
+            if success:
+                logger.info(f"✅ Notification successfully sent to {recipient_email}")
+            else:
+                logger.error(f"❌ Failed to send notification to {recipient_email} - SMTP returned False")
+                
+        except asyncio.TimeoutError:
+            logger.error(f"❌ Email notification to {recipient_email} timed out after 30s")
+        except Exception as smtp_error:
+            logger.error(f"❌ SMTP error sending to {recipient_email}: {smtp_error}")
         
     except Exception as e:
-        logger.error(f"Failed to send notification: {str(e)}")
+        logger.error(f"Failed to send notification: {str(e)}", exc_info=True)
 
 
 async def store_analysis_result(db: Session, analysis_data: Dict[str, Any]):
