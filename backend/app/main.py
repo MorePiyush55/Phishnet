@@ -125,7 +125,7 @@ async def lifespan(app: FastAPI):
     # Initialize Email Polling Service
     try:
         from app.services.email_poller import email_polling_service
-        # asyncio.create_task(email_polling_service.start())
+        asyncio.create_task(email_polling_service.start())
         logger.info("Email polling service started")
     except Exception as e:
         logger.warning(f"Email polling service initialization failed: {e}")

@@ -337,17 +337,9 @@ View full dashboard: https://phishnet.ai/dashboard
 This is an automated message from PhishNet.
 """
         
-        # TODO: Send email via SMTP
-        # from app.services.email_sender import send_email
-        # await send_email(to=recipient_email, subject=f"Analysis Result: {original_subject}", body=email_body)
-        
-        # For now, log the body to demonstrate it works
-        logger.info(f"--- EMAIL BODY FOR {recipient_email} ---\n{email_body}\n---------------------------------------")
-        
-        logger.info(f"Notification sent to {recipient_email}")
-        
-    except Exception as e:
-        logger.error(f"Failed to send notification: {str(e)}")
+        # Send email via SMTP
+        from app.services.email_sender import send_email
+        await send_email(to_email=recipient_email, subject=f"Analysis Result: {original_subject}", body=email_body)
         
         logger.info(f"Notification sent to {recipient_email}")
         
