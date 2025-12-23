@@ -6,6 +6,7 @@ Provides distributed tracing, metrics, and observability.
 import os
 import logging
 from typing import Optional, Dict, Any
+from contextlib import contextmanager
 
 # Make OpenTelemetry imports optional to prevent startup failures
 try:
@@ -27,6 +28,9 @@ except ImportError:
     OPENTELEMETRY_AVAILABLE = False
     trace = None
     metrics = None
+    SpanAttributes = None
+    Status = None
+    StatusCode = None
 
 # Optional: aiohttp instrumentation (often missing)
 try:
@@ -41,20 +45,76 @@ from app.config.logging import get_logger
 
 logger = get_logger(__name__)
 
+
+# NoOp implementations for when OpenTelemetry is not available
+class NoOpSpan:
+    """A no-operation span that does nothing."""
+    def set_attribute(self, key: str, value: Any) -> None:
+        pass
+    
+    def set_status(self, status: Any) -> None:
+        pass
+    
+    def end(self) -> None:
+        pass
+    
+    def record_exception(self, exception: Exception) -> None:
+        pass
+
+
+class NoOpTracer:
+    """A no-operation tracer that returns NoOp spans."""
+    def start_span(self, name: str, **kwargs) -> NoOpSpan:
+        return NoOpSpan()
+    
+    def start_as_current_span(self, name: str, **kwargs):
+        @contextmanager
+        def noop_context():
+            yield NoOpSpan()
+        return noop_context()
+
+
+class NoOpMeter:
+    """A no-operation meter that returns NoOp instruments."""
+    def create_counter(self, name: str, **kwargs):
+        return NoOpCounter()
+    
+    def create_histogram(self, name: str, **kwargs):
+        return NoOpHistogram()
+    
+    def create_up_down_counter(self, name: str, **kwargs):
+        return NoOpCounter()
+
+
+class NoOpCounter:
+    """A no-operation counter."""
+    def add(self, amount: int, attributes: Dict = None) -> None:
+        pass
+
+
+class NoOpHistogram:
+    """A no-operation histogram."""
+    def record(self, amount: float, attributes: Dict = None) -> None:
+        pass
+
+
 # Global tracer and meter instances
-_tracer: Optional[trace.Tracer] = None
-_meter: Optional[metrics.Meter] = None
+_tracer = None
+_meter = None
 
 # Metrics instruments
-_emails_processed_counter: Optional[metrics.Counter] = None
-_scan_latency_histogram: Optional[metrics.Histogram] = None
-_api_error_counter: Optional[metrics.Counter] = None
-_external_api_failures_counter: Optional[metrics.Counter] = None
-_circuit_breaker_state_gauge: Optional[Any] = None
+_emails_processed_counter = None
+_scan_latency_histogram = None
+_api_error_counter = None
+_external_api_failures_counter = None
+_circuit_breaker_state_gauge = None
 
 
-def configure_resource() -> Resource:
+def configure_resource():
     """Configure OpenTelemetry resource with service information."""
+    if not OPENTELEMETRY_AVAILABLE:
+        logger.warning("OpenTelemetry not available, skipping resource configuration")
+        return None
     return Resource.create({
         SERVICE_NAME: "phishnet",
         SERVICE_VERSION: getattr(settings, 'VERSION', '1.0.0'),
@@ -66,6 +126,11 @@ def configure_resource() -> Resource:
 def configure_tracing() -> None:
     """Configure OpenTelemetry tracing with Jaeger export."""
     global _tracer
+    
+    if not OPENTELEMETRY_AVAILABLE:
+        logger.warning("OpenTelemetry not available, skipping tracing configuration")
+        _tracer = NoOpTracer()
+        return
     
     resource = configure_resource()
     
@@ -92,6 +157,11 @@ def configure_metrics() -> None:
     """Configure OpenTelemetry metrics with Prometheus export."""
     global _meter, _emails_processed_counter, _scan_latency_histogram
     global _api_error_counter, _external_api_failures_counter, _circuit_breaker_state_gauge
+    
+    if not OPENTELEMETRY_AVAILABLE:
+        logger.warning("OpenTelemetry not available, skipping metrics configuration")
+        _meter = NoOpMeter()
+        return
     
     resource = configure_resource()
     
@@ -185,21 +255,32 @@ def setup_observability() -> None:
         pass
 
 
-def get_tracer() -> trace.Tracer:
+def get_tracer():
     """Get the configured tracer instance."""
     global _tracer
     if _tracer is None:
-        # Fallback tracer if not configured
-        _tracer = trace.get_tracer(__name__)
+        if OPENTELEMETRY_AVAILABLE and trace is not None:
+            # Real tracer if OpenTelemetry is available
+            _tracer = trace.get_tracer(__name__)
+        else:
+            # NoOp tracer if OpenTelemetry is not available
+            _tracer = NoOpTracer()
+            logger.debug("Using NoOp tracer (OpenTelemetry not available)")
     return _tracer
 
 
-def get_meter() -> metrics.Meter:
+def get_meter():
     """Get the configured meter instance."""
     global _meter
     if _meter is None:
-        # Fallback meter if not configured
-        _meter = metrics.get_meter(__name__)
+        if OPENTELEMETRY_AVAILABLE and metrics is not None:
+            # Real meter if OpenTelemetry is available
+            _meter = metrics.get_meter(__name__)
+        else:
+            # NoOp meter if OpenTelemetry is not available
+            _meter = NoOpMeter()
+            logger.debug("Using NoOp meter (OpenTelemetry not available)")
+    return _meter
     return _meter
 
 
@@ -268,12 +349,14 @@ class traced_span:
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.span:
             if exc_type:
-                self.span.set_status(Status(StatusCode.ERROR, str(exc_val)))
+                if OPENTELEMETRY_AVAILABLE and Status and StatusCode:
+                    self.span.set_status(Status(StatusCode.ERROR, str(exc_val)))
                 self.span.set_attribute("error", True)
                 self.span.set_attribute("error.type", exc_type.__name__)
                 self.span.set_attribute("error.message", str(exc_val))
             else:
-                self.span.set_status(Status(StatusCode.OK))
+                if OPENTELEMETRY_AVAILABLE and Status and StatusCode:
+                    self.span.set_status(Status(StatusCode.OK))
             
             self.span.end()
 
@@ -282,14 +365,16 @@ def trace_external_api_call(service: str, operation: str):
     """Decorator for tracing external API calls."""
     def decorator(func):
         async def wrapper(*args, **kwargs):
-            with traced_span(
-                f"{service}.{operation}",
-                {
-                    "service.name": service,
-                    "operation": operation,
-                    SpanAttributes.HTTP_METHOD: "POST"  # Most APIs use POST
-                }
-            ) as span:
+            attributes = {
+                "service.name": service,
+                "operation": operation,
+            }
+            if SpanAttributes:
+                attributes[SpanAttributes.HTTP_METHOD] = "POST"  # Most APIs use POST
+            else:
+                attributes["http.method"] = "POST"
+            
+            with traced_span(f"{service}.{operation}", attributes) as span:
                 try:
                     result = await func(*args, **kwargs)
                     span.set_attribute("success", True)
