@@ -56,6 +56,26 @@ async def test_imap_connection(
         )
 
 
+@router.post("/debug/verify-smtp")
+async def verify_smtp_config(
+   target_email: str,
+   current_user: User = Depends(require_analyst) 
+):
+    """
+    Send a test email to verify SMTP settings on the server.
+    """
+    try:
+        from app.services.email_sender import send_email
+        success = await send_email(
+            to_email=target_email,
+            subject="PhishNet SMTP Verification",
+            body="If you see this, the backend can successfully send emails!",
+            html=False
+        )
+        return {"success": success, "recipient": target_email}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 @router.get("/pending")
 async def list_pending_forwarded_emails(
     current_user: User = Depends(require_analyst)
@@ -270,6 +290,42 @@ async def get_forwarding_stats(
             detail=f"Failed to retrieve stats: {str(e)}"
         )
 
+
+@router.post("/debug/trigger-poll")
+async def manual_trigger_poll(
+    current_user: User = Depends(require_analyst)
+):
+    """
+    Manually trigger one email polling cycle for debugging.
+    
+    This forces the system to check IMAP, analyze pending emails,
+    and send notifications immediately, skipping the schedule.
+    """
+    try:
+        from app.services.email_poller import email_polling_service
+        
+        # Determine if we can run it safely
+        if email_polling_service.is_running:
+            return {
+                "success": False,
+                "message": "Polling service is already running in background. Check logs."
+            }
+            
+        # Run one cycle
+        logger.info("Manually triggering email poll")
+        # We call the internal logic directly
+        await email_polling_service.poll_and_analyze()
+        
+        return {
+            "success": True,
+            "message": "Manual polling cycle completed successfully."
+        }
+    except Exception as e:
+        logger.error(f"Manual poll failed: {str(e)}")
+        return {
+            "success": False, 
+            "message": f"Manual poll failed: {str(e)}"
+        }
 
 # Helper functions
 
