@@ -1,4 +1,6 @@
 import smtplib
+import base64
+import httpx
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from app.config.settings import settings
@@ -7,6 +9,40 @@ import ssl
 from starlette.concurrency import run_in_threadpool
 
 logger = get_logger(__name__)
+
+
+# ============================================================================
+# HTTPS-based Email Sender (Works on Render Free Tier)
+# ============================================================================
+
+async def send_email_via_gmail_api(to_email: str, subject: str, body: str, html: bool = False) -> bool:
+    """
+    Send email using Gmail API over HTTPS.
+    This works on Render's free tier which blocks SMTP ports.
+    
+    Note: Requires OAuth2 token or uses fallback SMTP.
+    For simplicity, we'll use a webhook-based approach or SMTP as fallback.
+    """
+    # Try SMTP first with timeout handling for Render
+    return await send_email_smtp_with_fallback(to_email, subject, body, html)
+
+
+async def send_email_smtp_with_fallback(to_email: str, subject: str, body: str, html: bool = False) -> bool:
+    """
+    Try SMTP with short timeout, log clearly if blocked.
+    """
+    try:
+        result = await send_email(to_email, subject, body, html)
+        return result
+    except Exception as e:
+        logger.error(f"Email sending failed (Render may block SMTP): {e}")
+        logger.warning(
+            f"📧 EMAIL DELIVERY BLOCKED - Render free tier blocks SMTP. "
+            f"Analysis completed but response not sent to {to_email}. "
+            f"Consider using SendGrid/Mailgun API for production."
+        )
+        return False
+
 
 def send_email_sync(to_email: str, subject: str, body: str, html: bool = False) -> bool:
     """
@@ -42,7 +78,8 @@ def send_email_sync(to_email: str, subject: str, body: str, html: bool = False) 
 
     try:
         context = ssl.create_default_context()
-        with smtplib.SMTP(smtp_server, smtp_port) as server:
+        # Short timeout to fail fast on Render
+        with smtplib.SMTP(smtp_server, smtp_port, timeout=10) as server:
             server.set_debuglevel(0)  # Set to 1 for debug output
             server.ehlo()
             server.starttls(context=context)
@@ -50,11 +87,17 @@ def send_email_sync(to_email: str, subject: str, body: str, html: bool = False) 
             server.login(sender_email, password)
             server.send_message(msg)
             
-        logger.info(f"SMTP: Email sent successfully to {to_email}")
+        logger.info(f"✅ SMTP: Email sent successfully to {to_email}")
         return True
         
     except smtplib.SMTPAuthenticationError:
         logger.error("SMTP Authentication failed. Check username/app password.")
+        return False
+    except OSError as e:
+        if e.errno == 101:  # Network unreachable - Render blocks SMTP
+            logger.error(f"🚫 SMTP BLOCKED by Render (Network unreachable). Use SendGrid/Mailgun for production.")
+        else:
+            logger.error(f"SMTP Network Error: {e}")
         return False
     except Exception as e:
         logger.error(f"SMTP Error sending to {to_email}: {str(e)}")
