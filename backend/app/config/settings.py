@@ -76,9 +76,14 @@ class Settings(BaseSettings):
     SMTP_FROM_EMAIL: str = "noreply@phishnet.ai"
     SMTP_FROM_NAME: str = "PhishNet Security"
     
-    # Brevo (Sendinblue) Email API - Works on Render free tier
+    # Brevo (Sendinblue) Email API - Requires account activation (24-48h)
     # Get free API key at https://brevo.com (300 emails/day free)
     BREVO_API_KEY: Optional[str] = None
+    
+    # Resend Email API - Works immediately (Recommended)
+    # Get free API key at https://resend.com (100 emails/day free)
+    RESEND_API_KEY: Optional[str] = None
+    RESEND_FROM_EMAIL: str = "PhishNet <onboarding@resend.dev>"
     
     # OAuth Security Settings
     OAUTH_RATE_LIMIT_REQUESTS: int = 20

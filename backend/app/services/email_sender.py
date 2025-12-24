@@ -13,7 +13,61 @@ logger = get_logger(__name__)
 
 
 # ============================================================================
-# Brevo (Sendinblue) Email Sender - Works on Render Free Tier
+# Resend Email Sender - Works Immediately (Recommended)
+# ============================================================================
+
+RESEND_API_URL = "https://api.resend.com/emails"
+
+
+async def send_email_via_resend(to_email: str, subject: str, body: str, html: bool = False) -> bool:
+    """
+    Send email using Resend API over HTTPS.
+    Free tier: 100 emails/day, works immediately.
+    
+    Requires RESEND_API_KEY environment variable.
+    """
+    api_key = os.getenv('RESEND_API_KEY') or getattr(settings, 'RESEND_API_KEY', None)
+    
+    if not api_key:
+        return False
+    
+    # Resend requires verified domain or use onboarding@resend.dev for testing
+    sender_email = os.getenv('RESEND_FROM_EMAIL', 'PhishNet <onboarding@resend.dev>')
+    
+    payload = {
+        "from": sender_email,
+        "to": [to_email],
+        "subject": subject,
+    }
+    
+    if html:
+        payload["html"] = body
+    else:
+        payload["text"] = body
+    
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(RESEND_API_URL, json=payload, headers=headers)
+            
+            if response.status_code in [200, 201]:
+                logger.info(f"✅ Resend: Email sent successfully to {to_email}")
+                return True
+            else:
+                logger.error(f"❌ Resend API error: {response.status_code} - {response.text}")
+                return False
+                
+    except Exception as e:
+        logger.error(f"❌ Resend error: {str(e)}")
+        return False
+
+
+# ============================================================================
+# Brevo (Sendinblue) Email Sender - Requires Account Activation
 # ============================================================================
 
 BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
@@ -25,12 +79,12 @@ async def send_email_via_brevo(to_email: str, subject: str, body: str, html: boo
     Free tier: 300 emails/day.
     
     Requires BREVO_API_KEY environment variable.
+    Note: New accounts need activation (24-48 hours).
     """
     api_key = os.getenv('BREVO_API_KEY') or getattr(settings, 'BREVO_API_KEY', None)
     
     if not api_key:
-        logger.warning("BREVO_API_KEY not configured, falling back to SMTP")
-        return await send_email(to_email, subject, body, html)
+        return False
     
     sender_email = getattr(settings, 'IMAP_USER', 'phishnet.ai@gmail.com')
     sender_name = "PhishNet Analysis"
@@ -80,23 +134,30 @@ async def send_email_via_brevo(to_email: str, subject: str, body: str, html: boo
 
 async def send_email_smtp_with_fallback(to_email: str, subject: str, body: str, html: bool = False) -> bool:
     """
-    Try Brevo first (works on Render), fallback to SMTP.
+    Try email providers in order: Resend -> Brevo -> SMTP
     """
-    # Check if Brevo is configured
-    brevo_key = os.getenv('BREVO_API_KEY') or getattr(settings, 'BREVO_API_KEY', None)
+    # Try Resend first (works immediately)
+    resend_key = os.getenv('RESEND_API_KEY') or getattr(settings, 'RESEND_API_KEY', None)
+    if resend_key:
+        result = await send_email_via_resend(to_email, subject, body, html)
+        if result:
+            return True
     
+    # Try Brevo second
+    brevo_key = os.getenv('BREVO_API_KEY') or getattr(settings, 'BREVO_API_KEY', None)
     if brevo_key:
-        return await send_email_via_brevo(to_email, subject, body, html)
+        result = await send_email_via_brevo(to_email, subject, body, html)
+        if result:
+            return True
     
     # Fallback to SMTP (will fail on Render free tier)
     try:
-        result = await send_email(to_email, subject, body, html)
+        result = await run_in_threadpool(send_email_sync, to_email, subject, body, html)
         return result
     except Exception as e:
         logger.error(f"Email sending failed: {e}")
         logger.warning(
-            f"📧 EMAIL DELIVERY BLOCKED - Configure BREVO_API_KEY for production. "
-            f"Get free API key at https://brevo.com (300 emails/day free)"
+            f"📧 EMAIL DELIVERY FAILED - Configure RESEND_API_KEY (recommended) or BREVO_API_KEY"
         )
         return False
 
@@ -153,12 +214,21 @@ def send_email_sync(to_email: str, subject: str, body: str, html: bool = False) 
 async def send_email(to_email: str, subject: str, body: str, html: bool = False) -> bool:
     """
     Async wrapper for sending email.
-    Uses Brevo if configured, otherwise tries SMTP.
+    Priority: Resend -> Brevo -> SMTP
     """
-    # Try Brevo first
+    # Try Resend first (works immediately, recommended)
+    resend_key = os.getenv('RESEND_API_KEY') or getattr(settings, 'RESEND_API_KEY', None)
+    if resend_key:
+        result = await send_email_via_resend(to_email, subject, body, html)
+        if result:
+            return True
+    
+    # Try Brevo second
     brevo_key = os.getenv('BREVO_API_KEY') or getattr(settings, 'BREVO_API_KEY', None)
     if brevo_key:
-        return await send_email_via_brevo(to_email, subject, body, html)
+        result = await send_email_via_brevo(to_email, subject, body, html)
+        if result:
+            return True
     
-    # Fallback to SMTP
+    # Fallback to SMTP (blocked on Render)
     return await run_in_threadpool(send_email_sync, to_email, subject, body, html)
