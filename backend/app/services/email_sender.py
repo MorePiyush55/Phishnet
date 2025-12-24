@@ -10,7 +10,7 @@ logger = get_logger(__name__)
 
 def send_email_sync(to_email: str, subject: str, body: str, html: bool = False) -> bool:
     """
-    Send an email using SMTP (Synchronous - blocking).
+    Send an email using Mailgun HTTP API (SMTP blocked on Render).
     
     Args:
         to_email: Recipient email address
@@ -21,43 +21,12 @@ def send_email_sync(to_email: str, subject: str, body: str, html: bool = False) 
     Returns:
         bool: True if sent successfully, False otherwise
     """
-    # Use settings but fallback to os.getenv if needed (redundant if settings loads correctly)
-    smtp_server = "smtp.gmail.com"
-    smtp_port = 587
-    
-    # Credentials should come from settings (loaded from env)
-    sender_email = getattr(settings, 'IMAP_USER', None)
-    password = getattr(settings, 'IMAP_PASSWORD', None)
-
-    if not sender_email or not password:
-        logger.warning(f"SMTP credentials missing. User: {sender_email}, Pass: {'*' * 5 if password else 'None'}")
-        return False
-
-    msg = MIMEMultipart()
-    msg['From'] = f"PhishNet Analysis <{sender_email}>"
-    msg['To'] = to_email
-    msg['Subject'] = subject
-
-    msg.attach(MIMEText(body, 'html' if html else 'plain'))
-
     try:
-        context = ssl.create_default_context()
-        with smtplib.SMTP(smtp_server, smtp_port) as server:
-            server.set_debuglevel(0)  # Set to 1 for debug output
-            server.ehlo()
-            server.starttls(context=context)
-            server.ehlo()
-            server.login(sender_email, password)
-            server.send_message(msg)
-            
-        logger.info(f"SMTP: Email sent successfully to {to_email}")
-        return True
-        
-    except smtplib.SMTPAuthenticationError:
-        logger.error("SMTP Authentication failed. Check username/app password.")
-        return False
+        # Use Mailgun instead of SMTP (Render blocks SMTP)
+        from app.services.mailgun_sender import send_email_via_mailgun
+        return send_email_via_mailgun(to_email, subject, body, html)
     except Exception as e:
-        logger.error(f"SMTP Error sending to {to_email}: {str(e)}")
+        logger.error(f"Email sending failed: {e}")
         return False
 
 async def send_email(to_email: str, subject: str, body: str, html: bool = False) -> bool:
