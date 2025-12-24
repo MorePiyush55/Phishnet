@@ -19,20 +19,20 @@ logger = get_logger(__name__)
 BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
 
 
-async def send_email_via_brevo(to_email: str, subject: str, body: str, html: bool = True) -> bool:
+async def send_email_via_brevo(to_email: str, subject: str, body: str, html: bool = False) -> bool:
     """
-    Send email using Brevo (Sendinblue) HTTPS API.
-    Works on Render free tier - 300 emails/day free.
+    Send email using Brevo (Sendinblue) API over HTTPS.
+    Free tier: 300 emails/day.
     
-    Requires: BREVO_API_KEY environment variable
+    Requires BREVO_API_KEY environment variable.
     """
-    api_key = getattr(settings, 'BREVO_API_KEY', None) or os.getenv('BREVO_API_KEY')
+    api_key = os.getenv('BREVO_API_KEY') or getattr(settings, 'BREVO_API_KEY', None)
     
     if not api_key:
         logger.warning("BREVO_API_KEY not configured, falling back to SMTP")
         return await send_email(to_email, subject, body, html)
     
-    sender_email = getattr(settings, 'IMAP_USER', None) or os.getenv('IMAP_USER', 'phishnet.ai@gmail.com')
+    sender_email = getattr(settings, 'IMAP_USER', 'phishnet.ai@gmail.com')
     sender_name = "PhishNet Analysis"
     
     payload = {
@@ -63,49 +63,48 @@ async def send_email_via_brevo(to_email: str, subject: str, body: str, html: boo
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(BREVO_API_URL, json=payload, headers=headers)
             
-            if response.status_code in (200, 201):
+            if response.status_code in [200, 201]:
                 logger.info(f"✅ Brevo: Email sent successfully to {to_email}")
                 return True
             else:
-                logger.error(f"Brevo API error {response.status_code}: {response.text}")
+                logger.error(f"❌ Brevo API error: {response.status_code} - {response.text}")
                 return False
                 
     except httpx.TimeoutException:
-        logger.error(f"Brevo API timeout sending to {to_email}")
+        logger.error(f"❌ Brevo timeout sending to {to_email}")
         return False
     except Exception as e:
-        logger.error(f"Brevo API error: {e}")
+        logger.error(f"❌ Brevo error: {str(e)}")
         return False
 
 
-# ============================================================================
-# Main Email Sending Function (Uses Brevo if available, fallback to SMTP)
-# ============================================================================
-
-async def send_email_smart(to_email: str, subject: str, body: str, html: bool = True) -> bool:
+async def send_email_smtp_with_fallback(to_email: str, subject: str, body: str, html: bool = False) -> bool:
     """
-    Smart email sender - tries Brevo first (works on Render), falls back to SMTP.
+    Try Brevo first (works on Render), fallback to SMTP.
     """
-    # Try Brevo first (works on Render)
-    brevo_key = getattr(settings, 'BREVO_API_KEY', None) or os.getenv('BREVO_API_KEY')
+    # Check if Brevo is configured
+    brevo_key = os.getenv('BREVO_API_KEY') or getattr(settings, 'BREVO_API_KEY', None)
     
     if brevo_key:
-        logger.info(f"📧 Sending email via Brevo to {to_email}")
         return await send_email_via_brevo(to_email, subject, body, html)
     
-    # Fallback to SMTP (may not work on Render free tier)
-    logger.info(f"📧 Sending email via SMTP to {to_email}")
-    return await send_email(to_email, subject, body, html)
+    # Fallback to SMTP (will fail on Render free tier)
+    try:
+        result = await send_email(to_email, subject, body, html)
+        return result
+    except Exception as e:
+        logger.error(f"Email sending failed: {e}")
+        logger.warning(
+            f"📧 EMAIL DELIVERY BLOCKED - Configure BREVO_API_KEY for production. "
+            f"Get free API key at https://brevo.com (300 emails/day free)"
+        )
+        return False
 
-
-# ============================================================================
-# SMTP Email Sender (Fallback - blocked on Render free tier)
-# ============================================================================
 
 def send_email_sync(to_email: str, subject: str, body: str, html: bool = False) -> bool:
     """
     Send an email using SMTP (Synchronous - blocking).
-    Note: SMTP is blocked on Render free tier.
+    Note: SMTP is blocked on Render free tier. Use Brevo instead.
     """
     smtp_server = "smtp.gmail.com"
     smtp_port = 587
@@ -127,6 +126,7 @@ def send_email_sync(to_email: str, subject: str, body: str, html: bool = False) 
     try:
         context = ssl.create_default_context()
         with smtplib.SMTP(smtp_server, smtp_port, timeout=10) as server:
+            server.set_debuglevel(0)
             server.ehlo()
             server.starttls(context=context)
             server.ehlo()
@@ -141,7 +141,7 @@ def send_email_sync(to_email: str, subject: str, body: str, html: bool = False) 
         return False
     except OSError as e:
         if e.errno == 101:
-            logger.error(f"🚫 SMTP BLOCKED by Render. Configure BREVO_API_KEY for email delivery.")
+            logger.error(f"🚫 SMTP BLOCKED (Render). Configure BREVO_API_KEY instead.")
         else:
             logger.error(f"SMTP Network Error: {e}")
         return False
@@ -152,6 +152,13 @@ def send_email_sync(to_email: str, subject: str, body: str, html: bool = False) 
 
 async def send_email(to_email: str, subject: str, body: str, html: bool = False) -> bool:
     """
-    Async wrapper for SMTP email sending.
+    Async wrapper for sending email.
+    Uses Brevo if configured, otherwise tries SMTP.
     """
+    # Try Brevo first
+    brevo_key = os.getenv('BREVO_API_KEY') or getattr(settings, 'BREVO_API_KEY', None)
+    if brevo_key:
+        return await send_email_via_brevo(to_email, subject, body, html)
+    
+    # Fallback to SMTP
     return await run_in_threadpool(send_email_sync, to_email, subject, body, html)

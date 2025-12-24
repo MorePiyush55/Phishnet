@@ -22,7 +22,7 @@ from app.config.logging import get_logger
 from app.services.quick_imap import QuickIMAPService
 from app.services.enhanced_phishing_analyzer import EnhancedPhishingAnalyzer, ComprehensivePhishingAnalysis
 from app.services.gemini import GeminiClient
-from app.services.email_sender import send_email_smart
+from app.services.email_sender import send_email
 from app.models.mongodb_models import ForwardedEmailAnalysis
 from app.config.settings import get_settings
 
@@ -468,10 +468,10 @@ For questions, contact your IT/Security team.
 ════════════════════════════════════════════════════════════
 """
         
-        # Send email (uses Brevo if configured, fallback to SMTP)
+        # Send email
         subject = f"PhishNet Analysis: {verdict_display.get(verdict, verdict)} — {self._sanitize_text(job.original_subject)[:50]}"
         
-        success = await send_email_smart(
+        success = await send_email(
             to_email=job.forwarded_by,
             subject=subject,
             body=email_body,

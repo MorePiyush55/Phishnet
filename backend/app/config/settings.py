@@ -77,6 +77,7 @@ class Settings(BaseSettings):
     SMTP_FROM_NAME: str = "PhishNet Security"
     
     # Brevo (Sendinblue) Email API - Works on Render free tier
+    # Get free API key at https://brevo.com (300 emails/day free)
     BREVO_API_KEY: Optional[str] = None
     
     # OAuth Security Settings
