@@ -235,7 +235,8 @@ class EmailPollingWorker:
         self.metrics.total_polls += 1
         self.metrics.last_poll_at = datetime.utcnow()
         
-        logger.debug(f"Poll cycle #{self.metrics.total_polls} starting...")
+        # Use INFO level so we can see polling activity in Render logs
+        logger.info(f"📬 Poll cycle #{self.metrics.total_polls} starting...")
         
         try:
             # Process all pending emails
@@ -256,11 +257,11 @@ class EmailPollingWorker:
             
             if completed_jobs:
                 logger.info(
-                    f"Poll cycle #{self.metrics.total_polls} complete: "
+                    f"✅ Poll cycle #{self.metrics.total_polls} complete: "
                     f"{len(completed_jobs)} emails processed"
                 )
             else:
-                logger.debug(f"Poll cycle #{self.metrics.total_polls}: No pending emails")
+                logger.info(f"📭 Poll cycle #{self.metrics.total_polls}: No new emails to process")
             
             return completed_jobs
             

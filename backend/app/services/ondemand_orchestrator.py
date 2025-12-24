@@ -517,14 +517,19 @@ For questions, contact your IT/Security team.
         logger.info(f"Checking {len(recent_emails)} recent emails for new submissions...")
         
         completed_jobs = []
+        skipped_count = 0
         
         for email_info in recent_emails:
             try:
                 mail_uid = email_info.get('uid')
                 message_id = email_info.get('message_id')
+                subject = email_info.get('subject', 'No Subject')
                 
                 if not mail_uid:
+                    logger.warning(f"Email missing UID, skipping: {subject}")
                     continue
+                
+                logger.debug(f"Checking email: {subject} (UID={mail_uid}, MsgID={message_id[:50] if message_id else 'None'}...)")
                     
                 # DEDUPLICATION CHECK
                 if message_id:
@@ -532,12 +537,14 @@ For questions, contact your IT/Security team.
                     exists = await ForwardedEmailAnalysis.find_one({"email_metadata.message_id": message_id})
                     if exists:
                         # Already analyzed - Skip
+                        skipped_count += 1
+                        logger.debug(f"Skipping already-processed email: {subject} (UID={mail_uid})")
                         continue
+                else:
+                    logger.warning(f"Email has no message_id, will process: {subject} (UID={mail_uid})")
                 
-                # Double check with UID if message-id missing or just to be safe? 
-                # UID changes if message moves, Message-ID is better.
-                # If we are here, it is NOT in DB.
-                logger.info(f"Found NEW unanalyzed email: {email_info.get('subject')} (UID {mail_uid})")
+                # If we are here, it is NOT in DB - process it!
+                logger.info(f"🆕 Found NEW unanalyzed email: {subject} (UID {mail_uid})")
                 
                 job = await self.process_single_email(mail_uid)
                 completed_jobs.append(job)
@@ -546,8 +553,10 @@ For questions, contact your IT/Security team.
                 logger.error(f"Failed to process email {email_info.get('uid')}: {e}")
                 continue
         
+        logger.info(f"Poll summary: {len(completed_jobs)} new, {skipped_count} already processed, {len(recent_emails)} total checked")
+        
         if completed_jobs:
-            logger.info(f"Completed {len(completed_jobs)} new email analyses")
+            logger.info(f"✅ Completed {len(completed_jobs)} new email analyses")
         return completed_jobs
     
     def get_job_status(self, job_id: str) -> Optional[AnalysisJob]:
