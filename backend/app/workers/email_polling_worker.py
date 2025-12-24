@@ -265,8 +265,9 @@ class EmailPollingWorker:
             return completed_jobs
             
         except Exception as e:
-            logger.error(f"Poll cycle error: {e}")
-            raise
+            logger.error(f"Poll cycle error: {e}", exc_info=True)
+            # DON'T raise - just log and continue polling
+            return []
     
     async def _handle_error(self, error: Exception) -> None:
         """Handle polling errors with exponential backoff"""
