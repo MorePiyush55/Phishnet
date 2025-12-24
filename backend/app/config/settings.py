@@ -67,7 +67,7 @@ class Settings(BaseSettings):
     IMAP_FOLDER: str = "INBOX"
     IMAP_POLL_INTERVAL: int = 60  # Poll every 60 seconds
     
-    # SMTP Configuration (For sending replies)
+    # SMTP Configuration (For sending replies - blocked on Render free tier)
     SMTP_ENABLED: bool = False
     SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
@@ -75,6 +75,9 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: Optional[str] = None
     SMTP_FROM_EMAIL: str = "noreply@phishnet.ai"
     SMTP_FROM_NAME: str = "PhishNet Security"
+    
+    # Brevo (Sendinblue) Email API - Works on Render free tier
+    BREVO_API_KEY: Optional[str] = None
     
     # OAuth Security Settings
     OAUTH_RATE_LIMIT_REQUESTS: int = 20
