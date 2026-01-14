@@ -167,6 +167,14 @@ class OnDemandOrchestrator:
             )
             
             # ═══════════════════════════════════════════════════════════════
+            # STEP 2.5: Enhanced Threat Intel (VirusTotal - Optional)
+            # ═══════════════════════════════════════════════════════════════
+            try:
+                await self._enhance_with_virustotal(detection_result)
+            except Exception as vt_error:
+                logger.warning(f"[Job {job.job_id}] VirusTotal enhancement skipped: {vt_error}")
+            
+            # ═══════════════════════════════════════════════════════════════
             # STEP 3: Interpretation Phase (Gemini translates, NOT decides)
             # ═══════════════════════════════════════════════════════════════
             job.status = JobStatus.INTERPRETING
@@ -283,6 +291,69 @@ class OnDemandOrchestrator:
                 guidance=self._default_guidance(detection_result),
                 threat_score=1.0 - (detection_result.total_score / 100)
             )
+    
+    async def _enhance_with_virustotal(
+        self, 
+        detection_result: ComprehensivePhishingAnalysis
+    ) -> None:
+        """
+        Enhance detection with VirusTotal link scanning.
+        
+        Only scans suspicious URLs (encoded, redirects, http-only) to save API quota.
+        Modifies detection_result in-place if malicious URLs found.
+        """
+        from app.services.virustotal import create_virustotal_client
+        
+        vt_client = create_virustotal_client()
+        if not vt_client.is_available:
+            logger.debug("VirusTotal not available, skipping enhancement")
+            return
+        
+        # Identify suspicious URLs worth scanning
+        suspicious_urls = []
+        for link_info in detection_result.links.link_details[:10]:  # Limit to 10
+            url = link_info.get('url', '')
+            is_suspicious = (
+                link_info.get('is_encoded', False) or
+                link_info.get('is_redirect', False) or
+                link_info.get('protocol') == 'http'
+            )
+            if is_suspicious and url.startswith(('http://', 'https://')):
+                suspicious_urls.append(url)
+        
+        if not suspicious_urls:
+            return
+        
+        logger.info(f"Scanning {len(suspicious_urls)} suspicious URLs with VirusTotal")
+        
+        # Scan URLs (limit to 3 to respect rate limits)
+        malicious_urls = []
+        for url in suspicious_urls[:3]:
+            try:
+                result = await vt_client.scan(url)
+                if result.get('verdict') in ('malicious', 'suspicious'):
+                    malicious_urls.append({
+                        'url': url,
+                        'verdict': result.get('verdict'),
+                        'score': result.get('threat_score', 0)
+                    })
+            except Exception as e:
+                logger.warning(f"VT scan failed for {url[:50]}: {e}")
+        
+        # If malicious URLs found, upgrade severity
+        if malicious_urls:
+            detection_result.risk_factors.append(
+                f"VirusTotal flagged {len(malicious_urls)} URL(s) as malicious"
+            )
+            detection_result.links.indicators.append(
+                f"🚨 {len(malicious_urls)} link(s) flagged by VirusTotal"
+            )
+            
+            # Upgrade verdict if currently SAFE
+            if detection_result.final_verdict == "SAFE":
+                detection_result.final_verdict = "SUSPICIOUS"
+                detection_result.confidence = max(detection_result.confidence, 0.8)
+                logger.info(f"Verdict upgraded to SUSPICIOUS based on VirusTotal findings")
     
     def _build_technical_report(
         self, 
