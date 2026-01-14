@@ -167,12 +167,13 @@ class OnDemandOrchestrator:
             )
             
             # ═══════════════════════════════════════════════════════════════
-            # STEP 2.5: Enhanced Threat Intel (VirusTotal - Optional)
+            # STEP 2.5: Enhanced Threat Intel (VirusTotal + AbuseIPDB)
             # ═══════════════════════════════════════════════════════════════
             try:
-                await self._enhance_with_virustotal(detection_result)
-            except Exception as vt_error:
-                logger.warning(f"[Job {job.job_id}] VirusTotal enhancement skipped: {vt_error}")
+                await self.phishing_analyzer.enhance_with_threat_intel(detection_result)
+                logger.info(f"[Job {job.job_id}] Threat intel enhancement complete")
+            except Exception as ti_error:
+                logger.warning(f"[Job {job.job_id}] Threat intel enhancement skipped: {ti_error}")
             
             # ═══════════════════════════════════════════════════════════════
             # STEP 3: Interpretation Phase (Gemini translates, NOT decides)

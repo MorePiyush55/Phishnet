@@ -767,3 +767,159 @@ class EnhancedPhishingAnalyzer:
         risk_factors.extend(auth.indicators)
         risk_factors.extend(attachments.indicators)
         return risk_factors
+    
+    # ═══════════════════════════════════════════════════════════════
+    # ASYNC THREAT INTELLIGENCE ENHANCEMENT METHODS
+    # ═══════════════════════════════════════════════════════════════
+    
+    async def enhance_with_threat_intel(
+        self, 
+        result: ComprehensivePhishingAnalysis
+    ) -> ComprehensivePhishingAnalysis:
+        """
+        Enhance analysis results with external threat intelligence.
+        
+        - Uses VirusTotal for URL scanning
+        - Uses AbuseIPDB for IP reputation
+        
+        Modifies result in-place and returns it.
+        """
+        import asyncio
+        
+        # Run enhancements in parallel
+        await asyncio.gather(
+            self._enhance_links_with_virustotal(result),
+            self._enhance_sender_with_abuseipdb(result),
+            return_exceptions=True
+        )
+        
+        # Recalculate verdict if enhancements found threats
+        self._recalculate_verdict_if_needed(result)
+        
+        return result
+    
+    async def _enhance_links_with_virustotal(
+        self, 
+        result: ComprehensivePhishingAnalysis
+    ) -> None:
+        """Scan suspicious links with VirusTotal."""
+        try:
+            from app.services.virustotal import create_virustotal_client
+            
+            vt = create_virustotal_client()
+            if not vt.api_key:
+                return
+            
+            # Get links to scan (prioritize suspicious ones)
+            links_to_scan = []
+            for link_info in result.links.link_details[:5]:
+                url = link_info.get('url', '')
+                if url.startswith(('http://', 'https://')):
+                    # Prioritize: HTTP, encoded, or redirect links
+                    is_priority = (
+                        link_info.get('protocol') == 'http' or
+                        link_info.get('is_encoded', False) or
+                        link_info.get('is_redirect', False)
+                    )
+                    links_to_scan.append((url, is_priority))
+            
+            # Sort by priority, scan up to 3
+            links_to_scan.sort(key=lambda x: x[1], reverse=True)
+            malicious_count = 0
+            
+            for url, _ in links_to_scan[:3]:
+                try:
+                    scan_result = await vt.scan(url)
+                    verdict = scan_result.get('verdict', 'unknown')
+                    
+                    if verdict in ('malicious', 'suspicious'):
+                        malicious_count += 1
+                        result.links.indicators.append(
+                            f"🛡️ VirusTotal: {url[:40]}... flagged as {verdict}"
+                        )
+                        
+                        # Update link score
+                        result.links.overall_score = max(0, result.links.overall_score - 30)
+                        
+                except Exception as e:
+                    pass  # Continue with other links
+            
+            if malicious_count > 0:
+                result.risk_factors.append(
+                    f"VirusTotal detected {malicious_count} malicious/suspicious URL(s)"
+                )
+                
+        except ImportError:
+            pass  # VirusTotal not available
+        except Exception as e:
+            pass  # Don't fail analysis if VT fails
+    
+    async def _enhance_sender_with_abuseipdb(
+        self, 
+        result: ComprehensivePhishingAnalysis
+    ) -> None:
+        """Check sender IP reputation with AbuseIPDB."""
+        try:
+            from app.services.abuseipdb import AbuseIPDBClient
+            
+            abuseipdb = AbuseIPDBClient()
+            if not abuseipdb.api_key:
+                return
+            
+            sender_ip = result.sender.sender_ip
+            if not sender_ip:
+                return
+            
+            # Check IP reputation
+            try:
+                check_result = await abuseipdb.analyze(
+                    sender_ip, 
+                    analysis_type=None  # Will use IP_REPUTATION
+                )
+                
+                if check_result.threat_score > 0.5:
+                    result.sender.indicators.append(
+                        f"🌐 AbuseIPDB: Sender IP {sender_ip} has abuse score {check_result.threat_score:.0%}"
+                    )
+                    result.sender.score = max(0, result.sender.score - 25)
+                    result.risk_factors.append(
+                        f"Sender IP flagged by AbuseIPDB (score: {check_result.threat_score:.0%})"
+                    )
+                    
+            except Exception as e:
+                pass  # Continue analysis if check fails
+                
+        except ImportError:
+            pass  # AbuseIPDB not available
+        except Exception as e:
+            pass  # Don't fail analysis if AIPDB fails
+    
+    def _recalculate_verdict_if_needed(
+        self, 
+        result: ComprehensivePhishingAnalysis
+    ) -> None:
+        """Recalculate verdict if threat intel found new threats."""
+        
+        # Check if we have new high-severity indicators
+        vt_threats = sum(1 for r in result.risk_factors if 'VirusTotal' in r)
+        abuseipdb_threats = sum(1 for r in result.risk_factors if 'AbuseIPDB' in r)
+        
+        if vt_threats > 0 or abuseipdb_threats > 0:
+            # Recalculate total score
+            new_total_score = self._calculate_total_score(
+                result.sender.score,
+                result.content.score,
+                result.links.overall_score,
+                result.authentication.overall_score,
+                result.attachments.score
+            )
+            result.total_score = new_total_score
+            
+            # Upgrade verdict if needed
+            if vt_threats > 0 and result.final_verdict == "SAFE":
+                result.final_verdict = "SUSPICIOUS"
+                result.confidence = max(result.confidence, 0.85)
+            
+            if vt_threats >= 2 or (vt_threats > 0 and abuseipdb_threats > 0):
+                result.final_verdict = "PHISHING"
+                result.confidence = max(result.confidence, 0.9)
