@@ -384,8 +384,29 @@ async def send_analysis_notification(
         # Format bullet points
         reasons_text = chr(10).join(f"  • {r}" for r in reasons)
         
-        # Calculate safety score (invert for user-friendly display: high = safe)
-        safety_score = analysis_result.total_score
+        # CRITICAL FIX: Convert safety scores to RISK scores for user clarity
+        # Backend uses: High score = Safe, Low score = Risky
+        # Users expect: High % = High Risk
+        risk_score = 100 - analysis_result.total_score
+        sender_risk = 100 - analysis_result.sender.score
+        content_risk = 100 - analysis_result.content.score  
+        links_risk = 100 - analysis_result.links.overall_score
+        
+        # Attachment: Use descriptive text instead of confusing percentages
+        attachment_count = analysis_result.attachments.total_attachments
+        dangerous_count = len(analysis_result.attachments.dangerous_extensions)
+        if attachment_count == 0:
+            attachment_status = "✅ None detected"
+        elif dangerous_count > 0:
+            attachment_status = f"🚨 {dangerous_count} DANGEROUS file(s) found!"
+        else:
+            attachment_status = f"⚠️ {attachment_count} file(s) - review before opening"
+        
+        # Generate component explanations
+        def get_risk_label(risk: int) -> str:
+            if risk >= 70: return "🔴 HIGH"
+            if risk >= 40: return "🟡 MEDIUM"
+            return "🟢 LOW"
         
         email_body = f"""
 ╔══════════════════════════════════════════════════════════╗
@@ -397,6 +418,7 @@ Subject: {original_subject}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 VERDICT: {verdict_emoji.get(final_verdict, '⚠️')} {final_verdict}
+RISK LEVEL: {risk_score}% {get_risk_label(risk_score)}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 🎯 RECOMMENDED ACTION:
@@ -406,16 +428,14 @@ VERDICT: {verdict_emoji.get(final_verdict, '⚠️')} {final_verdict}
 {reasons_text}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 TECHNICAL DETAILS
+📊 THREAT BREAKDOWN
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Safety Score: {safety_score}/100 (higher = safer)
-Confidence: {analysis_result.confidence:.0%}
+  Sender Risk:    {sender_risk}% {get_risk_label(sender_risk)}
+  Content Risk:   {content_risk}% {get_risk_label(content_risk)}
+  Link Risk:      {links_risk}% {get_risk_label(links_risk)}
+  Attachments:    {attachment_status}
 
-Component Scores:
-  • Sender Verification:  {analysis_result.sender.score}/100
-  • Content Analysis:     {analysis_result.content.score}/100
-  • Link Safety:          {analysis_result.links.overall_score}/100
-  • Attachment Safety:    {analysis_result.attachments.score}/100
+Confidence: {analysis_result.confidence:.0%}
 
 ╔══════════════════════════════════════════════════════════╗
   📊 View full analysis: https://phishnet.ai/dashboard
