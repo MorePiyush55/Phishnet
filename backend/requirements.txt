@@ -86,3 +86,6 @@ google-generativeai>=0.4.0
 # IMAP Support
 imap-tools==1.5.0
 playwright>=1.40.0
+
+# Domain Analysis (Phase 0)
+publicsuffix2>=2.20191221

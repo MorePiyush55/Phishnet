@@ -66,6 +66,10 @@ class LinkAnalysis:
     duplication_score: int
     overall_score: int  # 0-100 percentage score
     indicators: List[str] = field(default_factory=list)
+    # Phase 0: Sender-link alignment (higher = more aligned, safer)
+    sender_alignment_score: float = 1.0  # 0-1 scale
+    aligned_links: int = 0  # Links to same_org or known_vendor
+    unrelated_links: int = 0  # Links to unknown domains
 
 
 @dataclass
@@ -332,8 +336,23 @@ class EnhancedPhishingAnalyzer:
     def analyze_links(self, msg: email.message.Message) -> LinkAnalysis:
         """
         Analyze links in email
-        Checks: encoding, HTTP/HTTPS usage, redirection, duplication
+        Checks: encoding, HTTP/HTTPS usage, redirection, duplication, sender alignment
+        
+        PHASE 0 CHANGES:
+        - Added sender-link alignment analysis
+        - HTTP score considers aligned domains (doesn't penalize aligned HTTP)
+        - Uses eTLD+1 for domain comparisons
         """
+        from app.services.domain_identity import SenderLinkAlignment, get_registrable_domain
+        
+        # Extract sender email for alignment check
+        sender_email = msg.get('From', '')
+        if '<' in sender_email:
+            # Extract email from "Name <email@domain.com>" format
+            import re
+            match = re.search(r'<([^>]+)>', sender_email)
+            sender_email = match.group(1) if match else sender_email
+        
         # Extract all links from email
         links = self._extract_links(msg)
         
@@ -349,8 +368,19 @@ class EnhancedPhishingAnalyzer:
         suspicious_tlds = []
         link_details = []
         
+        # PHASE 0: Track alignment
+        aligned_links = 0
+        unrelated_links = 0
+        
+        # Get sender-link alignment analysis
+        alignment_result = SenderLinkAlignment.analyze_email_links(sender_email, links)
+        sender_alignment_score = alignment_result.get('alignment_score', 1.0)
+        aligned_links = alignment_result.get('same_org_count', 0) + alignment_result.get('vendor_count', 0)
+        unrelated_links = alignment_result.get('unrelated_count', 0)
+        
         for link in links:
             parsed = urlparse(link)
+            domain = parsed.netloc.lower()
             
             # Check protocol
             if parsed.scheme == 'https':
@@ -367,7 +397,6 @@ class EnhancedPhishingAnalyzer:
                 redirect_links += 1
             
             # Check for suspicious TLDs
-            domain = parsed.netloc.lower()
             for tld in self.SUSPICIOUS_TLDS:
                 if domain.endswith(tld):
                     suspicious_tlds.append(domain)
@@ -376,33 +405,57 @@ class EnhancedPhishingAnalyzer:
             link_details.append({
                 'url': link,
                 'protocol': parsed.scheme,
-                'domain': parsed.netloc,
+                'domain': domain,
+                'registrable_domain': get_registrable_domain(domain),
                 'path': parsed.path,
                 'is_encoded': link != unquote(link),
                 'is_redirect': 'redirect' in link.lower()
             })
         
-        # Calculate sub-scores
-        https_score = 100 if total_links == 0 else int((https_links / total_links) * 100)
+        # PHASE 0: Calculate sub-scores with alignment awareness
+        # HTTPS score now considers alignment - aligned HTTP links get partial credit
+        if total_links == 0:
+            https_score = 100
+        else:
+            # Base HTTPS score
+            base_https_score = int((https_links / total_links) * 100)
+            
+            # Aligned HTTP links get 70% credit (they're less risky)
+            if aligned_links > 0 and https_links == 0:
+                aligned_http_bonus = int((aligned_links / total_links) * 70)
+                https_score = min(80, base_https_score + aligned_http_bonus)
+            else:
+                https_score = base_https_score
+        
         encoding_score = 100 if total_links == 0 else int(((total_links - encoded_links) / total_links) * 100)
         redirect_score = 100 if total_links == 0 else int(((total_links - redirect_links) / total_links) * 100)
         duplication_score = 100 if total_links <= 1 else int(((total_links - duplicate_links) / total_links) * 100)
         
-        # Overall link score (average of sub-scores)
-        overall_score = int((https_score + encoding_score + redirect_score + duplication_score) / 4)
+        # PHASE 0: Alignment score contributes to overall score
+        alignment_score_weighted = int(sender_alignment_score * 100)
         
-        # Identify indicators
+        # Overall link score (now includes alignment)
+        overall_score = int((https_score + encoding_score + redirect_score + duplication_score + alignment_score_weighted) / 5)
+        
+        # Identify indicators (PHASE 0: improved messaging)
         indicators = []
         if http_links > 0:
-            indicators.append(f"{http_links} HTTP (non-secure) links found")
+            if aligned_links == http_links:
+                indicators.append(f"{http_links} HTTP link(s) to aligned/known domains")
+            elif aligned_links > 0:
+                indicators.append(f"{http_links - aligned_links} HTTP link(s) to unknown domains")
+            else:
+                indicators.append(f"{http_links} HTTP (non-secure) link(s) found")
         if encoded_links > 0:
-            indicators.append(f"{encoded_links} encoded links detected")
+            indicators.append(f"{encoded_links} encoded link(s) detected")
         if redirect_links > 0:
-            indicators.append(f"{redirect_links} redirect links found")
+            indicators.append(f"{redirect_links} redirect link(s) found")
         if len(suspicious_tlds) > 0:
             indicators.append(f"Suspicious TLDs detected: {', '.join(set(suspicious_tlds))}")
         if duplicate_links > 2:
             indicators.append(f"{duplicate_links} duplicate links")
+        if unrelated_links > 0:
+            indicators.append(f"{unrelated_links} link(s) to unrelated domains")
         
         return LinkAnalysis(
             total_links=total_links,
@@ -419,8 +472,13 @@ class EnhancedPhishingAnalyzer:
             redirect_score=redirect_score,
             duplication_score=duplication_score,
             overall_score=overall_score,
-            indicators=indicators
+            indicators=indicators,
+            # PHASE 0: New alignment fields
+            sender_alignment_score=sender_alignment_score,
+            aligned_links=aligned_links,
+            unrelated_links=unrelated_links
         )
+
     
     def analyze_authentication(self, msg: email.message.Message) -> AuthenticationAnalysis:
         """
@@ -743,15 +801,34 @@ class EnhancedPhishingAnalyzer:
             critical_flags += 1
         if auth.dkim_result == 'fail':
             critical_flags += 1
-        if links.http_links > 0 and links.https_links == 0:
-            critical_flags += 1
+        
+        # PHASE 0 FIX: HTTP-only is NO LONGER a critical flag on its own
+        # Instead, only flag if HTTP links go to UNRELATED domains
+        # AND authentication is not fully passing
+        if links.unrelated_links > 0 and links.https_links == 0:
+            # Only critical if auth is also failing
+            if auth.overall_score < 80:
+                critical_flags += 1
+        
+        # VERDICT ARBITRATION: If fully authenticated + aligned, don't flag
+        is_fully_authenticated = (
+            auth.spf_result == 'pass' and 
+            auth.dkim_result == 'pass' and 
+            auth.dmarc_result == 'pass'
+        )
+        is_well_aligned = links.sender_alignment_score >= 0.7
         
         # Determine verdict
         if critical_flags >= 2 or total_score < 30:
             return "PHISHING", 0.9
         elif total_score < 50 or critical_flags >= 1:
+            # GUARDRAIL: Authenticated + aligned emails can't be SUSPICIOUS from links alone
+            if is_fully_authenticated and is_well_aligned and critical_flags == 0:
+                return "SAFE", 0.75
             return "SUSPICIOUS", 0.7
         elif total_score < 70:
+            if is_fully_authenticated and is_well_aligned:
+                return "SAFE", 0.7
             return "SUSPICIOUS", 0.5
         else:
             return "SAFE", min(0.95, total_score / 100)

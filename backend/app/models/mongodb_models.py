@@ -446,6 +446,7 @@ class ForwardedEmailAnalysis(Document):
         indexes = [
             IndexModel([("user_id", ASCENDING), ("created_at", DESCENDING)]),
             IndexModel([("forwarded_by", ASCENDING), ("created_at", DESCENDING)]),
+            IndexModel([("email_metadata.message_id", ASCENDING)], unique=True),
             IndexModel([("risk_level", ASCENDING)]),
             IndexModel([("reply_sent", ASCENDING)]),
         ]

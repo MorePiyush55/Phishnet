@@ -17,6 +17,10 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, Any, Optional, List
 import hashlib
+try:
+    import redis.asyncio as redis
+except ImportError:
+    import redis
 
 from app.config.logging import get_logger
 from app.services.quick_imap import QuickIMAPService
@@ -101,6 +105,15 @@ class OnDemandOrchestrator:
         
         # In-memory job tracking (use Redis/DB in production)
         self._active_jobs: Dict[str, AnalysisJob] = {}
+        
+        # Redis for distributed locking
+        self.redis = None
+        if hasattr(settings, 'REDIS_URL') and settings.REDIS_URL:
+            try:
+                self.redis = redis.from_url(settings.REDIS_URL)
+                logger.info("Orchestrator: Redis connection for locking initialized")
+            except Exception as e:
+                logger.warning(f"Orchestrator: Redis initialization failed: {e}")
     
     def _generate_job_id(self, mail_uid: str) -> str:
         """Generate unique job ID"""
@@ -232,8 +245,6 @@ class OnDemandOrchestrator:
             # ═══════════════════════════════════════════════════════════════
             job.status = JobStatus.COMPLETED
             job.completed_at = datetime.utcnow()
-            
-            logger.info(f"[Job {job.job_id}] Response sent to {job.forwarded_by}")
 
             # ═══════════════════════════════════════════════════════════════
             # STEP 5: Persist to Database (Critical for Deduplication)
@@ -450,10 +461,23 @@ class OnDemandOrchestrator:
             reasons.append("The email signature could not be verified (failed DKIM).")
         if result.content.urgency_level == 'HIGH':
             reasons.append("The message uses urgent language to pressure you into acting quickly.")
+        
+        # PHASE 0: Alignment-aware HTTP messaging
         if result.links.http_links > 0:
-            reasons.append(f"Contains {result.links.http_links} insecure link(s) that could be dangerous.")
+            # Check if links are aligned with sender
+            if hasattr(result.links, 'aligned_links') and result.links.aligned_links > 0:
+                if result.links.aligned_links == result.links.http_links:
+                    # All HTTP links are aligned - not alarming
+                    reasons.append(f"Contains {result.links.http_links} HTTP link(s) to sender-aligned domains (verified).")
+                elif result.links.unrelated_links > 0:
+                    # Some unrelated links - mention those specifically
+                    reasons.append(f"Contains {result.links.unrelated_links} HTTP link(s) to unrelated domains.")
+            else:
+                # No alignment data or all unrelated - original warning
+                reasons.append(f"Contains {result.links.http_links} unencrypted HTTP link(s) (verify before clicking).")
+        
         if result.links.redirect_links > 0:
-            reasons.append("Contains links that redirect through unknown websites.")
+            reasons.append("Contains links that redirect through other websites.")
         if len(result.attachments.dangerous_extensions) > 0:
             reasons.append(f"Contains potentially dangerous attachment(s): {', '.join(result.attachments.dangerous_extensions)}")
         if result.sender.score < 50:
@@ -647,11 +671,26 @@ For questions, contact your IT/Security team.
                 else:
                     logger.warning(f"Email has no message_id, will process: {subject} (UID={mail_uid})")
                 
-                # If we are here, it is NOT in DB - process it!
-                logger.info(f"🆕 Found NEW unanalyzed email: {subject} (UID {mail_uid})")
+                # DISTRIBUTED LOCK (Prevention for multi-instance races)
+                lock_acquired = False
+                if self.redis and message_id:
+                    lock_key = f"lock:analysis:{message_id}"
+                    # Try to acquire lock for 10 minutes (sufficient for analysis)
+                    lock_acquired = await self.redis.set(lock_key, "processing", ex=600, nx=True)
+                    if not lock_acquired:
+                        logger.info(f"⏭️ Skipping: Another instance is already processing email {message_id[:10]}...")
+                        continue
                 
-                job = await self.process_single_email(mail_uid)
-                completed_jobs.append(job)
+                try:
+                    # If we are here, it is NOT in DB - process it!
+                    logger.info(f"🆕 Found NEW unanalyzed email: {subject} (UID {mail_uid})")
+                    
+                    job = await self.process_single_email(mail_uid)
+                    completed_jobs.append(job)
+                finally:
+                    # Release lock if we acquired it
+                    if self.redis and lock_acquired and message_id:
+                        await self.redis.delete(f"lock:analysis:{message_id}")
                 
             except Exception as e:
                 logger.error(f"Failed to process email {email_info.get('uid')}: {e}")

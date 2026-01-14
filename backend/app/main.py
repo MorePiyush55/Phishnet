@@ -122,15 +122,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Real-time monitoring initialization failed: {e}")
 
-    # Initialize Email Polling Service
-    try:
-        from app.services.email_poller import email_polling_service
-        asyncio.create_task(email_polling_service.start())
-        logger.info("Email polling service started")
-    except Exception as e:
-        logger.warning(f"Email polling service initialization failed: {e}")
-    
-    # Initialize On-Demand Email Polling Worker (AUTO-START for production)
+    # Initialize Email Polling Worker (The more robust one)
     try:
         from app.workers.email_polling_worker import get_email_polling_worker
         worker = get_email_polling_worker()
