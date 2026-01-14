@@ -564,7 +564,7 @@ Provide only the JSON response, no additional text.
                 'analysis_type': 'text_analysis'
             }
 
-    async def interpret_technical_findings(self, technical_report: Dict[str, Any]) -> GeminiResult:
+    async def interpret_technical_findings(self, technical_report: Dict[str, Any]) -> Optional[GeminiResult]:
         """
         Interpret technical analysis findings into user-friendly language.
         
@@ -572,7 +572,7 @@ Provide only the JSON response, no additional text.
             technical_report: Structured dictionary of technical findings
             
         Returns:
-            GeminiResult containing the simplified explanation and verdict
+            GeminiResult containing the simplified explanation, or None if interpretation fails
         """
         if not self.is_available:
             raise ServiceUnavailableError(f"Gemini service unavailable: {self._health.status}")
@@ -627,17 +627,9 @@ Provide only the JSON response, no additional text.
         except Exception as e:
             self._update_health_failure()
             logger.error(f"Gemini interpretation failed: {e}")
-            # Return safe fallback
-            return GeminiResult(
-                llm_score=0.0,
-                verdict="Unknown",
-                explanation_snippets=[
-                    "Automated interpretation unavailable.",
-                    "Please review the technical details below."
-                ],
-                confidence_reasoning=f"Interpretation failed: {str(e)}",
-                detected_techniques=["Proceed with caution"]
-            )
+            # Return None to indicate interpretation unavailable
+            # Caller should use backend verdict and default explanations
+            return None
 
     def _build_interpretation_prompt(self, technical_summary: str, subject: str) -> str:
         """Build prompt for interpreting technical findings."""

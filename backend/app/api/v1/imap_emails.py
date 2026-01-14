@@ -329,6 +329,16 @@ async def manual_trigger_poll(
 
 # Helper functions
 
+def _get_action_for_verdict(verdict: str) -> str:
+    """Get clear, actionable recommendation based on verdict."""
+    actions = {
+        "PHISHING": "🚫 DELETE this email immediately. Do NOT click any links or open attachments.",
+        "SUSPICIOUS": "⚠️ Do not interact with this email. Verify the sender through official channels before responding.",
+        "SAFE": "✅ This email appears legitimate. Always verify unexpected requests through official channels."
+    }
+    return actions.get(verdict, "⚠️ Review this email carefully before taking any action.")
+
+
 async def send_analysis_notification(
     recipient_email: str,
     original_subject: str,
@@ -337,7 +347,9 @@ async def send_analysis_notification(
 ):
     """
     Send email notification with analysis verdict to user who forwarded the email.
-    Uses Gemini interpretation if available, otherwise falls back to technical summary.
+    
+    IMPORTANT: Backend verdict is ALWAYS authoritative. Gemini only provides
+    plain-language explanations, never overrides the verdict.
     """
     try:
         logger.info(f"Sending analysis notification to {recipient_email}")
@@ -348,49 +360,67 @@ async def send_analysis_notification(
             "PHISHING": "🚨"
         }
         
-        # Determine Verdict and Explanation Source
-        if interpretation:
-            final_verdict = interpretation.verdict.upper()
+        # CRITICAL: Always use backend verdict - Gemini is for explanation only
+        final_verdict = analysis_result.final_verdict
+        action = _get_action_for_verdict(final_verdict)
+        
+        # Get explanation from Gemini if available, otherwise use risk factors
+        if interpretation and interpretation.explanation_snippets:
             reasons = interpretation.explanation_snippets
-            action = interpretation.detected_techniques[0] if interpretation.detected_techniques else "Use caution."
             explanation_source = "AI Analysis"
         else:
-            final_verdict = analysis_result.final_verdict
-            reasons = analysis_result.risk_factors[:3] if analysis_result.risk_factors else ["No specific risk factors found."]
-            action = "Please review the details below."
-            explanation_source = "Automated Rules"
+            reasons = analysis_result.risk_factors[:5] if analysis_result.risk_factors else []
+            explanation_source = "Security Analysis"
+        
+        # Ensure we always have at least one reason
+        if not reasons:
+            if final_verdict == "PHISHING":
+                reasons = ["Multiple security indicators suggest this email is attempting to deceive you."]
+            elif final_verdict == "SUSPICIOUS":
+                reasons = ["Some elements of this email raise security concerns."]
+            else:
+                reasons = ["No significant security threats were detected in this email."]
 
         # Format bullet points
         reasons_text = chr(10).join(f"  • {r}" for r in reasons)
         
+        # Calculate safety score (invert for user-friendly display: high = safe)
+        safety_score = analysis_result.total_score
+        
         email_body = f"""
-PhishNet Security Analysis
-{'='*50}
+╔══════════════════════════════════════════════════════════╗
+                    PhishNet Security Report
+╚══════════════════════════════════════════════════════════╝
 
+📧 ANALYZED EMAIL
 Subject: {original_subject}
 
-VERDICT: {verdict_emoji.get(final_verdict, '❓')} {final_verdict}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VERDICT: {verdict_emoji.get(final_verdict, '⚠️')} {final_verdict}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-RECOMMENDED ACTION:
-👉 {action}
+🎯 RECOMMENDED ACTION:
+{action}
 
-KEY REASONS ({explanation_source}):
+📋 KEY FINDINGS ({explanation_source}):
 {reasons_text}
 
-{'='*50}
-TECHNICAL DETAILS
-Confidence: {analysis_result.confidence:.1%}
-Total Risk Score: {analysis_result.total_score}%
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 TECHNICAL DETAILS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Safety Score: {safety_score}/100 (higher = safer)
+Confidence: {analysis_result.confidence:.0%}
 
-Section Scores:
-  • Sender: {analysis_result.sender.score}%
-  • Content: {analysis_result.content.score}%
-  • Links: {analysis_result.links.overall_score}%
-  • Attachments: {analysis_result.attachments.score}%
+Component Scores:
+  • Sender Verification:  {analysis_result.sender.score}/100
+  • Content Analysis:     {analysis_result.content.score}/100
+  • Link Safety:          {analysis_result.links.overall_score}/100
+  • Attachment Safety:    {analysis_result.attachments.score}/100
 
-View full dashboard: https://phishnet.ai/dashboard
-{'='*50}
-This is an automated message from PhishNet.
+╔══════════════════════════════════════════════════════════╗
+  📊 View full analysis: https://phishnet.ai/dashboard
+  💡 Questions? Forward suspicious emails to this address.
+╚══════════════════════════════════════════════════════════╝
 """
         
         # Send email via SMTP with timeout
@@ -400,7 +430,7 @@ This is an automated message from PhishNet.
         try:
             # Add 30 second timeout to prevent hanging
             success = await asyncio.wait_for(
-                send_email(to_email=recipient_email, subject=f"Analysis Result: {original_subject}", body=email_body),
+                send_email(to_email=recipient_email, subject=f"PhishNet: {verdict_emoji.get(final_verdict, '⚠️')} {final_verdict} - {original_subject[:40]}", body=email_body),
                 timeout=30.0
             )
             
