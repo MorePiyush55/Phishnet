@@ -396,17 +396,33 @@ async def send_analysis_notification(
         attachment_count = analysis_result.attachments.total_attachments
         dangerous_count = len(analysis_result.attachments.dangerous_extensions)
         if attachment_count == 0:
-            attachment_status = "✅ None detected"
+            attachment_status = "✅ No attachments"
         elif dangerous_count > 0:
-            attachment_status = f"🚨 {dangerous_count} DANGEROUS file(s) found!"
+            attachment_status = f"🔴 DANGEROUS: {dangerous_count} executable file(s)!"
         else:
-            attachment_status = f"⚠️ {attachment_count} file(s) - review before opening"
+            attachment_status = f"🟡 {attachment_count} file(s) - verify before opening"
         
-        # Generate component explanations
-        def get_risk_label(risk: int) -> str:
-            if risk >= 70: return "🔴 HIGH"
-            if risk >= 40: return "🟡 MEDIUM"
-            return "🟢 LOW"
+        # ═══════════════════════════════════════════════════════════════
+        # SOC-STYLE SEVERITY LEVELS
+        # ═══════════════════════════════════════════════════════════════
+        def get_severity(verdict: str, risk: int) -> tuple:
+            """Returns (severity_label, color_emoji)"""
+            if verdict == "PHISHING":
+                if risk >= 80: return ("CRITICAL", "🔴")
+                return ("HIGH", "🟠")
+            elif verdict == "SUSPICIOUS":
+                if risk >= 60: return ("MEDIUM", "🟡")
+                return ("LOW", "🟢")
+            else:
+                return ("INFO", "🔵")
+        
+        severity, severity_emoji = get_severity(final_verdict, risk_score)
+        
+        # Confidence-based messaging (display only, NEVER changes verdict)
+        confidence_pct = int(analysis_result.confidence * 100)
+        confidence_warning = ""
+        if confidence_pct < 60:
+            confidence_warning = "\n⚠️ LOW CONFIDENCE - Manual review recommended"
         
         email_body = f"""
 ╔══════════════════════════════════════════════════════════╗
@@ -417,12 +433,12 @@ async def send_analysis_notification(
 Subject: {original_subject}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SEVERITY: {severity} {severity_emoji}
 VERDICT: {verdict_emoji.get(final_verdict, '⚠️')} {final_verdict}
-RISK LEVEL: {risk_score}% {get_risk_label(risk_score)}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 🎯 RECOMMENDED ACTION:
-{action}
+{action}{confidence_warning}
 
 📋 KEY FINDINGS ({explanation_source}):
 {reasons_text}
@@ -430,16 +446,15 @@ RISK LEVEL: {risk_score}% {get_risk_label(risk_score)}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 THREAT BREAKDOWN
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  Sender Risk:    {sender_risk}% {get_risk_label(sender_risk)}
-  Content Risk:   {content_risk}% {get_risk_label(content_risk)}
-  Link Risk:      {links_risk}% {get_risk_label(links_risk)}
-  Attachments:    {attachment_status}
+  Sender:      {sender_risk}% risk
+  Content:     {content_risk}% risk
+  Links:       {links_risk}% risk
+  Attachments: {attachment_status}
 
-Confidence: {analysis_result.confidence:.0%}
+Confidence: {confidence_pct}%
 
 ╔══════════════════════════════════════════════════════════╗
   📊 View full analysis: https://phishnet.ai/dashboard
-  💡 Questions? Forward suspicious emails to this address.
 ╚══════════════════════════════════════════════════════════╝
 """
         

@@ -721,27 +721,79 @@ class EnhancedPhishingAnalyzer:
     def _determine_verdict(self, total_score: int, sender: SenderAnalysis,
                           content: ContentAnalysis, links: LinkAnalysis,
                           auth: AuthenticationAnalysis, attachments: AttachmentAnalysis) -> Tuple[str, float]:
-        """Determine final verdict and confidence level"""
-        # Critical red flags
-        critical_flags = 0
-        if len(attachments.dangerous_extensions) > 0:
-            critical_flags += 1
-        if auth.spf_result == 'fail':
-            critical_flags += 1
-        if auth.dkim_result == 'fail':
-            critical_flags += 1
-        if links.http_links > 0 and links.https_links == 0:
-            critical_flags += 1
+        """
+        SOC-Grade Deterministic Verdict Engine
         
-        # Determine verdict
-        if critical_flags >= 2 or total_score < 30:
-            return "PHISHING", 0.9
-        elif total_score < 50 or critical_flags >= 1:
-            return "SUSPICIOUS", 0.7
-        elif total_score < 70:
-            return "SUSPICIOUS", 0.5
+        RULES (in priority order):
+        1. Any critical flag = PHISHING (CRITICAL severity)
+        2. Risk >= 80 = PHISHING (HIGH severity)
+        3. Risk 60-79 = SUSPICIOUS (MEDIUM severity)
+        4. Risk 40-59 = SUSPICIOUS (LOW severity)
+        5. Risk < 40 = SAFE (INFO severity)
+        
+        Confidence affects messaging display ONLY, never the verdict.
+        UNKNOWN is NEVER returned.
+        
+        Returns:
+            Tuple of (verdict: str, confidence: float)
+        """
+        # Calculate RISK score (inverted from safety score)
+        risk_score = 100 - total_score
+        
+        # ═══════════════════════════════════════════════════════════════
+        # CRITICAL FLAGS - Any single one = PHISHING verdict
+        # ═══════════════════════════════════════════════════════════════
+        critical_flags = []
+        
+        # 1. Executable/dangerous attachment
+        if len(attachments.dangerous_extensions) > 0:
+            critical_flags.append("executable_attachment")
+        
+        # 2. Spoofed sender (SPF fail + low sender score)
+        if auth.spf_result == 'fail' or (auth.spf_result == 'softfail' and sender.score < 50):
+            critical_flags.append("spoofed_sender")
+        
+        # 3. DKIM failure (signature tampering)
+        if auth.dkim_result == 'fail':
+            critical_flags.append("spoofed_sender")
+        
+        # 4. Credential harvesting indicators in content
+        credential_keywords = ['password', 'login', 'verify your account', 'confirm your identity', 
+                               'update your information', 'ssn', 'social security', 'credit card']
+        content_lower = content.body_text.lower()
+        if any(kw in content_lower for kw in credential_keywords) and content.urgency_level == "HIGH":
+            critical_flags.append("credential_request")
+        
+        # 5. Malicious link patterns (HTTP only, suspicious TLDs, or redirect chains)
+        if links.http_links > 0 and links.https_links == 0:
+            critical_flags.append("malicious_link_confirmed")
+        if len(links.suspicious_tlds) > 0:
+            critical_flags.append("malicious_link_confirmed")
+        if links.redirect_links >= 2:
+            critical_flags.append("malicious_link_confirmed")
+        
+        # Deduplicate critical flags
+        critical_flags = list(set(critical_flags))
+        
+        # ═══════════════════════════════════════════════════════════════
+        # VERDICT DETERMINATION (Deterministic, SOC-grade)
+        # ═══════════════════════════════════════════════════════════════
+        
+        # Priority 1: Critical flags override everything
+        if len(critical_flags) > 0:
+            # High confidence when we have hard evidence
+            confidence = 0.95 if len(critical_flags) >= 2 else 0.90
+            return "PHISHING", confidence
+        
+        # Priority 2: Risk score thresholds (no ambiguity)
+        if risk_score >= 80:
+            return "PHISHING", 0.85
+        elif risk_score >= 60:
+            return "SUSPICIOUS", 0.80
+        elif risk_score >= 40:
+            return "SUSPICIOUS", 0.65  # Low confidence, but still SUSPICIOUS
         else:
-            return "SAFE", min(0.95, total_score / 100)
+            return "SAFE", min(0.95, (100 - risk_score) / 100)
     
     def _collect_risk_factors(self, sender: SenderAnalysis, content: ContentAnalysis,
                              links: LinkAnalysis, auth: AuthenticationAnalysis,
