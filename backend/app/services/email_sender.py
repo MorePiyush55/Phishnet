@@ -213,22 +213,46 @@ def send_email_sync(to_email: str, subject: str, body: str, html: bool = False) 
 
 async def send_email(to_email: str, subject: str, body: str, html: bool = False) -> bool:
     """
-    Async wrapper for sending email.
+    Async wrapper for sending email with retry logic.
     Priority: Resend -> Brevo -> SMTP
+    Includes exponential backoff: 3 attempts with 1s, 4s, 9s delays
     """
-    # Try Resend first (works immediately, recommended)
-    resend_key = os.getenv('RESEND_API_KEY') or getattr(settings, 'RESEND_API_KEY', None)
-    if resend_key:
-        result = await send_email_via_resend(to_email, subject, body, html)
-        if result:
-            return True
+    import asyncio
     
-    # Try Brevo second
-    brevo_key = os.getenv('BREVO_API_KEY') or getattr(settings, 'BREVO_API_KEY', None)
-    if brevo_key:
-        result = await send_email_via_brevo(to_email, subject, body, html)
-        if result:
-            return True
+    MAX_RETRIES = 3
     
-    # Fallback to SMTP (blocked on Render)
-    return await run_in_threadpool(send_email_sync, to_email, subject, body, html)
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            # Try Resend first (works immediately, recommended)
+            resend_key = os.getenv('RESEND_API_KEY') or getattr(settings, 'RESEND_API_KEY', None)
+            if resend_key:
+                result = await send_email_via_resend(to_email, subject, body, html)
+                if result:
+                    return True
+            
+            # Try Brevo second
+            brevo_key = os.getenv('BREVO_API_KEY') or getattr(settings, 'BREVO_API_KEY', None)
+            if brevo_key:
+                result = await send_email_via_brevo(to_email, subject, body, html)
+                if result:
+                    return True
+            
+            # Fallback to SMTP (blocked on Render)
+            result = await run_in_threadpool(send_email_sync, to_email, subject, body, html)
+            if result:
+                return True
+            
+            # If we get here, all providers failed for this attempt
+            if attempt < MAX_RETRIES:
+                delay = attempt ** 2  # Exponential backoff: 1, 4, 9 seconds
+                logger.warning(f"📧 Email send failed (attempt {attempt}/{MAX_RETRIES}), retrying in {delay}s...")
+                await asyncio.sleep(delay)
+                
+        except Exception as e:
+            logger.error(f"Email error (attempt {attempt}/{MAX_RETRIES}): {e}")
+            if attempt < MAX_RETRIES:
+                delay = attempt ** 2
+                await asyncio.sleep(delay)
+    
+    logger.error(f"❌ Email delivery failed after {MAX_RETRIES} attempts to {to_email}")
+    return False

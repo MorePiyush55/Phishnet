@@ -287,6 +287,13 @@ async def detailed_health_check(request: Request):
         ):
             overall_status = "degraded"
         
+        # Get circuit breaker status
+        try:
+            from app.core.circuit_breaker import get_all_circuit_breakers
+            circuit_breakers = get_all_circuit_breakers()
+        except ImportError:
+            circuit_breakers = {}
+        
         return {
             "status": overall_status,
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -296,7 +303,8 @@ async def detailed_health_check(request: Request):
             "components": {
                 "database": db_health,
                 "redis": redis_health,
-                "external_apis": api_health
+                "external_apis": api_health,
+                "circuit_breakers": circuit_breakers
             },
             "system": system_info
         }
