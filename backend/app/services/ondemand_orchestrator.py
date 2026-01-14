@@ -176,6 +176,38 @@ class OnDemandOrchestrator:
                 logger.warning(f"[Job {job.job_id}] Threat intel enhancement skipped: {ti_error}")
             
             # ═══════════════════════════════════════════════════════════════
+            # STEP 2.6: ThreatAggregator (Rules Engine + Multi-source Analysis)
+            # ═══════════════════════════════════════════════════════════════
+            try:
+                from app.services.email_threat_adapter import (
+                    aggregate_email_threat, 
+                    enrich_analysis_with_aggregation
+                )
+                
+                # Run aggregation with all available data
+                threat_result = await aggregate_email_threat(
+                    analysis=detection_result,
+                    gemini_result=None,  # Will add Gemini after interpretation
+                    email_id=job.job_id
+                )
+                
+                # Enrich analysis with aggregator insights (may upgrade verdict)
+                detection_result = enrich_analysis_with_aggregation(
+                    analysis=detection_result,
+                    threat_result=threat_result
+                )
+                
+                logger.info(
+                    f"[Job {job.job_id}] ThreatAggregator: "
+                    f"score={threat_result.score:.2f}, "
+                    f"level={threat_result.level.value}, "
+                    f"rules_triggered={len([r for r in threat_result.rule_overrides if r.triggered])}"
+                )
+                
+            except Exception as agg_error:
+                logger.warning(f"[Job {job.job_id}] ThreatAggregator skipped: {agg_error}")
+            
+            # ═══════════════════════════════════════════════════════════════
             # STEP 3: Interpretation Phase (Gemini translates, NOT decides)
             # ═══════════════════════════════════════════════════════════════
             job.status = JobStatus.INTERPRETING
