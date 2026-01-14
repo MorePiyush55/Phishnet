@@ -197,6 +197,10 @@ class VirusTotalClient(IAnalyzer):
             async with session.post(f"{self.BASE_URL}/url/scan", data=submit_params) as response:
                 if response.status == 429:
                     raise RateLimitError()
+                elif response.status == 204:
+                    # No content - return empty result indicating resource not found
+                    logger.debug(f"VirusTotal returned 204 for URL submission: {url[:50]}")
+                    return {"response_code": 0, "verbose_msg": "Resource not found"}
                 elif response.status != 200:
                     raise AnalysisError(f"VirusTotal URL submission failed: {response.status}")
                 
@@ -214,6 +218,10 @@ class VirusTotalClient(IAnalyzer):
             async with session.get(f"{self.BASE_URL}/url/report", params=report_params) as response:
                 if response.status == 429:
                     raise RateLimitError()
+                elif response.status == 204:
+                    # No content - return empty result
+                    logger.debug(f"VirusTotal returned 204 for URL report: {url[:50]}")
+                    return {"response_code": 0, "verbose_msg": "Scan results not yet available"}
                 elif response.status != 200:
                     raise AnalysisError(f"VirusTotal URL report failed: {response.status}")
                 
@@ -230,6 +238,10 @@ class VirusTotalClient(IAnalyzer):
             async with session.get(f"{self.BASE_URL}/file/report", params=params) as response:
                 if response.status == 429:
                     raise RateLimitError()
+                elif response.status == 204:
+                    # No content - hash not found in database
+                    logger.debug(f"VirusTotal returned 204 for hash lookup: {file_hash}")
+                    return {"response_code": 0, "verbose_msg": "Hash not found in database"}
                 elif response.status != 200:
                     raise AnalysisError(f"VirusTotal hash lookup failed: {response.status}")
                 
@@ -246,6 +258,10 @@ class VirusTotalClient(IAnalyzer):
             async with session.get(f"{self.BASE_URL}/ip-address/report", params=params) as response:
                 if response.status == 429:
                     raise RateLimitError()
+                elif response.status == 204:
+                    # No content - IP not found
+                    logger.debug(f"VirusTotal returned 204 for IP scan: {ip_address}")
+                    return {"response_code": 0, "verbose_msg": "IP address not found"}
                 elif response.status != 200:
                     raise AnalysisError(f"VirusTotal IP scan failed: {response.status}")
                 
@@ -398,13 +414,15 @@ class VirusTotalClient(IAnalyzer):
         """Retrieve cached analysis result."""
         try:
             redis = get_redis_connection()
-            cached_data = await redis.get(cache_key)
+            # Redis client returns sync values - don't await
+            cached_data = redis.get(cache_key)
             if cached_data:
                 # In a real implementation, you'd deserialize the AnalysisResult
                 # For now, return None to always fetch fresh data
+                logger.debug(f"Cache hit for {cache_key}")
                 pass
         except Exception as e:
-            logger.warning(f"Cache retrieval failed: {e}")
+            logger.debug(f"Cache retrieval skipped (Redis unavailable): {e}")
         
         return None
     
@@ -414,9 +432,10 @@ class VirusTotalClient(IAnalyzer):
             # In a real implementation, you'd serialize the AnalysisResult
             # For now, just cache the basic info
             redis = get_redis_connection()
-            await redis.setex(cache_key, ttl, f"cached:{result.threat_score}")
+            # Redis client returns sync values - don't await
+            redis.setex(cache_key, ttl, f"cached:{result.threat_score}")
         except Exception as e:
-            logger.warning(f"Cache storage failed: {e}")
+            logger.debug(f"Cache storage skipped (Redis unavailable): {e}")
     
     async def health_check(self) -> ServiceHealth:
         """Check VirusTotal API health."""
