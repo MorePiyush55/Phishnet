@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { 
-  Shield, 
-  AlertTriangle, 
-  Eye, 
-  Search, 
-  Filter, 
-  Clock, 
-  Mail, 
-  Link, 
-  FileText, 
-  Trash2, 
-  Archive, 
+import {
+  Shield,
+  AlertTriangle,
+  Eye,
+  Search,
+  Filter,
+  Clock,
+  Mail,
+  Link,
+  FileText,
+  Trash2,
+  Archive,
   ExternalLink,
   Activity,
   Users,
@@ -63,22 +63,22 @@ const usePermissions = () => ({
 });
 
 const useUpdateEmailStatus = () => ({
-  mutate: async () => {},
-  mutateAsync: async (params: any) => {},
+  mutate: async () => { },
+  mutateAsync: async (params: any) => { },
   isLoading: false,
   isPending: false
 });
 
 const useDeleteEmail = () => ({
-  mutate: async () => {},
-  mutateAsync: async (emailId: any) => {},
+  mutate: async () => { },
+  mutateAsync: async (emailId: any) => { },
   isLoading: false,
   isPending: false
 });
 
 const useBulkUpdateEmails = () => ({
-  mutate: async () => {},
-  mutateAsync: async (params: any) => {},
+  mutate: async () => { },
+  mutateAsync: async (params: any) => { },
   isLoading: false,
   isPending: false
 });
@@ -116,12 +116,13 @@ const SOCDashboard = () => {
   // Hooks
   const { user, logout } = useAuth();
   const { canDeleteEmails, canViewAudits } = usePermissions();
-  const { isConnected: wsConnected } = useWebSocket();
+  const wsUrl = import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8080';
+  const { isConnected: wsConnected } = useWebSocket(`${wsUrl}/ws`);
   const [searchParams, setSearchParams] = useSearchParams();
-  
+
   // OAuth Status
   const [oauthStatus, setOauthStatus] = useState<OAuthUserStatus | null>(null);
-  
+
   // UI State
   const {
     filters,
@@ -149,7 +150,7 @@ const SOCDashboard = () => {
     system_status: 'healthy'
   };
   const statsLoading = false;
-  
+
   // Mutations
   const updateEmailStatus = useUpdateEmailStatus();
   const deleteEmail = useDeleteEmail();
@@ -200,7 +201,7 @@ const SOCDashboard = () => {
     const diff = now.getTime() - date.getTime();
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(diff / 3600000);
-    
+
     if (minutes < 60) return `${minutes}m ago`;
     if (hours < 24) return `${hours}h ago`;
     return date.toLocaleDateString();
@@ -280,7 +281,7 @@ const SOCDashboard = () => {
   useEffect(() => {
     const oauthSuccess = searchParams.get('oauth_success');
     const email = searchParams.get('email');
-    
+
     if (oauthSuccess === 'true') {
       // Show success notification
       const { addNotification } = useUIStore.getState();
@@ -289,10 +290,10 @@ const SOCDashboard = () => {
         message: `Gmail account ${email} successfully connected! Real-time protection is now active.`,
         autoHide: false // Keep the success message visible
       });
-      
+
       // Clean up URL parameters
       setSearchParams({});
-      
+
       // Refresh OAuth status
       const checkOAuthStatus = async () => {
         try {
@@ -313,12 +314,11 @@ const SOCDashboard = () => {
         {notifications.map((notification) => (
           <div
             key={notification.id}
-            className={`p-4 rounded-lg shadow-lg max-w-md ${
-              notification.type === 'error' ? 'bg-red-600' :
-              notification.type === 'warning' ? 'bg-yellow-600' :
-              notification.type === 'success' ? 'bg-green-600' :
-              'bg-blue-600'
-            }`}
+            className={`p-4 rounded-lg shadow-lg max-w-md ${notification.type === 'error' ? 'bg-red-600' :
+                notification.type === 'warning' ? 'bg-yellow-600' :
+                  notification.type === 'success' ? 'bg-green-600' :
+                    'bg-blue-600'
+              }`}
           >
             <div className="flex items-center justify-between">
               <p className="text-white">{notification.message}</p>
@@ -339,17 +339,17 @@ const SOCDashboard = () => {
           <div className="flex items-center space-x-4">
             <Shield className="w-8 h-8 text-blue-400" />
             <h1 className="text-2xl font-bold text-white">PhishNet SOC Dashboard</h1>
-            
+
             {/* Navigation */}
             <nav className="flex items-center space-x-4 ml-8">
-              <a 
-                href="/dashboard" 
+              <a
+                href="/dashboard"
                 className="px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-gray-700 rounded-md transition-colors"
               >
                 Dashboard
               </a>
-              <a 
-                href="/test" 
+              <a
+                href="/test"
                 className="px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-gray-700 rounded-md transition-colors"
               >
                 Email Test
@@ -365,9 +365,8 @@ const SOCDashboard = () => {
             <div className="flex items-center space-x-2 text-sm text-gray-300">
               <Mail className="w-4 h-4" />
               <span>Gmail</span>
-              <div className={`w-2 h-2 rounded-full ${
-                oauthStatus?.status === 'connected' ? 'bg-green-500 animate-pulse' : 'bg-orange-500'
-              }`}></div>
+              <div className={`w-2 h-2 rounded-full ${oauthStatus?.status === 'connected' ? 'bg-green-500 animate-pulse' : 'bg-orange-500'
+                }`}></div>
               {oauthStatus?.status === 'connected' && (
                 <CheckCircle className="w-4 h-4 text-green-400" />
               )}
@@ -513,8 +512,8 @@ const SOCDashboard = () => {
           {/* Email List */}
           <div className="flex-1 overflow-y-auto">
             {isOAuthUser && userEmail ? (
-              <GmailEmailList 
-                userEmail={userEmail} 
+              <GmailEmailList
+                userEmail={userEmail}
                 onEmailSelect={setSelectedGmailEmail}
               />
             ) : (
@@ -536,9 +535,8 @@ const SOCDashboard = () => {
                     <div
                       key={email.id}
                       onClick={() => handleEmailSelect(email)}
-                      className={`p-4 border-b border-gray-700 hover:bg-gray-800 cursor-pointer transition-colors ${
-                        selectedEmailId === email.id ? 'bg-gray-800 border-l-4 border-l-blue-500' : ''
-                      }`}
+                      className={`p-4 border-b border-gray-700 hover:bg-gray-800 cursor-pointer transition-colors ${selectedEmailId === email.id ? 'bg-gray-800 border-l-4 border-l-blue-500' : ''
+                        }`}
                     >
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex items-center space-x-3">
@@ -564,11 +562,11 @@ const SOCDashboard = () => {
                           <div className="text-xs text-gray-500">{formatTimestamp(email.timestamp)}</div>
                         </div>
                       </div>
-                      
+
                       <div className="mb-2">
                         <div className="font-medium text-gray-200 truncate">{email.subject}</div>
                       </div>
-                      
+
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-4 text-sm text-gray-400">
                           <span className="flex items-center space-x-1">
@@ -618,11 +616,10 @@ const SOCDashboard = () => {
                   <div className="text-sm text-gray-400">Active Threats</div>
                 </div>
                 <div className="bg-gray-700 p-3 rounded">
-                  <div className={`text-2xl font-bold ${
-                    systemStats.system_status === 'healthy' ? 'text-green-400' :
-                    systemStats.system_status === 'degraded' ? 'text-yellow-400' :
-                    'text-red-400'
-                  }`}>
+                  <div className={`text-2xl font-bold ${systemStats.system_status === 'healthy' ? 'text-green-400' :
+                      systemStats.system_status === 'degraded' ? 'text-yellow-400' :
+                        'text-red-400'
+                    }`}>
                     {systemStats.system_status}
                   </div>
                   <div className="text-sm text-gray-400">System Status</div>
@@ -636,8 +633,8 @@ const SOCDashboard = () => {
           {/* Email Analysis Panel */}
           <div className="flex-1 p-4 overflow-y-auto">
             {selectedEmail ? (
-              <EmailAnalysisPanel 
-                email={selectedEmail} 
+              <EmailAnalysisPanel
+                email={selectedEmail}
                 onAction={handleEmailAction}
                 canDelete={canDeleteEmails}
               />
@@ -708,23 +705,21 @@ const EmailAnalysisPanel: React.FC<EmailAnalysisPanelProps> = ({ email, onAction
       <div className="bg-gray-800 rounded-lg p-4 mb-4">
         <div className="flex items-center justify-between mb-3">
           <h4 className="font-semibold text-white">Risk Assessment</h4>
-          <div className={`text-2xl font-bold ${
-            email.risk_level === 'critical' ? 'text-red-400' :
-            email.risk_level === 'high' ? 'text-orange-400' :
-            email.risk_level === 'medium' ? 'text-yellow-400' :
-            'text-green-400'
-          }`}>
+          <div className={`text-2xl font-bold ${email.risk_level === 'critical' ? 'text-red-400' :
+              email.risk_level === 'high' ? 'text-orange-400' :
+                email.risk_level === 'medium' ? 'text-yellow-400' :
+                  'text-green-400'
+            }`}>
             {email.risk_score}/100
           </div>
         </div>
         <div className="w-full bg-gray-700 rounded-full h-2 mb-3">
           <div
-            className={`h-2 rounded-full ${
-              email.risk_level === 'critical' ? 'bg-red-500' :
-              email.risk_level === 'high' ? 'bg-orange-500' :
-              email.risk_level === 'medium' ? 'bg-yellow-500' :
-              'bg-green-500'
-            }`}
+            className={`h-2 rounded-full ${email.risk_level === 'critical' ? 'bg-red-500' :
+                email.risk_level === 'high' ? 'bg-orange-500' :
+                  email.risk_level === 'medium' ? 'bg-yellow-500' :
+                    'bg-green-500'
+              }`}
             style={{ width: `${email.risk_score}%` }}
           ></div>
         </div>
@@ -733,7 +728,7 @@ const EmailAnalysisPanel: React.FC<EmailAnalysisPanelProps> = ({ email, onAction
 
       {/* Actions */}
       <div className="grid grid-cols-2 gap-2 mb-4">
-        <button 
+        <button
           onClick={() => onAction(email.id, 'quarantined')}
           className="flex items-center justify-center space-x-2 px-3 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white transition-colors"
           disabled={email.status === 'quarantined'}
@@ -742,7 +737,7 @@ const EmailAnalysisPanel: React.FC<EmailAnalysisPanelProps> = ({ email, onAction
           <span>Quarantine</span>
         </button>
         {canDelete && (
-          <button 
+          <button
             onClick={() => onAction(email.id, 'delete')}
             className="flex items-center justify-center space-x-2 px-3 py-2 bg-red-700 hover:bg-red-800 rounded-lg text-white transition-colors"
           >
@@ -750,7 +745,7 @@ const EmailAnalysisPanel: React.FC<EmailAnalysisPanelProps> = ({ email, onAction
             <span>Delete</span>
           </button>
         )}
-        <button 
+        <button
           onClick={() => onAction(email.id, 'safe')}
           className="flex items-center justify-center space-x-2 px-3 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-white transition-colors"
           disabled={email.status === 'safe'}
@@ -785,12 +780,11 @@ const EmailAnalysisPanel: React.FC<EmailAnalysisPanelProps> = ({ email, onAction
           </div>
           <div>
             <span className="text-gray-400">Status:</span>
-            <span className={`ml-2 px-2 py-1 rounded text-xs ${
-              email.status === 'quarantined' ? 'bg-red-900 text-red-200' :
-              email.status === 'analyzing' ? 'bg-yellow-900 text-yellow-200' :
-              email.status === 'safe' ? 'bg-green-900 text-green-200' :
-              'bg-blue-900 text-blue-200'
-            }`}>
+            <span className={`ml-2 px-2 py-1 rounded text-xs ${email.status === 'quarantined' ? 'bg-red-900 text-red-200' :
+                email.status === 'analyzing' ? 'bg-yellow-900 text-yellow-200' :
+                  email.status === 'safe' ? 'bg-green-900 text-green-200' :
+                    'bg-blue-900 text-blue-200'
+              }`}>
               {email.status}
             </span>
           </div>
