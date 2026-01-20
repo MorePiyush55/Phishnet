@@ -2,7 +2,6 @@
 
 from fastapi import APIRouter, HTTPException, Request, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
 from typing import Dict, Any, Optional, List
 import datetime
 import httpx
@@ -10,27 +9,21 @@ import asyncio
 import jwt
 
 # Import dependencies
-from app.core.database import get_db
-from app.models.user import User, OAuthToken
-from app.core.config import settings
+from app.db.mongodb import get_mongodb_db
+from app.models.mongodb_models import User
+from app.config.settings import settings
 
 # Import real threat analyzer
 from app.analyzers.real_threat_analyzer import real_threat_analyzer
 
-# Import MongoDB for backward compatibility
-try:
-    from ..db.mongodb import get_mongodb_db
-    MONGODB_AVAILABLE = True
-except ImportError:
-    MONGODB_AVAILABLE = False
-    print("MongoDB not available for Gmail tokens")
+# MongoDB is primary for this mode
+MONGODB_AVAILABLE = True
 
 router = APIRouter(prefix="/api/gmail-simple", tags=["Gmail Test"])
 security = HTTPBearer(auto_error=False)
 
 async def get_current_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-    db: Session = Depends(get_db)
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
 ) -> Optional[User]:
     """Get current authenticated user from JWT token."""
     if not credentials:
@@ -46,19 +39,15 @@ async def get_current_user(
         )
         
         # Get user_id from token
-        user_id = payload.get("user_id")
         user_email = payload.get("sub")
         
-        if not user_id and not user_email:
+        if not user_email:
             return None
         
-        # Find user in database
-        if user_id:
-            user = db.query(User).filter(User.id == user_id).first()
-        else:
-            user = db.query(User).filter(User.email == user_email).first()
+        # Find user in MongoDB
+        user = await User.find_one({"email": user_email})
         
-        if user and user.is_active and not user.disabled:
+        if user and user.is_active:
             return user
         
         return None
@@ -75,8 +64,7 @@ async def test_endpoint():
 @router.get("/check-tokens/{user_email}")
 async def check_user_tokens(
     user_email: str,
-    current_user: Optional[User] = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: Optional[User] = Depends(get_current_user)
 ):
     """Check if user has stored Gmail tokens - now user-specific."""
     # Check if authenticated user has access to request tokens for this email
@@ -87,24 +75,16 @@ async def check_user_tokens(
     if current_user.email != user_email and not current_user.is_superuser:
         raise HTTPException(status_code=403, detail="Can only check your own tokens")
     
-    # First check SQLAlchemy OAuth tokens (primary)
-    oauth_token = (
-        db.query(OAuthToken)
-        .filter(
-            OAuthToken.user_id == current_user.id,
-            OAuthToken.provider == 'google',
-            OAuthToken.is_active == True
-        )
-        .first()
-    )
+    # First check MongoDB (primary for this user)
+    has_tokens = current_user.gmail_access_token is not None
     
-    if oauth_token:
+    if has_tokens:
         return {
             "has_tokens": True,
             "user_email": user_email,
-            "token_source": "oauth",
-            "token_created": oauth_token.created_at,
-            "scopes": oauth_token.scope.split(' ') if oauth_token.scope else []
+            "token_source": "mongodb",
+            "token_created": current_user.created_at,
+            "has_refresh_token": current_user.gmail_refresh_token is not None
         }
     
     # Fallback to MongoDB for backward compatibility
@@ -146,8 +126,7 @@ async def gmail_health():
 @router.post("/analyze")
 async def analyze_user_emails(
     request: Optional[Dict[str, Any]] = None,
-    current_user: Optional[User] = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: Optional[User] = Depends(get_current_user)
 ):
     """
     Analyze user's Gmail emails for phishing indicators.
@@ -165,67 +144,33 @@ async def analyze_user_emails(
         
         print(f"Fetching emails for authenticated user: {user_email}")
         
-        # First try to get access token from SQLAlchemy OAuth tokens (primary)
-        oauth_token = (
-            db.query(OAuthToken)
-            .filter(
-                OAuthToken.user_id == current_user.id,
-                OAuthToken.provider == 'google',
-                OAuthToken.is_active == True
-            )
-            .first()
-        )
-        
-        gmail_access_token = None
-        token_source = None
-        
-        if oauth_token:
-            # Use the new token refresh functionality
-            gmail_access_token = await oauth_token.get_valid_access_token(db)
-            if gmail_access_token:
-                token_source = "oauth"
-                print(f"Using OAuth access token for {user_email}")
-            else:
-                print(f"OAuth token refresh failed for {user_email}")
-        else:
-            # Fallback to MongoDB for backward compatibility
-            if MONGODB_AVAILABLE:
-                try:
-                    print(f"Trying MongoDB fallback for user: {user_email}")
-                    mongo_db = await get_mongodb_db()
-                    users_collection = mongo_db.users
-                    
-                    user_doc = await users_collection.find_one({"email": user_email})
-                    
-                    if user_doc and user_doc.get("gmail_access_token"):
-                        gmail_access_token = user_doc.get("gmail_access_token")
-                        token_source = "mongodb"
-                        print(f"Using MongoDB access token for {user_email}")
-                    else:
-                        print(f"No Gmail access token found in MongoDB for {user_email}")
-                        
-                except Exception as mongodb_error:
-                    print(f"MongoDB error: {mongodb_error}")
-        
+        gmail_access_token = current_user.gmail_access_token
+        token_source = "mongodb"
+        oauth_token = None # No SQLAlchemy token here
         if not gmail_access_token:
             print(f"No Gmail access token found for {user_email} in either OAuth or MongoDB")
-            return get_mock_emails_response()
+            return {
+                "total_emails": 0,
+                "fetched_emails": 0,
+                "emails": [],
+                "error": "Authentication required. Please connect your Gmail account."
+            }
         
         print(f"Found Gmail token for {user_email} from {token_source}, fetching real emails...")
         
         # Fetch real Gmail emails with pagination
         gmail_result = await fetch_gmail_emails(gmail_access_token, max_emails)
         
-        # Handle token expiration with one retry
-        if gmail_result.get("error") == "token_expired" and oauth_token:
-            print(f"Token expired, attempting refresh for {user_email}")
-            if await oauth_token.refresh_access_token(db):
-                print("Token refreshed successfully, retrying email fetch")
-                gmail_access_token = oauth_token.decrypt_access_token()
-                gmail_result = await fetch_gmail_emails(gmail_access_token, max_emails)
-            else:
-                print("Token refresh failed")
-                return get_mock_emails_response()
+        # Handle token expiration (MongoDB simple version)
+        if gmail_result.get("error") == "token_expired":
+            print(f"Token expired for {user_email}. Refresh needed.")
+            # In a real app, we would refresh using current_user.gmail_refresh_token
+            return {
+                "total_emails": 0,
+                "fetched_emails": 0,
+                "emails": [],
+                "error": "Session expired. Please reconnect your Gmail account."
+            }
         
         if gmail_result.get("emails"):
             real_emails = gmail_result["emails"]
@@ -242,8 +187,13 @@ async def analyze_user_emails(
             error = gmail_result.get("error")
             if error:
                 print(f"Gmail API error: {error}")
-            print("No real emails found or API call failed, returning mock data")
-            return get_mock_emails_response()
+            print("No real emails found or API call failed")
+            return {
+                "total_emails": 0,
+                "fetched_emails": 0,
+                "emails": [],
+                "message": "No emails found in your inbox."
+            }
         
     except HTTPException:
         raise  # Re-raise HTTP exceptions
@@ -251,7 +201,7 @@ async def analyze_user_emails(
         print(f"Error in analyze_user_emails: {e}")
         import traceback
         print(f"Error traceback: {traceback.format_exc()}")
-        return get_mock_emails_response()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 async def fetch_gmail_emails(access_token: str, max_emails: int = 10, page_token: Optional[str] = None) -> Dict[str, Any]:
@@ -433,40 +383,3 @@ async def analyze_email_for_phishing(email_info: Dict[str, Any]) -> Dict[str, An
             "summary": "Threat analysis failed - email requires manual review"
         }
 
-def get_mock_emails_response():
-    """Return mock emails as fallback."""
-    return {
-        "total_emails": 2,
-        "emails": [
-            {
-                "id": "demo-1",
-                "subject": "Weekly Team Meeting", 
-                "sender": "team@yourcompany.com",
-                "received_at": "2024-01-15T10:00:00Z",
-                "snippet": "Just a reminder about our weekly team meeting scheduled for today at 2 PM",
-                "phishing_analysis": {
-                    "risk_score": 5,
-                    "risk_level": "SAFE",
-                    "indicators": [],
-                    "summary": "Safe internal communication"
-                }
-            },
-            {
-                "id": "demo-2",
-                "subject": "URGENT: Account Verification Required",
-                "sender": "security@suspicious-bank.net",
-                "received_at": "2024-01-15T11:30:00Z",
-                "snippet": "Your account will be suspended if you don't verify immediately. Click here now!",
-                "phishing_analysis": {
-                    "risk_score": 85,
-                    "risk_level": "HIGH",
-                    "indicators": [
-                        "Suspicious subject word: 'urgent'",
-                        "Suspicious phrase: 'account suspended'",
-                        "Suspicious phrase: 'verify immediately'"
-                    ],
-                    "summary": "High risk phishing attempt detected"
-                }
-            }
-        ]
-    }

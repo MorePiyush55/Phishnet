@@ -139,13 +139,24 @@ class QuickIMAPService:
                     
                     # Check attachments for .eml file
                     for att in msg.attachments:
-                        # Check if attachment is EML file
-                        if (att.content_type in ['message/rfc822', 'application/octet-stream'] or
-                            att.filename.endswith('.eml')):
+                        # Check if attachment is EML file (message/rfc822 or .eml extension)
+                        is_eml = (
+                            att.content_type in ['message/rfc822', 'application/rfc822'] or
+                            att.filename.lower().endswith('.eml') or
+                            (att.content_type == 'application/octet-stream' and att.filename.lower().endswith('.eml'))
+                        )
+                        
+                        if is_eml:
                             # Parse attached email
                             try:
-                                internal_email = BytesParser(policy=policy.default).parsebytes(att.payload)
-                                raw_email = att.payload
+                                # Some clients send nested messages in different encodings
+                                payload = att.payload
+                                if not payload:
+                                    logger.warning(f"Empty payload for EML attachment in message {uid}")
+                                    continue
+                                    
+                                internal_email = BytesParser(policy=policy.default).parsebytes(payload)
+                                raw_email = payload
                                 logger.info(f"Extracted .eml attachment from forwarded email {uid}")
                                 break
                             except Exception as e:
@@ -252,6 +263,9 @@ class QuickIMAPService:
                 if value:
                     headers[header] = value
             
+            # Extract organization from sender (domain-based)
+            org_domain = from_addr.split('@')[-1].lower() if '@' in from_addr else 'unknown'
+            
             return {
                 'subject': subject,
                 'from': from_addr,
@@ -260,7 +274,8 @@ class QuickIMAPService:
                 'body_text': body_text,
                 'body_html': body_html,
                 'attachments': attachments,
-                'headers': headers
+                'headers': headers,
+                'org_domain': org_domain
             }
             
         except Exception as e:

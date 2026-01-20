@@ -39,49 +39,6 @@ export const GmailEmailList: React.FC<GmailEmailListProps> = ({ userEmail, onEma
   const [totalEmails, setTotalEmails] = useState<number>(0);
   const [fetchedEmails, setFetchedEmails] = useState<number>(0);
 
-  // Mock data for testing
-  const mockEmails: GmailEmail[] = [
-    {
-      id: 'mock-1',
-      subject: 'Urgent: Your account needs verification',
-      sender: 'security@suspicious-bank.com',
-      received_at: new Date().toISOString(),
-      snippet: 'Your account will be suspended if you do not verify immediately...',
-      phishing_analysis: {
-        risk_score: 85,
-        risk_level: 'HIGH',
-        indicators: ['Suspicious sender domain', 'Urgent action required', 'Account suspension threat'],
-        summary: 'High risk phishing attempt. Requests urgent account verification with threats.'
-      }
-    },
-    {
-      id: 'mock-2',
-      subject: 'Team meeting reminder',
-      sender: 'colleague@yourcompany.com',
-      received_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-      snippet: 'Just a reminder about our team meeting scheduled for tomorrow at 2 PM...',
-      phishing_analysis: {
-        risk_score: 15,
-        risk_level: 'SAFE',
-        indicators: [],
-        summary: 'Safe internal communication from known colleague.'
-      }
-    },
-    {
-      id: 'mock-3',
-      subject: 'Limited time offer - 90% off!',
-      sender: 'deals@promocompany.net',
-      received_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-      snippet: 'Amazing discount! Get 90% off premium products. Limited time only...',
-      phishing_analysis: {
-        risk_score: 55,
-        risk_level: 'MEDIUM',
-        indicators: ['Promotional content', 'Time pressure tactics', 'Unrealistic discount'],
-        summary: 'Medium risk promotional email with aggressive marketing tactics.'
-      }
-    }
-  ];
-
   const fetchEmails = async (pageToken?: string, append: boolean = false) => {
     if (!userEmail) {
       setError('No user email provided');
@@ -94,7 +51,7 @@ export const GmailEmailList: React.FC<GmailEmailListProps> = ({ userEmail, onEma
     try {
       console.log('Fetching Gmail emails for:', userEmail, pageToken ? `Page token: ${pageToken}` : 'Initial fetch');
 
-      const apiUrl = 'https://phishnet-backend-iuoc.onrender.com';
+      const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
       const requestBody: any = {
         user_email: userEmail,
@@ -150,11 +107,6 @@ export const GmailEmailList: React.FC<GmailEmailListProps> = ({ userEmail, onEma
       console.error('Gmail email fetch error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch Gmail emails';
       setError(errorMessage);
-
-      // Fallback to mock data if API fails
-      console.log('Using mock data fallback due to API error...');
-      setEmails(mockEmails);
-
     } finally {
       setLoading(false);
     }
@@ -176,8 +128,6 @@ export const GmailEmailList: React.FC<GmailEmailListProps> = ({ userEmail, onEma
     if (userEmail) {
       fetchEmails();
     } else {
-      // Show mock data immediately if no user email
-      setEmails(mockEmails);
       setLoading(false);
     }
   }, [userEmail, refreshTrigger]);

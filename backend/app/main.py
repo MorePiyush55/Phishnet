@@ -59,9 +59,9 @@ except ImportError:
     DOCUMENT_MODELS = []
 
 try:
-    from app.api.health import router as health_router  # Direct import to avoid __init__.py
-    from app.api.test_oauth import router as oauth_router  # Direct import to avoid conflicts
-    # Note: Avoiding "from app.api import" to prevent SQLAlchemy model conflicts
+    from app.api.health import router as health_router
+    from app.api.gmail_simple import router as gmail_simple_router
+    from app.api.test_oauth import router as oauth_router
     # Temporarily disabled: gmail_oauth, simple_oauth, simple_analysis, auth_simple, gmail_api
 except ImportError:
     # Create minimal router if imports fail
@@ -91,8 +91,6 @@ async def lifespan(app: FastAPI):
             await MongoDBManager.connect_to_mongo()
             await MongoDBManager.initialize_beanie(DOCUMENT_MODELS)
             logger.info("MongoDB initialized successfully")
-        except Exception as e:
-            logger.error(f"MongoDB initialization failed: {e}")
         except Exception as e:
             logger.error(f"MongoDB initialization failed: {e}")
             # raise  # Fail startup if MongoDB is not available
@@ -250,6 +248,13 @@ except Exception as e:
     logger.error(f"OAuth router failed to load: {e}")
     router_errors.append(f"OAuth: {e}")
 
+try:
+    app.include_router(gmail_simple_router, tags=["Gmail Simple Analysis"])
+    logger.info("Gmail simple router loaded successfully")
+except Exception as e:
+    logger.error(f"Gmail simple router failed to load: {e}")
+    router_errors.append(f"Gmail Simple: {e}")
+
 # IMAP Email Integration Router (ThePhish-style forwarded emails - Mode 1: Bulk Forward)
 try:
     from app.api.v1.imap_emails import router as imap_emails_router
@@ -287,6 +292,15 @@ try:
 except Exception as e:
     logger.warning(f"Email forward analysis router failed to load: {e}")
     router_errors.append(f"Email Forward: {e}")
+
+# Organization Analytics Router (Mode 1: Bulk Forward Overview)
+try:
+    from app.api.v2.organization import router as org_router
+    app.include_router(org_router, prefix="/api/v2/organization", tags=["Organization Analytics"])
+    logger.info("Organization analytics router loaded successfully")
+except Exception as e:
+    logger.warning(f"Organization analytics router failed to load: {e}")
+    router_errors.append(f"Organization Analytics: {e}")
 
 # Add routers directly with robust error handling (excluding manually loaded ones)
 routers_to_add = [

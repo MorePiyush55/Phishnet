@@ -347,6 +347,17 @@ class VirusTotalClient(IAnalyzer):
         # Generate explanation
         explanation = self._generate_explanation(vt_result)
         
+        # Tiered verdict logic
+        # 1. Malicious: Significant consensus (>= 10%) or multiple engines (>= 3)
+        if vt_result.vt_score >= 0.1 or vt_result.positives >= 3:
+            verdict = "malicious"
+        # 2. Suspicious: Any positive detection
+        elif vt_result.positives >= 1:
+            verdict = "suspicious"
+        # 3. Clean: No detections
+        else:
+            verdict = "clean"
+        
         return AnalysisResult(
             service_name=self.service_name,
             analysis_type=analysis_type,
@@ -356,7 +367,7 @@ class VirusTotalClient(IAnalyzer):
             raw_response=raw_response,
             timestamp=start_time,
             execution_time_ms=int((time.time() - start_time) * 1000),
-            verdict="malicious" if vt_result.vt_score > 0.1 else "clean",
+            verdict=verdict,
             explanation=explanation,
             indicators=vt_result.engine_hits[:5]  # Top 5 detection engines
         )

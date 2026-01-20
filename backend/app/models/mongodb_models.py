@@ -415,6 +415,7 @@ class ForwardedEmailAnalysis(Document):
     
     user_id: Indexed(str)  # Extracted from forwarding email address
     forwarded_by: Indexed(str)  # Email address that forwarded
+    org_domain: Optional[str] = Field(None, description="Organization domain of the forwarder")
     
     # Original email metadata
     original_sender: str
@@ -446,6 +447,7 @@ class ForwardedEmailAnalysis(Document):
         indexes = [
             IndexModel([("user_id", ASCENDING), ("created_at", DESCENDING)]),
             IndexModel([("forwarded_by", ASCENDING), ("created_at", DESCENDING)]),
+            IndexModel([("org_domain", ASCENDING), ("created_at", DESCENDING)]),
             IndexModel([("email_metadata.message_id", ASCENDING)], unique=True),
             IndexModel([("risk_level", ASCENDING)]),
             IndexModel([("reply_sent", ASCENDING)]),

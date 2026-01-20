@@ -14,9 +14,9 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'https://phishnet-1ed1.onrender.com',
+        target: 'http://localhost:8080',
         changeOrigin: true,
-        secure: true,
+        secure: false,
       },
     },
   },

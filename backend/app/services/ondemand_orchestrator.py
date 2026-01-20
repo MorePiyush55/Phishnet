@@ -62,6 +62,7 @@ class AnalysisJob:
     mail_uid: str
     forwarded_by: str
     original_subject: str
+    org_domain: Optional[str] = None
     status: JobStatus = JobStatus.RECEIVED
     created_at: datetime = field(default_factory=datetime.utcnow)
     completed_at: Optional[datetime] = None
@@ -155,10 +156,11 @@ class OnDemandOrchestrator:
                 raise ValueError(f"Email {mail_uid} not found or could not be parsed")
             
             job.forwarded_by = email_data.get('forwarded_by', '')
+            job.org_domain = email_data.get('org_domain', 'unknown')
             job.original_subject = email_data.get('subject', 'No Subject')
             job.status = JobStatus.PARSED
             
-            logger.info(f"[Job {job.job_id}] Parsed email from {job.forwarded_by}: {job.original_subject}")
+            logger.info(f"[Job {job.job_id}] Parsed email from {job.forwarded_by} (Org: {job.org_domain}): {job.original_subject}")
             
             # ═══════════════════════════════════════════════════════════════
             # STEP 2: Detection Phase (Backend is authoritative)
@@ -258,6 +260,7 @@ class OnDemandOrchestrator:
                 analysis_doc = ForwardedEmailAnalysis(
                     user_id=job.forwarded_by,
                     forwarded_by=job.forwarded_by,
+                    org_domain=job.org_domain,
                     original_sender=email_data.get('from', 'Unknown'),
                     original_subject=job.original_subject,
                     threat_score=float(detection_result.total_score) / 100.0,

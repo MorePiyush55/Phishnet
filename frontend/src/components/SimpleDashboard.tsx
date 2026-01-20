@@ -25,7 +25,8 @@ const SimpleDashboard: React.FC = () => {
   const isOAuthUser = localStorage.getItem('oauth_success') === 'true';
 
   // WebSocket Connection
-  const { isConnected, lastMessage } = useWebSocket('ws://localhost:8002/ws');
+  const wsUrl = import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8080';
+  const { isConnected, lastMessage } = useWebSocket(`${wsUrl}/ws`);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   useEffect(() => {
@@ -49,13 +50,13 @@ const SimpleDashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
+    <div className="min-h-screen bg-gray-900 text-white flex flex-col">
       {/* Header */}
       <header className="bg-gray-800 border-b border-gray-700 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <Shield className="h-8 w-8 text-blue-400" />
-            <h1 className="text-2xl font-bold">PhishNet SOC Dashboard</h1>
+            <h1 className="text-2xl font-bold">PhishNet Analysis Inbox</h1>
           </div>
 
           <div className="flex items-center space-x-4">
@@ -68,7 +69,7 @@ const SimpleDashboard: React.FC = () => {
             </button>
             <div className="flex items-center space-x-2 text-sm text-gray-300">
               <Activity className={`h-4 w-4 ${isConnected ? 'text-green-400' : 'text-red-400'}`} />
-              <span className="hidden md:inline">{isConnected ? 'Live' : 'Offline'}</span>
+              <span className="hidden md:inline">{isConnected ? 'Live Monitoring' : 'Offline'}</span>
             </div>
             <div className="flex items-center space-x-2 text-sm text-gray-300">
               <Mail className="h-4 w-4" />
@@ -85,99 +86,112 @@ const SimpleDashboard: React.FC = () => {
         </div>
       </header>
 
-      <div className="flex h-[calc(100vh-80px)]">
-        {/* Email List Panel */}
-        <div className="w-1/2 border-r border-gray-700 overflow-hidden flex flex-col">
-          <div className="p-4 border-b border-gray-700">
-            <h2 className="text-lg font-semibold">Email Analysis</h2>
+      <main className="flex-1 overflow-hidden">
+        <div className="flex h-full">
+          {/* Email List Panel */}
+          <div className="w-1/2 border-r border-gray-700 overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-gray-700 flex justify-between items-center">
+              <h2 className="text-lg font-semibold text-blue-400">Incoming Emails</h2>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              {isOAuthUser && userEmail ? (
+                <GmailEmailList
+                  userEmail={userEmail}
+                  onEmailSelect={setSelectedEmail}
+                  refreshTrigger={refreshTrigger}
+                />
+              ) : (
+                <div className="p-6 text-center text-gray-400">
+                  <Mail className="h-12 w-12 mx-auto mb-4 text-gray-500" />
+                  <p>No Gmail connection found</p>
+                  <p className="text-sm">Please authenticate with Gmail to view emails</p>
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto">
-            {isOAuthUser && userEmail ? (
-              <GmailEmailList
-                userEmail={userEmail}
-                onEmailSelect={setSelectedEmail}
-                refreshTrigger={refreshTrigger}
-              />
-            ) : (
-              <div className="p-6 text-center text-gray-400">
-                <Mail className="h-12 w-12 mx-auto mb-4 text-gray-500" />
-                <p>No Gmail connection found</p>
-                <p className="text-sm">Please authenticate with Gmail to view emails</p>
-              </div>
-            )}
-          </div>
-        </div>
+          {/* Email Detail Panel */}
+          <div className="w-1/2 overflow-hidden flex flex-col bg-gray-900 bg-opacity-50">
+            <div className="p-4 border-b border-gray-700">
+              <h2 className="text-lg font-semibold text-blue-400">Threat Analysis</h2>
+            </div>
 
-        {/* Email Detail Panel */}
-        <div className="w-1/2 overflow-hidden flex flex-col">
-          <div className="p-4 border-b border-gray-700">
-            <h2 className="text-lg font-semibold">Email Details</h2>
-          </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {selectedEmail ? (
+                <div className="space-y-4">
+                  <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                    <h3 className="text-lg font-semibold mb-2 text-white">{selectedEmail.subject}</h3>
+                    <div className="space-y-2 text-sm text-gray-300">
+                      <p><strong>From:</strong> {selectedEmail.sender}</p>
+                      <p><strong>Received:</strong> {new Date(selectedEmail.received_at).toLocaleString()}</p>
+                    </div>
+                  </div>
 
-          <div className="flex-1 overflow-y-auto p-4">
-            {selectedEmail ? (
-              <div className="space-y-4">
-                <div className="bg-gray-800 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold mb-2">{selectedEmail.subject}</h3>
-                  <div className="space-y-2 text-sm text-gray-300">
-                    <p><strong>From:</strong> {selectedEmail.sender}</p>
-                    <p><strong>Received:</strong> {new Date(selectedEmail.received_at).toLocaleString()}</p>
+                  <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                    <h4 className="font-semibold mb-2 text-blue-400">Content Snippet</h4>
+                    <p className="text-gray-300 text-sm italic">"{selectedEmail.snippet}"</p>
+                  </div>
+
+                  <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                    <h4 className="font-semibold mb-4 text-blue-400">Security Verdict</h4>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-gray-900">
+                        <span className="text-gray-300">Risk Assessment:</span>
+                        <span className={`px-3 py-1 rounded text-sm font-bold ${selectedEmail.phishing_analysis.risk_level === 'HIGH' ? 'bg-red-600 text-white' :
+                          selectedEmail.phishing_analysis.risk_level === 'MEDIUM' ? 'bg-orange-600 text-white' :
+                            selectedEmail.phishing_analysis.risk_level === 'LOW' ? 'bg-yellow-600 text-black' :
+                              'bg-green-600 text-white'
+                          }`}>
+                          {selectedEmail.phishing_analysis.risk_level}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-gray-900">
+                        <span className="text-gray-300">Confidence Score:</span>
+                        <div className="flex flex-col items-end">
+                          <span className="text-lg font-mono text-blue-400">{selectedEmail.phishing_analysis.risk_score}%</span>
+                          <div className="w-32 h-2 bg-gray-700 rounded-full mt-1">
+                            <div
+                              className={`h-full rounded-full ${selectedEmail.phishing_analysis.risk_score > 70 ? 'bg-red-500' : selectedEmail.phishing_analysis.risk_score > 30 ? 'bg-yellow-500' : 'bg-green-500'}`}
+                              style={{ width: `${selectedEmail.phishing_analysis.risk_score}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      </div>
+                      {selectedEmail.phishing_analysis.summary && (
+                        <div className="p-3 rounded-lg bg-gray-900 border-l-4 border-blue-500">
+                          <p className="font-medium text-gray-200">AI Summary:</p>
+                          <p className="text-gray-300 text-sm mt-1">{selectedEmail.phishing_analysis.summary}</p>
+                        </div>
+                      )}
+                      {selectedEmail.phishing_analysis.indicators.length > 0 && (
+                        <div className="p-3 rounded-lg bg-gray-900">
+                          <p className="font-medium text-gray-200 mb-2">Detected Indicators:</p>
+                          <ul className="space-y-1">
+                            {selectedEmail.phishing_analysis.indicators.map((indicator, index) => (
+                              <li key={index} className="flex items-center space-x-2 text-sm text-gray-300">
+                                <span className="h-1.5 w-1.5 rounded-full bg-red-400"></span>
+                                <span>{indicator}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-
-                <div className="bg-gray-800 rounded-lg p-4">
-                  <h4 className="font-semibold mb-2">Content Preview</h4>
-                  <p className="text-gray-300 text-sm">{selectedEmail.snippet}</p>
-                </div>
-
-                <div className="bg-gray-800 rounded-lg p-4">
-                  <h4 className="font-semibold mb-2">Phishing Analysis</h4>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span>Risk Level:</span>
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${selectedEmail.phishing_analysis.risk_level === 'HIGH' ? 'bg-red-900 text-red-300' :
-                        selectedEmail.phishing_analysis.risk_level === 'MEDIUM' ? 'bg-orange-900 text-orange-300' :
-                          selectedEmail.phishing_analysis.risk_level === 'LOW' ? 'bg-yellow-900 text-yellow-300' :
-                            'bg-green-900 text-green-300'
-                        }`}>
-                        {selectedEmail.phishing_analysis.risk_level}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Risk Score:</span>
-                      <span className="font-mono">{selectedEmail.phishing_analysis.risk_score}/100</span>
-                    </div>
-                    {selectedEmail.phishing_analysis.summary && (
-                      <div>
-                        <p className="font-medium">Summary:</p>
-                        <p className="text-gray-300 text-sm mt-1">{selectedEmail.phishing_analysis.summary}</p>
-                      </div>
-                    )}
-                    {selectedEmail.phishing_analysis.indicators.length > 0 && (
-                      <div>
-                        <p className="font-medium">Indicators:</p>
-                        <ul className="list-disc list-inside text-gray-300 text-sm mt-1">
-                          {selectedEmail.phishing_analysis.indicators.map((indicator, index) => (
-                            <li key={index}>{indicator}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
+              ) : (
+                <div className="flex items-center justify-center h-full text-gray-400">
+                  <div className="text-center">
+                    <Eye className="h-12 w-12 mx-auto mb-4 text-gray-600" />
+                    <p className="text-lg">Select an email to view detailed threat analysis</p>
                   </div>
                 </div>
-              </div>
-            ) : (
-              <div className="flex items-center justify-center h-full text-gray-400">
-                <div className="text-center">
-                  <Eye className="h-12 w-12 mx-auto mb-4 text-gray-500" />
-                  <p>Select an email to view analysis</p>
-                </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 };
