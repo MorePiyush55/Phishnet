@@ -62,7 +62,8 @@ try:
     from app.api.health import router as health_router
     from app.api.gmail_simple import router as gmail_simple_router
     from app.api.test_oauth import router as oauth_router
-    # Temporarily disabled: gmail_oauth, simple_oauth, simple_analysis, auth_simple, gmail_api
+    from app.api.gmail_oauth import router as gmail_oauth_router
+    # Temporarily disabled: simple_oauth, simple_analysis, auth_simple, gmail_api
 except ImportError:
     # Create minimal router if imports fail
     from fastapi import APIRouter
@@ -254,6 +255,13 @@ try:
 except Exception as e:
     logger.error(f"Gmail simple router failed to load: {e}")
     router_errors.append(f"Gmail Simple: {e}")
+
+try:
+    app.include_router(gmail_oauth_router, tags=["Gmail OAuth"])
+    logger.info("Gmail OAuth router loaded successfully")
+except Exception as e:
+    logger.error(f"Gmail OAuth router failed to load: {e}")
+    router_errors.append(f"Gmail OAuth: {e}")
 
 # IMAP Email Integration Router (ThePhish-style forwarded emails - Mode 1: Bulk Forward)
 try:
