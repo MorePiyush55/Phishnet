@@ -49,12 +49,15 @@ async def google_oauth_redirect():
     from fastapi.responses import RedirectResponse
     import os
     
-    # Get OAuth configuration
+    # Get OAuth configuration from environment
     client_id = os.getenv("GMAIL_CLIENT_ID")
-    redirect_uri = os.getenv("GMAIL_REDIRECT_URI", "http://localhost:8080/api/v1/oauth/callback")
+    redirect_uri = os.getenv("GMAIL_REDIRECT_URI")
     
     if not client_id:
         raise HTTPException(status_code=500, detail="OAuth not configured - GMAIL_CLIENT_ID missing")
+    
+    if not redirect_uri:
+        raise HTTPException(status_code=500, detail="OAuth not configured - GMAIL_REDIRECT_URI missing")
     
     # Build Google OAuth URL
     scopes = [
