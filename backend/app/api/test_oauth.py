@@ -37,3 +37,47 @@ async def oauth_health() -> Dict[str, str]:
         "status": "healthy",
         "module": "test_oauth"
     }
+
+
+@router.get("/google")
+async def google_oauth_redirect():
+    """
+    Redirect to Google OAuth flow.
+    
+    This endpoint initiates the OAuth flow by redirecting to the actual OAuth router.
+    """
+    from fastapi.responses import RedirectResponse
+    import os
+    
+    # Get OAuth configuration
+    client_id = os.getenv("GMAIL_CLIENT_ID")
+    redirect_uri = os.getenv("GMAIL_REDIRECT_URI", "http://localhost:8080/api/v1/oauth/callback")
+    
+    if not client_id:
+        raise HTTPException(status_code=500, detail="OAuth not configured - GMAIL_CLIENT_ID missing")
+    
+    # Build Google OAuth URL
+    scopes = [
+        "https://www.googleapis.com/auth/gmail.readonly",
+        "https://www.googleapis.com/auth/userinfo.email",
+        "openid"
+    ]
+    
+    import urllib.parse
+    import secrets
+    
+    # Generate state token for CSRF protection
+    state = secrets.token_urlsafe(32)
+    
+    # Build authorization URL
+    auth_url = "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode({
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": " ".join(scopes),
+        "state": state,
+        "access_type": "offline",
+        "prompt": "consent"
+    })
+    
+    return RedirectResponse(url=auth_url, status_code=302)

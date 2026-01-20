@@ -29,10 +29,10 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-    
+
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
-      
+
       // Try to refresh session before redirecting
       try {
         await api.post('/auth/refresh');
@@ -44,7 +44,7 @@ api.interceptors.response.use(
         window.location.href = '/login';
       }
     }
-    
+
     // Handle rate limiting with backoff
     if (error.response?.status === 429) {
       const retryAfter = error.response.headers['retry-after'];
@@ -54,7 +54,7 @@ api.interceptors.response.use(
         return api(originalRequest);
       }
     }
-    
+
     return Promise.reject(error);
   }
 );
@@ -69,13 +69,13 @@ function getCsrfToken(): string | null {
       return decodeURIComponent(value);
     }
   }
-  
+
   // Fallback to meta tag (common in production)
   const metaTag = document.querySelector('meta[name="csrf-token"]');
   if (metaTag) {
     return metaTag.getAttribute('content');
   }
-  
+
   return null;
 }
 
@@ -137,7 +137,7 @@ export class ConnectionMonitor {
       this.isOnline = true;
       this.notifyListeners(true);
     });
-    
+
     window.addEventListener('offline', () => {
       this.isOnline = false;
       this.notifyListeners(false);
@@ -175,13 +175,13 @@ export class OAuthService {
     localStorage.removeItem('oauth_state');
     localStorage.removeItem('csrf_token');
     sessionStorage.removeItem('oauth_state');
-    
+
     // Clear rate limiting data for auth endpoints
     RateLimiter.clearRateLimit('/auth/start');
     RateLimiter.clearRateLimit('/api/user/status');
     RateLimiter.clearRateLimit('/auth/revoke');
     RateLimiter.clearRateLimit('/api/scan/trigger');
-    
+
     // Clear any other session data
     sessionStorage.clear();
   }
@@ -194,11 +194,11 @@ export class OAuthService {
     if (!error.response && originalRequest && this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectAttempts++;
       const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-      
+
       console.log(`Network error, retrying in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
-      
+
       await new Promise(resolve => setTimeout(resolve, delay));
-      
+
       try {
         const response = await api.request(originalRequest);
         this.reconnectAttempts = 0; // Reset on success
@@ -224,12 +224,12 @@ export class OAuthService {
     if (error.response?.status === 429) {
       const retryAfter = error.response.headers['retry-after'];
       const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : 60000;
-      
+
       const message = `Too many requests. Please wait ${Math.ceil(waitTime / 1000)} seconds.`;
-      window.dispatchEvent(new CustomEvent('auth:rate-limited', { 
-        detail: { message, waitTime } 
+      window.dispatchEvent(new CustomEvent('auth:rate-limited', {
+        detail: { message, waitTime }
       }));
-      
+
       throw new Error(message);
     }
 
@@ -246,14 +246,11 @@ export class OAuthService {
     throw new Error(`API Error: ${error.response?.data?.detail || error.message}`);
   }
 
-  /**
-   * Start OAuth flow - redirects to Google
-   */
   static async startOAuth(): Promise<void> {
     try {
-      // Direct redirect to simple OAuth endpoint (bypasses MongoDB issues)
+      // Direct redirect to test OAuth endpoint
       const backendUrl = API_BASE_URL;
-      window.location.href = `${backendUrl}/api/simple/oauth`;
+      window.location.href = `${backendUrl}/test-oauth/google`;
     } catch (error: any) {
       console.error('OAuth redirect error:', error);
       throw new Error('Failed to start OAuth flow');
@@ -293,10 +290,10 @@ export class OAuthService {
       }
 
       const response: AxiosResponse<RevokeResponse> = await api.post('/auth/revoke');
-      
+
       // Clear local session data on successful revoke
       this.clearStoredSession();
-      
+
       return response.data;
     } catch (error: any) {
       return await this.handleApiError(error, { url: '/auth/revoke', method: 'post' });
@@ -373,10 +370,10 @@ export class OAuthService {
       }
 
       const response = await api.delete('/api/user/delete');
-      
+
       // Clear all data on successful account deletion
       this.clearStoredSession();
-      
+
       return response.data;
     } catch (error: any) {
       return await this.handleApiError(error, { url: '/api/user/delete', method: 'delete' });
@@ -394,22 +391,22 @@ export class OAuthService {
       }
 
       const status = await this.getUserStatus();
-      
+
       // Dispatch auth status event for components
-      window.dispatchEvent(new CustomEvent('auth:status-checked', { 
+      window.dispatchEvent(new CustomEvent('auth:status-checked', {
         detail: { status, authenticated: true }
       }));
-      
+
       return status;
     } catch (error: any) {
       // Handle unauthenticated state gracefully
       if (error.message.includes('User not connected') || error.message.includes('Session expired')) {
-        window.dispatchEvent(new CustomEvent('auth:status-checked', { 
+        window.dispatchEvent(new CustomEvent('auth:status-checked', {
           detail: { status: null, authenticated: false }
         }));
         return null;
       }
-      
+
       // Re-throw other errors
       throw error;
     }
@@ -422,15 +419,15 @@ export class OAuthService {
     const urlParams = new URLSearchParams(window.location.search);
     const state = urlParams.get('state');
     const storedState = sessionStorage.getItem('oauth_state');
-    
+
     // Clear stored state
     sessionStorage.removeItem('oauth_state');
-    
+
     if (!state || !storedState || state !== storedState) {
       console.error('OAuth state mismatch - possible CSRF attack');
       return false;
     }
-    
+
     return true;
   }
 }
@@ -444,22 +441,22 @@ export class RateLimiter {
   static canMakeRequest(endpoint: string, maxRequests: number = 5, windowMs: number = 60000): boolean {
     const now = Date.now();
     const storageKey = this.getStorageKey(endpoint);
-    
+
     // Get requests from localStorage for persistence across page reloads
     const storedRequests = localStorage.getItem(storageKey);
     const requests: number[] = storedRequests ? JSON.parse(storedRequests) : [];
-    
+
     // Remove old requests outside the window
     const validRequests = requests.filter(time => now - time < windowMs);
-    
+
     if (validRequests.length >= maxRequests) {
       return false;
     }
-    
+
     // Add current request
     validRequests.push(now);
     localStorage.setItem(storageKey, JSON.stringify(validRequests));
-    
+
     return true;
   }
 
@@ -468,11 +465,11 @@ export class RateLimiter {
     const storageKey = this.getStorageKey(endpoint);
     const storedRequests = localStorage.getItem(storageKey);
     const requests: number[] = storedRequests ? JSON.parse(storedRequests) : [];
-    
+
     if (requests.length < maxRequests) {
       return 0;
     }
-    
+
     const oldestRequest = Math.min(...requests);
     return Math.max(0, windowMs - (now - oldestRequest));
   }
