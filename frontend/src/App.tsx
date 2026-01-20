@@ -34,9 +34,9 @@ const queryClient = new QueryClient({
 const App: React.FC = () => {
   const handleGoogleSignIn = () => {
     try {
-      // Use production backend (CORRECT URL from Render logs)
-      const backendUrl = 'https://phishnet-backend-iuoc.onrender.com';
-      window.location.href = `${backendUrl}/api/rest/auth/google`;
+      // Use OAuthService for proper OAuth flow
+      const backendUrl = import.meta.env.VITE_API_BASE_URL || 'https://phishnet-backend-iuoc.onrender.com';
+      window.location.href = `${backendUrl}/test-oauth/google`;
     } catch (error) {
       console.error('OAuth error:', error);
     }
@@ -53,47 +53,47 @@ const App: React.FC = () => {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/connected" element={<ConnectedPage />} />
               <Route path="/oauth-test" element={<OAuthTest />} />
-              
+
               {/* Protected Routes */}
-              <Route 
-                path="/dashboard" 
+              <Route
+                path="/dashboard"
                 element={
                   <RequireAuth>
                     <SimpleDashboard />
                   </RequireAuth>
-                } 
+                }
               />
-              <Route 
-                path="/emails" 
+              <Route
+                path="/emails"
                 element={
                   <RequireAuth>
                     <EmailAnalysis userEmail={localStorage.getItem('user_email') || ''} />
                   </RequireAuth>
-                } 
+                }
               />
-              <Route 
-                path="/test" 
+              <Route
+                path="/test"
                 element={
                   <RequireAuth>
                     <EmailAnalysisTest />
                   </RequireAuth>
-                } 
+                }
               />
-              <Route 
-                path="/link-analysis" 
+              <Route
+                path="/link-analysis"
                 element={
                   <RequireAuth>
                     <LinkAnalysisPage />
                   </RequireAuth>
-                } 
+                }
               />
-              
+
               {/* Default redirect */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Router>
         </AuthProvider>
-        
+
         {/* React Query DevTools */}
         <ReactQueryDevtools initialIsOpen={false} />
       </ErrorProvider>
