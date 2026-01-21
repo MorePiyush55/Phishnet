@@ -283,7 +283,9 @@ class OnDemandOrchestrator:
                 await analysis_doc.save()
                 logger.info(f"[Job {job.job_id}] Analysis persisted to MongoDB for deduplication")
             except Exception as e:
-                logger.error(f"[Job {job.job_id}] Failed to persist to MongoDB: {e}")
+                import traceback
+                logger.error(f"[Job {job.job_id}] Failed to persist to MongoDB: {repr(e)}")
+                logger.error(f"Traceback: {traceback.format_exc()}")
             
             return job
             

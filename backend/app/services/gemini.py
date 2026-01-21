@@ -43,6 +43,7 @@ class GeminiClient(IAnalyzer):
             api_key 
             or os.getenv("GEMINI_API_KEY") 
             or os.getenv("GOOGLE_GEMINI_API_KEY")
+            or os.getenv("GOOGLE_API_KEY")  # Added support for standard Google Cloud key name
             or getattr(settings, 'GEMINI_API_KEY', None)
             or getattr(settings, 'GOOGLE_GEMINI_API_KEY', None)
         )
