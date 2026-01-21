@@ -64,8 +64,11 @@ try:
     from app.api.test_oauth import router as oauth_router
     from app.api.gmail_oauth import router as gmail_oauth_router
     # Temporarily disabled: simple_oauth, simple_analysis, auth_simple, gmail_api
-except ImportError:
+except Exception as e:
     # Create minimal router if imports fail
+    import traceback
+    print(f"CRITICAL: Router import failed with error: {e}")
+    print(f"Traceback: {traceback.format_exc()}")
     from fastapi import APIRouter
     health_router = APIRouter()
     gmail_oauth_router = APIRouter()
