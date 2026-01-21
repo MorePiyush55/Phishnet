@@ -58,23 +58,36 @@ except ImportError:
     MongoDBManager = None
     DOCUMENT_MODELS = []
 
+# Import routers with individual error handling
 try:
     from app.api.health import router as health_router
-    from app.api.gmail_simple import router as gmail_simple_router
-    from app.api.test_oauth import router as oauth_router
-    from app.api.gmail_oauth import router as gmail_oauth_router
-    # Temporarily disabled: simple_oauth, simple_analysis, auth_simple, gmail_api
 except Exception as e:
-    # Create minimal router if imports fail
-    import traceback
-    print(f"CRITICAL: Router import failed with error: {e}")
-    print(f"Traceback: {traceback.format_exc()}")
+    print(f"CRITICAL: health router import failed: {e}")
     from fastapi import APIRouter
     health_router = APIRouter()
-    gmail_oauth_router = APIRouter()
+
+try:
+    from app.api.gmail_simple import router as gmail_simple_router
+except Exception as e:
+    print(f"CRITICAL: gmail_simple router import failed: {e}")
+    from fastapi import APIRouter
     gmail_simple_router = APIRouter()
+
+try:
+    from app.api.test_oauth import router as oauth_router
+except Exception as e:
+    print(f"CRITICAL: test_oauth router import failed: {e}")
+    from fastapi import APIRouter
     oauth_router = APIRouter()
-    gmail_api = APIRouter()
+
+try:
+    from app.api.gmail_oauth import router as gmail_oauth_router
+except Exception as e:
+    print(f"CRITICAL: gmail_oauth router import failed: {e}")
+    import traceback
+    print(f"Traceback: {traceback.format_exc()}")
+    from fastapi import APIRouter
+    gmail_oauth_router = APIRouter()
 
 # Use structured logger if available
 logger = get_structured_logger(__name__) if OBSERVABILITY_AVAILABLE else get_logger(__name__)
