@@ -48,8 +48,8 @@ class Settings(BaseSettings):
     MONGODB_DATABASE: str = "phishnet"
     MONGODB_PASSWORD: Optional[str] = None
     
-    # Redis
-    REDIS_URL: str = "redis://localhost:6379/0"
+    # Redis (Optional - only used if REDIS_URL environment variable is set)
+    REDIS_URL: Optional[str] = None
     REDIS_PASSWORD: Optional[str] = None
     
     # Gmail API
@@ -165,9 +165,9 @@ class Settings(BaseSettings):
     SANDBOX_MAX_CPU: str = "0.5"  # Maximum CPU per sandbox container
     ENABLE_REAL_TIME_ALERTS: bool = True
     
-    # Celery (Background Tasks)
-    CELERY_BROKER_URL: str = "redis://localhost:6379/1"
-    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
+    # Celery (Background Tasks) - Optional, only used if configured
+    CELERY_BROKER_URL: Optional[str] = None
+    CELERY_RESULT_BACKEND: Optional[str] = None
     
     # CORS
     CORS_ORIGINS: List[str] = [
@@ -221,9 +221,9 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "json"
     
-    # Celery
-    CELERY_BROKER_URL: str = "redis://localhost:6379/1"
-    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/2"
+    # Celery - Optional, only used if configured
+    CELERY_BROKER_URL: Optional[str] = None
+    CELERY_RESULT_BACKEND: Optional[str] = None
     
     @field_validator("SECRET_KEY")
     @classmethod
