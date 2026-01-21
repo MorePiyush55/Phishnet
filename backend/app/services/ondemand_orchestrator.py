@@ -257,6 +257,15 @@ class OnDemandOrchestrator:
                 # Ideally email_data has it.
                 message_id = email_data.get('message_id')
                 
+                # Prepare email metadata, excluding message_id if None to avoid unique index violation
+                email_metadata = {
+                    "uid": mail_uid,
+                    "subject": job.original_subject,
+                    "date": email_data.get('received_date').isoformat() if email_data.get('received_date') else None
+                }
+                if message_id:
+                    email_metadata["message_id"] = message_id
+                
                 analysis_doc = ForwardedEmailAnalysis(
                     user_id=job.forwarded_by,
                     forwarded_by=job.forwarded_by,
@@ -271,12 +280,7 @@ class OnDemandOrchestrator:
                         "confidence": detection_result.confidence,
                         "risk_factors": detection_result.risk_factors
                     },
-                    email_metadata={
-                        "message_id": message_id,
-                        "uid": mail_uid,
-                        "subject": job.original_subject,
-                        "date": email_data.get('received_date').isoformat() if email_data.get('received_date') else None
-                    },
+                    email_metadata=email_metadata,
                     reply_sent=True,
                     reply_sent_at=datetime.utcnow()
                 )
