@@ -67,12 +67,9 @@ try:
 except ImportError:
     # Create minimal router if imports fail
     from fastapi import APIRouter
-    health = APIRouter()
-    gmail_oauth = APIRouter()
-    simple_oauth = APIRouter()
-    simple_analysis = APIRouter()
-    auth_simple = APIRouter()
-    test_oauth = APIRouter()
+    health_router = APIRouter()
+    gmail_oauth_router = APIRouter()
+    gmail_simple_router = APIRouter()
     oauth_router = APIRouter()
     gmail_api = APIRouter()
 
