@@ -1,0 +1,27 @@
+{
+    "name": "phishnet-e2e-tests",
+    "version": "1.0.0",
+    "description": "End-to-end tests for PhishNet OAuth flow",
+    "scripts": {
+        "test": "playwright test",
+        "test:headed": "playwright test --headed",
+        "test:debug": "playwright test --debug",
+        "test:oauth": "playwright test oauth-flow.spec.ts",
+        "test:oauth:headed": "playwright test oauth-flow.spec.ts --headed",
+        "report": "playwright show-report"
+    },
+    "keywords": [
+        "playwright",
+        "e2e",
+        "oauth",
+        "testing"
+    ],
+    "author": "",
+    "license": "MIT",
+    "devDependencies": {
+        "@playwright/test": "^1.40.0",
+        "@types/node": "^20.10.0",
+        "typescript": "^5.3.0",
+        "dotenv": "^16.3.1"
+    }
+}

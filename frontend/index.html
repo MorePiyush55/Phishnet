@@ -1,14 +1,487 @@
 <!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/shield.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PhishNet SOC Dashboard</title>
-    <meta name="description" content="PhishNet Security Operations Center - Advanced Email Threat Detection and Analysis" />
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/index.tsx"></script>
-  </body>
+<html class="dark" lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+  <title>PhishNet Premium | AI-Powered Phishing Protection</title>
+  <meta name="description"
+    content="Advanced AI-powered email security platform. Protect your inbox from phishing attacks with real-time threat detection and analysis." />
+  <meta name="keywords" content="phishing protection, email security, AI security, threat detection" />
+
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap"
+    rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+    rel="stylesheet" />
+
+  <script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#00c7e6",
+            "secondary": "#8026C0",
+            "background-light": "#f1f2f4",
+            "background-dark": "#050505",
+          },
+          fontFamily: {
+            "display": ["Space Grotesk", "sans-serif"],
+            "body": ["Inter", "sans-serif"]
+          },
+          borderRadius: {
+            "DEFAULT": "0.5rem",
+            "lg": "1rem",
+            "xl": "1.5rem",
+            "full": "9999px"
+          },
+        },
+      },
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+
+    .font-display {
+      font-family: 'Space Grotesk', sans-serif;
+    }
+
+    .glass {
+      background: rgba(255, 255, 255, 0.03);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .glow-cyan {
+      box-shadow: 0 0 20px rgba(0, 199, 230, 0.3);
+    }
+
+    .gradient-border {
+      position: relative;
+      background: #050505;
+      background-clip: padding-box;
+      border: 2px solid transparent;
+    }
+
+    .gradient-border::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      z-index: -1;
+      margin: -2px;
+      border-radius: inherit;
+      background: linear-gradient(to right, #8026C0, #00c7e6);
+    }
+
+    .scan-line {
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #00c7e6, transparent);
+      position: absolute;
+      width: 100%;
+      top: 0;
+      animation: scan 3s linear infinite;
+    }
+
+    @keyframes scan {
+      0% {
+        top: 0%;
+        opacity: 0;
+      }
+
+      50% {
+        opacity: 1;
+      }
+
+      100% {
+        top: 100%;
+        opacity: 0;
+      }
+    }
+
+    @keyframes scroll {
+      0% {
+        transform: translateX(0);
+      }
+
+      100% {
+        transform: translateX(-50%);
+      }
+    }
+  </style>
+</head>
+
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-white transition-colors duration-300">
+  <!-- Background Orbs -->
+  <div class="fixed inset-0 overflow-hidden pointer-events-none z-0">
+    <div class="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[120px]"></div>
+    <div class="absolute top-[20%] -right-[5%] w-[30%] h-[30%] bg-secondary/10 rounded-full blur-[120px]"></div>
+  </div>
+
+  <!-- Sticky Navigation -->
+  <header class="sticky top-0 z-50 px-6 py-4">
+    <nav class="max-w-7xl mx-auto glass rounded-full px-8 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <div class="text-primary">
+          <span class="material-symbols-outlined text-3xl">shield_lock</span>
+        </div>
+        <h2 class="font-display text-xl font-bold tracking-tight">Phish<span class="text-primary">Net</span></h2>
+      </div>
+      <div class="hidden md:flex items-center gap-10">
+        <a class="text-sm font-medium hover:text-primary transition-colors" href="#features">Features</a>
+        <a class="text-sm font-medium hover:text-primary transition-colors" href="#threat-intel">Threat Intel</a>
+        <a class="text-sm font-medium hover:text-primary transition-colors" href="#integration">Integration</a>
+        <a class="text-sm font-medium hover:text-primary transition-colors" href="#pricing">Pricing</a>
+      </div>
+      <div class="flex items-center gap-4">
+        <button id="auth-button"
+          class="bg-primary hover:bg-primary/80 text-background-dark px-6 py-2 rounded-full font-bold text-sm transition-all transform hover:scale-105 active:scale-95">
+          Get Started
+        </button>
+      </div>
+    </nav>
+  </header>
+
+  <main class="relative z-10">
+    <!-- Hero Section -->
+    <section class="max-w-7xl mx-auto px-6 pt-16 pb-24 grid lg:grid-cols-2 gap-16 items-center">
+      <div class="flex flex-col gap-8">
+        <div class="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 rounded-full px-4 py-1 w-fit">
+          <span class="relative flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+          </span>
+          <span class="text-xs font-bold text-primary uppercase tracking-wider">Next-Gen AI Protection Active</span>
+        </div>
+        <h1 class="font-display text-5xl md:text-7xl font-black leading-[1.1] tracking-tight">
+          Advanced AI Shield Against <span
+            class="text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">Phishing</span>
+        </h1>
+        <p class="text-slate-500 dark:text-slate-400 text-lg md:text-xl max-w-xl leading-relaxed">
+          Intercept malicious threats before they hit your inbox with our proprietary 3D neural scan engine.
+          Enterprise-grade security for your personal and professional digital life.
+        </p>
+        <div class="flex flex-wrap gap-4">
+          <button id="hero-cta"
+            class="bg-primary hover:glow-cyan text-background-dark px-8 py-4 rounded-xl font-bold text-lg transition-all flex items-center gap-2 group">
+            Secure My Inbox
+            <span class="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
+          </button>
+          <button class="glass px-8 py-4 rounded-xl font-bold text-lg hover:bg-white/10 transition-all">
+            View Demo
+          </button>
+        </div>
+      </div>
+
+      <!-- 3D-like Hero Card -->
+      <div class="relative group">
+        <div
+          class="absolute -inset-1 bg-gradient-to-r from-primary to-secondary rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-1000">
+        </div>
+        <div class="relative glass rounded-2xl p-8 overflow-hidden">
+          <div class="scan-line"></div>
+          <div class="flex justify-between items-start mb-8">
+            <div class="flex items-center gap-3">
+              <div class="size-10 rounded-full bg-red-500/20 flex items-center justify-center text-red-500">
+                <span class="material-symbols-outlined">warning</span>
+              </div>
+              <div>
+                <p class="text-xs font-bold uppercase tracking-widest text-slate-500">Security Alert</p>
+                <p class="text-sm font-semibold">Incoming Transaction Request</p>
+              </div>
+            </div>
+            <div class="bg-white/5 rounded-lg px-3 py-1 text-[10px] font-mono">
+              ID: #PX-9921
+            </div>
+          </div>
+          <div class="space-y-4 mb-8">
+            <div class="h-2 w-3/4 bg-white/10 rounded-full"></div>
+            <div class="h-2 w-full bg-white/10 rounded-full"></div>
+            <div class="h-2 w-5/6 bg-white/10 rounded-full"></div>
+          </div>
+          <div class="bg-red-500/10 border border-red-500/20 rounded-xl p-6 relative">
+            <div class="flex items-center gap-4 mb-2">
+              <span class="material-symbols-outlined text-red-500">dangerous</span>
+              <p class="font-display font-bold text-xl text-red-500">Phishing Detected</p>
+            </div>
+            <p class="text-sm text-slate-400 mb-4">Origin: Spoofed Domain (paypaI-secure.com)<br />Risk Level: Critical
+            </p>
+            <div class="w-full bg-red-500 h-1 rounded-full opacity-30"></div>
+          </div>
+          <div class="mt-8 grid grid-cols-2 gap-4">
+            <div class="glass p-4 rounded-xl text-center">
+              <p class="text-2xl font-bold text-primary">99.9%</p>
+              <p class="text-[10px] uppercase text-slate-500">Confidence</p>
+            </div>
+            <div class="glass p-4 rounded-xl text-center">
+              <p class="text-2xl font-bold text-secondary">0.02s</p>
+              <p class="text-[10px] uppercase text-slate-500">Response</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Live Threat Intel Ticker -->
+    <section id="threat-intel" class="border-y border-white/10 bg-white/[0.02] py-4 overflow-hidden">
+      <div class="flex whitespace-nowrap gap-12 animate-[scroll_40s_linear_infinite]">
+        <div class="flex items-center gap-8 px-4">
+          <span class="flex items-center gap-2 text-sm text-slate-400">
+            <span class="size-2 rounded-full bg-primary"></span>
+            THREATS NEUTRALIZED TODAY: <span class="text-white font-mono font-bold">1,248,392</span>
+          </span>
+          <span class="flex items-center gap-2 text-sm text-slate-400">
+            <span class="size-2 rounded-full bg-secondary"></span>
+            GLOBAL RISK INDEX: <span class="text-white font-mono font-bold">STABLE (2.4)</span>
+          </span>
+          <span class="flex items-center gap-2 text-sm text-slate-400">
+            <span class="size-2 rounded-full bg-primary"></span>
+            ACTIVE USERS: <span class="text-white font-mono font-bold">542,001</span>
+          </span>
+          <span class="flex items-center gap-2 text-sm text-slate-400">
+            <span class="size-2 rounded-full bg-secondary"></span>
+            LATEST SCAN: <span class="text-white font-mono font-bold">USA/NEW_YORK</span>
+          </span>
+        </div>
+        <!-- Duplicate for seamless scroll -->
+        <div class="flex items-center gap-8 px-4">
+          <span class="flex items-center gap-2 text-sm text-slate-400">
+            <span class="size-2 rounded-full bg-primary"></span>
+            THREATS NEUTRALIZED TODAY: <span class="text-white font-mono font-bold">1,248,392</span>
+          </span>
+          <span class="flex items-center gap-2 text-sm text-slate-400">
+            <span class="size-2 rounded-full bg-secondary"></span>
+            GLOBAL RISK INDEX: <span class="text-white font-mono font-bold">STABLE (2.4)</span>
+          </span>
+          <span class="flex items-center gap-2 text-sm text-slate-400">
+            <span class="size-2 rounded-full bg-primary"></span>
+            ACTIVE USERS: <span class="text-white font-mono font-bold">542,001</span>
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stats Section -->
+    <section class="max-w-7xl mx-auto px-6 py-24">
+      <div class="grid md:grid-cols-3 gap-8">
+        <div class="glass p-8 rounded-2xl group hover:border-primary/50 transition-all">
+          <p class="text-slate-400 text-sm font-medium mb-2">Neutralized Attacks</p>
+          <div class="flex items-end justify-between">
+            <h3 class="font-display text-4xl font-bold">1.2M+</h3>
+            <span class="text-emerald-500 flex items-center text-sm font-bold bg-emerald-500/10 px-2 py-1 rounded">
+              <span class="material-symbols-outlined text-sm">trending_up</span> 12%
+            </span>
+          </div>
+        </div>
+        <div class="glass p-8 rounded-2xl group hover:border-primary/50 transition-all">
+          <p class="text-slate-400 text-sm font-medium mb-2">Accuracy Rating</p>
+          <div class="flex items-end justify-between">
+            <h3 class="font-display text-4xl font-bold">99.9%</h3>
+            <span class="text-emerald-500 flex items-center text-sm font-bold bg-emerald-500/10 px-2 py-1 rounded">
+              <span class="material-symbols-outlined text-sm">verified</span> 0.1%
+            </span>
+          </div>
+        </div>
+        <div class="glass p-8 rounded-2xl group hover:border-primary/50 transition-all">
+          <p class="text-slate-400 text-sm font-medium mb-2">Protected Orgs</p>
+          <div class="flex items-end justify-between">
+            <h3 class="font-display text-4xl font-bold">14k+</h3>
+            <span class="text-emerald-500 flex items-center text-sm font-bold bg-emerald-500/10 px-2 py-1 rounded">
+              <span class="material-symbols-outlined text-sm">add</span> 2k
+            </span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features Grid -->
+    <section id="features" class="max-w-7xl mx-auto px-6 py-24">
+      <div class="mb-16">
+        <h2 class="font-display text-4xl md:text-5xl font-black mb-6">Enterprise Protection,<br />Simplified for You
+        </h2>
+        <p class="text-slate-400 max-w-2xl text-lg">Our AI engine works silently in the background, analyzing millions
+          of signals to keep your digital identity safe from sophisticated social engineering.</p>
+      </div>
+      <div class="grid md:grid-cols-3 gap-6">
+        <!-- Feature 1 -->
+        <div class="glass p-8 rounded-2xl flex flex-col gap-6 relative group overflow-hidden">
+          <div
+            class="absolute -right-8 -top-8 size-32 bg-primary/10 rounded-full blur-2xl group-hover:bg-primary/20 transition-all">
+          </div>
+          <div
+            class="size-14 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+            <span class="material-symbols-outlined text-3xl">psychology</span>
+          </div>
+          <div>
+            <h4 class="font-display text-xl font-bold mb-3">Neural Scan Engine</h4>
+            <p class="text-slate-400 text-sm leading-relaxed">Proprietary deep learning model that analyzes URL
+              structures and behavioral patterns in real-time.</p>
+          </div>
+          <div class="mt-auto">
+            <a class="text-primary text-sm font-bold flex items-center gap-1 group/link" href="#integration">
+              Learn more <span
+                class="material-symbols-outlined text-xs group-hover/link:translate-x-1 transition-transform">arrow_forward</span>
+            </a>
+          </div>
+        </div>
+        <!-- Feature 2 -->
+        <div class="glass p-8 rounded-2xl flex flex-col gap-6 relative group overflow-hidden">
+          <div
+            class="absolute -right-8 -top-8 size-32 bg-secondary/10 rounded-full blur-2xl group-hover:bg-secondary/20 transition-all">
+          </div>
+          <div
+            class="size-14 rounded-xl bg-secondary/10 border border-secondary/20 flex items-center justify-center text-secondary">
+            <span class="material-symbols-outlined text-3xl">extension</span>
+          </div>
+          <div>
+            <h4 class="font-display text-xl font-bold mb-3">Browser Guard</h4>
+            <p class="text-slate-400 text-sm leading-relaxed">Native integration for Chrome, Brave, and Safari. Blocks
+              malicious scripts before they execute.</p>
+          </div>
+          <div class="mt-auto">
+            <a class="text-secondary text-sm font-bold flex items-center gap-1 group/link" href="#integration">
+              Learn more <span
+                class="material-symbols-outlined text-xs group-hover/link:translate-x-1 transition-transform">arrow_forward</span>
+            </a>
+          </div>
+        </div>
+        <!-- Feature 3 -->
+        <div class="glass p-8 rounded-2xl flex flex-col gap-6 relative group overflow-hidden">
+          <div
+            class="absolute -right-8 -top-8 size-32 bg-primary/10 rounded-full blur-2xl group-hover:bg-primary/20 transition-all">
+          </div>
+          <div
+            class="size-14 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+            <span class="material-symbols-outlined text-3xl">phonelink_ring</span>
+          </div>
+          <div>
+            <h4 class="font-display text-xl font-bold mb-3">Mobile Smishing Link</h4>
+            <p class="text-slate-400 text-sm leading-relaxed">Forward suspicious texts to our AI for instant risk
+              assessment. Protection that travels with you.</p>
+          </div>
+          <div class="mt-auto">
+            <a class="text-primary text-sm font-bold flex items-center gap-1 group/link" href="#integration">
+              Learn more <span
+                class="material-symbols-outlined text-xs group-hover/link:translate-x-1 transition-transform">arrow_forward</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Chart Section -->
+    <section id="integration" class="max-w-7xl mx-auto px-6 py-24">
+      <div class="glass rounded-3xl p-10 grid lg:grid-cols-2 gap-12 items-center">
+        <div>
+          <h2 class="font-display text-3xl md:text-4xl font-black mb-6">Proven Detection Precision</h2>
+          <p class="text-slate-400 mb-8 leading-relaxed">Our detection rates outperform industry standards by 15% on
+            zero-day exploits. We don't just block known threats—we anticipate new ones.</p>
+          <div class="space-y-6">
+            <div class="flex items-center gap-4">
+              <div class="size-2 rounded-full bg-primary"></div>
+              <p class="text-sm font-medium">99.9% Detection Accuracy</p>
+            </div>
+            <div class="flex items-center gap-4">
+              <div class="size-2 rounded-full bg-secondary"></div>
+              <p class="text-sm font-medium">0.001% False Positive Rate</p>
+            </div>
+            <div class="flex items-center gap-4">
+              <div class="size-2 rounded-full bg-white/20"></div>
+              <p class="text-sm font-medium">Real-time Global Threat Database</p>
+            </div>
+          </div>
+        </div>
+        <div class="bg-background-dark/50 rounded-2xl p-6 border border-white/5">
+          <div class="flex justify-between items-center mb-8">
+            <div>
+              <p class="text-xs text-slate-500 uppercase tracking-widest font-bold">Detection Stability</p>
+              <p class="text-xl font-bold">Performance Delta</p>
+            </div>
+            <div class="flex gap-2">
+              <div class="size-2 rounded-full bg-primary"></div>
+              <div class="size-2 rounded-full bg-secondary"></div>
+            </div>
+          </div>
+          <div class="h-48 flex items-end justify-between gap-2">
+            <div class="w-full bg-primary/20 rounded-t-lg h-[60%] hover:bg-primary transition-colors cursor-help"
+              title="Week 1"></div>
+            <div class="w-full bg-primary/20 rounded-t-lg h-[75%] hover:bg-primary transition-colors cursor-help"
+              title="Week 2"></div>
+            <div class="w-full bg-primary/20 rounded-t-lg h-[65%] hover:bg-primary transition-colors cursor-help"
+              title="Week 3"></div>
+            <div class="w-full bg-primary/20 rounded-t-lg h-[85%] hover:bg-primary transition-colors cursor-help"
+              title="Week 4"></div>
+            <div class="w-full bg-primary/20 rounded-t-lg h-[80%] hover:bg-primary transition-colors cursor-help"
+              title="Week 5"></div>
+            <div class="w-full bg-primary/20 rounded-t-lg h-[95%] hover:bg-primary transition-colors cursor-help"
+              title="Week 6"></div>
+            <div class="w-full bg-primary/20 rounded-t-lg h-[90%] hover:bg-primary transition-colors cursor-help"
+              title="Week 7"></div>
+          </div>
+          <div class="flex justify-between mt-4 text-[10px] text-slate-500 font-bold">
+            <span>WK 01</span>
+            <span>WK 02</span>
+            <span>WK 03</span>
+            <span>WK 04</span>
+            <span>WK 05</span>
+            <span>WK 06</span>
+            <span>WK 07</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Final CTA -->
+    <section id="pricing" class="max-w-7xl mx-auto px-6 py-24">
+      <div
+        class="gradient-border rounded-3xl p-16 text-center flex flex-col items-center gap-8 overflow-hidden relative">
+        <div class="absolute -bottom-24 -left-24 size-64 bg-primary/20 rounded-full blur-[100px]"></div>
+        <div class="absolute -top-24 -right-24 size-64 bg-secondary/20 rounded-full blur-[100px]"></div>
+        <h2 class="font-display text-4xl md:text-6xl font-black max-w-3xl">Stop Phishing Before It Starts</h2>
+        <p class="text-slate-400 text-lg md:text-xl max-w-xl">Join over 500,000 users who trust PhishNet to keep their
+          data and identity secure. 14-day free trial on all plans.</p>
+        <div class="flex flex-col sm:flex-row gap-4 w-full justify-center">
+          <button id="cta-button"
+            class="bg-primary text-background-dark px-10 py-5 rounded-xl font-bold text-lg hover:glow-cyan transition-all transform hover:-translate-y-1">
+            Secure My Inbox Now
+          </button>
+          <button
+            class="glass px-10 py-5 rounded-xl font-bold text-lg hover:bg-white/10 transition-all transform hover:-translate-y-1">
+            Enterprise Solutions
+          </button>
+        </div>
+        <p class="text-sm text-slate-500">No credit card required. Cancel anytime.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="border-t border-white/5 bg-black py-12">
+    <div class="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-8">
+      <div class="flex items-center gap-2">
+        <div class="text-primary">
+          <span class="material-symbols-outlined text-2xl">shield_lock</span>
+        </div>
+        <h2 class="font-display text-lg font-bold">PhishNet</h2>
+      </div>
+      <div class="flex gap-8 text-sm text-slate-500">
+        <a class="hover:text-white transition-colors" href="#privacy">Privacy Policy</a>
+        <a class="hover:text-white transition-colors" href="#terms">Terms of Service</a>
+        <a class="hover:text-white transition-colors" href="#security">Security Audit</a>
+        <a class="hover:text-white transition-colors" href="#status">Status</a>
+      </div>
+      <p class="text-xs text-slate-600">© 2026 PhishNet AI. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <!-- Backend Integration Script -->
+  <script src="/app.js"></script>
+</body>
+
 </html>

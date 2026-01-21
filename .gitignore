@@ -431,3 +431,11 @@ phishnet_env/
 # External project references (keep local only)
 ThePhish/
 email-phishing-detection-add-in/
+
+# E2E Test artifacts
+tests/e2e/.env
+tests/e2e/node_modules/
+tests/e2e/test-results/
+tests/e2e/playwright-report/
+tests/e2e/playwright/.cache/
+tests/e2e/package-lock.json
