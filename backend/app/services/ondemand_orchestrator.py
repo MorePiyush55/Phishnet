@@ -674,19 +674,31 @@ For questions, contact your IT/Security team.
                 
                 # DEDUPLICATION CHECK
                 exists = None
+                
+                # DIAGNOSTIC: Log query
                 if message_id:
-                     # Check if already processed by Message-ID
                     exists = await ForwardedEmailAnalysis.find_one({"email_metadata.message_id": message_id})
                 elif mail_uid:
-                    # Fallback: Check by UID
-                    # Force string for query consistency
                     query_uid = str(mail_uid).strip()
-                    logger.debug(f"🔍 Checking duplicate by UID: '{query_uid}'")
+                    logger.info(f"🔍 Checking duplicate by UID: '{query_uid}' (Type: {type(query_uid)})")
+                    
+                    # 1. Primary Check: String
                     exists = await ForwardedEmailAnalysis.find_one({"email_metadata.uid": query_uid})
+                    
+                    # 2. Fallback Check: Integer (if DB has mixed types)
+                    if not exists and query_uid.isdigit():
+                        logger.info(f"   String match failed. Checking INT: {int(query_uid)}")
+                        exists = await ForwardedEmailAnalysis.find_one({"email_metadata.uid": int(query_uid)})
+                    
                     if exists:
                         logger.info(f"✅ Found duplicate by UID: {query_uid} (Job {exists.id})")
                     else:
-                        logger.debug(f"❌ UID {query_uid} not found in DB")
+                        logger.info(f"❌ UID {query_uid} (Str/Int) not found in DB")
+                        
+                        # SUPER DIAGNOSTIC: What IS in the DB?
+                        recent = await ForwardedEmailAnalysis.find_all().sort("-created_at").limit(3).to_list()
+                        debug_meta = [f"{r.email_metadata.get('uid')} ({type(r.email_metadata.get('uid'))})" for r in recent]
+                        logger.info(f"   Recent DB UIDs: {debug_meta}")
                 
                 if exists:
                     # Already analyzed - Skip
