@@ -675,17 +675,24 @@ For questions, contact your IT/Security team.
                 # DEDUPLICATION CHECK
                 exists = None
                 
-                # DIAGNOSTIC: Log query
+                # DEDUPLICATION CHECK
+                exists = None
+                
+                # 1. Check by Message-ID (Priority)
                 if message_id:
                     exists = await ForwardedEmailAnalysis.find_one({"email_metadata.message_id": message_id})
-                elif mail_uid:
+                    if exists:
+                        logger.info(f"✅ Found duplicate by Message-ID: {message_id[:30]}... (Job {exists.id})")
+                
+                # 2. Check by UID (Fallback if Message-ID missing OR yielded no result)
+                if not exists and mail_uid:
                     query_uid = str(mail_uid).strip()
                     logger.info(f"🔍 Checking duplicate by UID: '{query_uid}' (Type: {type(query_uid)})")
                     
-                    # 1. Primary Check: String
+                    # Primary Check: String
                     exists = await ForwardedEmailAnalysis.find_one({"email_metadata.uid": query_uid})
                     
-                    # 2. Fallback Check: Integer (if DB has mixed types)
+                    # Secondary Check: Integer
                     if not exists and query_uid.isdigit():
                         logger.info(f"   String match failed. Checking INT: {int(query_uid)}")
                         exists = await ForwardedEmailAnalysis.find_one({"email_metadata.uid": int(query_uid)})
@@ -695,10 +702,10 @@ For questions, contact your IT/Security team.
                     else:
                         logger.info(f"❌ UID {query_uid} (Str/Int) not found in DB")
                         
-                        # SUPER DIAGNOSTIC: What IS in the DB?
+                        # SUPER DIAGNOSTIC: Ground Truth
                         recent = await ForwardedEmailAnalysis.find_all().sort("-created_at").limit(3).to_list()
-                        debug_meta = [f"{r.email_metadata.get('uid')} ({type(r.email_metadata.get('uid'))})" for r in recent]
-                        logger.info(f"   Recent DB UIDs: {debug_meta}")
+                        debug_meta = [f"UID:{r.email_metadata.get('uid')} MID:{str(r.email_metadata.get('message_id'))[:10]}" for r in recent]
+                        logger.info(f"   Recent DB Docs: {debug_meta}")
                 
                 if exists:
                     # Already analyzed - Skip
