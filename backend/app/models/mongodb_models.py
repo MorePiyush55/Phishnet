@@ -401,7 +401,8 @@ class OnDemandAnalysis(Document):
         name = "on_demand_analyses"
         indexes = [
             IndexModel([("user_id", ASCENDING), ("created_at", DESCENDING)]),
-            IndexModel([("gmail_message_id", ASCENDING)]),
+            IndexModel([("email_metadata.message_id", ASCENDING)], sparse=True),
+            IndexModel([("email_metadata.uid", ASCENDING)], sparse=True),  # For fallback deduplication
             IndexModel([("retention_until", ASCENDING)]),  # For auto-deletion
             IndexModel([("risk_level", ASCENDING)]),
         ]

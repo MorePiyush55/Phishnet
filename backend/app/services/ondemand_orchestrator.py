@@ -669,22 +669,26 @@ For questions, contact your IT/Security team.
                     logger.warning(f"Email missing UID, skipping: {subject}")
                     continue
                 
-                logger.debug(f"Checking email: {subject} (UID={mail_uid}, MsgID={message_id[:50] if message_id else 'None'}...)")
-                    
                 # DEDUPLICATION CHECK
                 exists = None
                 if message_id:
-                     # Check if already processed by Message-ID (robust)
+                     # Check if already processed by Message-ID
                     exists = await ForwardedEmailAnalysis.find_one({"email_metadata.message_id": message_id})
                 elif mail_uid:
-                    # Fallback: Check by UID if message_id is missing
-                    # Note: UID validity depends on IMAP server (UIDVALIDITY), but sufficient for short-term duplicate prevention
-                    exists = await ForwardedEmailAnalysis.find_one({"email_metadata.uid": mail_uid})
+                    # Fallback: Check by UID
+                    # Force string for query consistency
+                    query_uid = str(mail_uid).strip()
+                    logger.debug(f"🔍 Checking duplicate by UID: '{query_uid}'")
+                    exists = await ForwardedEmailAnalysis.find_one({"email_metadata.uid": query_uid})
+                    if exists:
+                        logger.info(f"✅ Found duplicate by UID: {query_uid} (Job {exists.id})")
+                    else:
+                        logger.debug(f"❌ UID {query_uid} not found in DB")
                 
                 if exists:
                     # Already analyzed - Skip
                     skipped_count += 1
-                    logger.debug(f"Skipping already-processed email: {subject} (UID={mail_uid})")
+                    logger.info(f"⏭️ Skipping already-processed email: {subject} (UID={mail_uid})")
                     continue
                 
                 # DISTRIBUTED LOCK (Prevention for multi-instance races)
