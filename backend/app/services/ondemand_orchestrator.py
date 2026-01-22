@@ -326,6 +326,9 @@ class OnDemandOrchestrator:
             # Call Gemini interpretation
             gemini_result = await self.gemini_client.interpret_technical_findings(technical_report)
             
+            if not gemini_result:
+                raise ValueError("Gemini interpretation returned None (service unavailable or rate limited)")
+            
             # Map to InterpretationResult
             # The verdict from Gemini should match backend, but we use backend as authority
             return InterpretationResult(
