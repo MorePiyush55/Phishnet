@@ -131,56 +131,15 @@ jobs:
           pytest tests/ -v --cov=app --cov-report=xml --cov-report=html
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           file: ./backend/coverage.xml
           flags: backend
+          token: ${{ secrets.CODECOV_TOKEN }}
         ports:
           - 6379:6379
 
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-        cache: 'pip'
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install -r requirements_enhanced.txt
-        pip install pytest pytest-cov pytest-asyncio black flake8 mypy
-
-    - name: Code formatting check
-      run: black --check --diff .
-
-    - name: Lint with flake8
-      run: |
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-
-    - name: Type checking with mypy
-      run: mypy app/ --ignore-missing-imports
-
-    - name: Run tests
-      env:
-        DATABASE_URL: postgresql+asyncpg://testuser:testpass@localhost:5432/testdb
-        REDIS_URL: redis://localhost:6379/0
-        SECRET_KEY: test-secret-key
-        ENCRYPTION_KEY: test-encryption-key-32-chars-long
-      run: |
-        pytest tests/ -v --cov=app --cov-report=xml --cov-report=html
-
-    - name: Upload coverage reports
-      uses: codecov/codecov-action@v3
-      with:
-        file: ./coverage.xml
-        flags: unittests
-        name: codecov-umbrella
 
   # Build and push Docker images
   build:
