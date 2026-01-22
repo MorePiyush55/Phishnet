@@ -661,7 +661,10 @@ For questions, contact your IT/Security team.
         
         for email_info in recent_emails:
             try:
-                mail_uid = email_info.get('uid')
+                # FORCE STRING & TRIM UID (Critical for deduplication consistency)
+                raw_uid = email_info.get('uid')
+                mail_uid = str(raw_uid).strip() if raw_uid else None
+                
                 message_id = email_info.get('message_id')
                 subject = email_info.get('subject', 'No Subject')
                 
