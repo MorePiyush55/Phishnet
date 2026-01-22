@@ -654,7 +654,7 @@ For questions, contact your IT/Security team.
         if not recent_emails:
             return []
             
-        logger.info(f"Checking {len(recent_emails)} recent emails for new submissions...")
+        logger.info(f"Checking {len(recent_emails)} recent emails for new submissions... (Version: 766fcd4-FORCE-DEPLOY)")
         
         completed_jobs = []
         skipped_count = 0
