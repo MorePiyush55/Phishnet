@@ -672,16 +672,20 @@ For questions, contact your IT/Security team.
                 logger.debug(f"Checking email: {subject} (UID={mail_uid}, MsgID={message_id[:50] if message_id else 'None'}...)")
                     
                 # DEDUPLICATION CHECK
+                exists = None
                 if message_id:
-                     # Check if already processed
+                     # Check if already processed by Message-ID (robust)
                     exists = await ForwardedEmailAnalysis.find_one({"email_metadata.message_id": message_id})
-                    if exists:
-                        # Already analyzed - Skip
-                        skipped_count += 1
-                        logger.debug(f"Skipping already-processed email: {subject} (UID={mail_uid})")
-                        continue
-                else:
-                    logger.warning(f"Email has no message_id, will process: {subject} (UID={mail_uid})")
+                elif mail_uid:
+                    # Fallback: Check by UID if message_id is missing
+                    # Note: UID validity depends on IMAP server (UIDVALIDITY), but sufficient for short-term duplicate prevention
+                    exists = await ForwardedEmailAnalysis.find_one({"email_metadata.uid": mail_uid})
+                
+                if exists:
+                    # Already analyzed - Skip
+                    skipped_count += 1
+                    logger.debug(f"Skipping already-processed email: {subject} (UID={mail_uid})")
+                    continue
                 
                 # DISTRIBUTED LOCK (Prevention for multi-instance races)
                 lock_acquired = False
