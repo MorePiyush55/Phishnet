@@ -6,9 +6,7 @@
 // Configuration
 const CONFIG = {
     // Use environment variable or default to production backend
-    BACKEND_URL: window.location.hostname === 'localhost'
-        ? 'http://localhost:8000'
-        : 'https://phishnet-backend-iuoc.onrender.com',
+    BACKEND_URL: 'https://phishnet-backend-iuoc.onrender.com',
 
     // OAuth endpoints
     AUTH_ENDPOINT: '/auth/google',
