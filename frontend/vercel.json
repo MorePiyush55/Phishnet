@@ -1,6 +1,8 @@
 {
   "version": 2,
   "name": "phishnet-frontend",
+  "buildCommand": "echo 'Static Deployment'",
+  "outputDirectory": ".",
   "public": true,
   "env": {
     "BACKEND_URL": "https://phishnet-backend-iuoc.onrender.com"
