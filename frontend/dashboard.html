@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+  <title>PhishNet Dashboard</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap"
+    rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+    rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#00c7e6",
+            "secondary": "#8026C0",
+            "background-light": "#f1f2f4",
+            "background-dark": "#050505",
+          },
+          fontFamily: {
+            "display": ["Space Grotesk", "sans-serif"],
+            "body": ["Inter", "sans-serif"]
+          },
+        },
+      },
+    }
+  </script>
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
+  </style>
+</head>
+
+<body class="bg-background-dark text-white min-h-screen">
+  <!-- Nav -->
+  <nav class="border-b border-white/10 px-6 py-4 flex justify-between items-center">
+    <div class="flex items-center gap-2 text-primary">
+      <span class="material-symbols-outlined text-2xl">shield_lock</span>
+      <h2 class="font-display text-lg font-bold">PhishNet</h2>
+    </div>
+    <div class="flex items-center gap-4">
+      <div class="bg-emerald-500/10 text-emerald-500 px-3 py-1 rounded-full text-xs font-bold border border-emerald-500/20 flex items-center gap-2">
+        <span class="relative flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+        </span>
+        PROTECTION ACTIVE
+      </div>
+      <button onclick="logout()" class="text-sm text-slate-400 hover:text-white">Logout</button>
+    </div>
+  </nav>
+
+  <main class="max-w-7xl mx-auto px-6 py-8">
+    <div class="mb-8">
+      <h1 class="font-display text-3xl font-bold mb-2">Security Dashboard</h1>
+      <p class="text-slate-400" id="user-welcome">Welcome back</p>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid md:grid-cols-4 gap-6 mb-8">
+        <div class="glass p-6 rounded-xl">
+            <p class="text-sm text-slate-400 mb-1">Inbox Status</p>
+            <p class="text-xl font-bold text-emerald-500">Secure</p>
+        </div>
+        <div class="glass p-6 rounded-xl">
+            <p class="text-sm text-slate-400 mb-1">Emails Scanned</p>
+            <p class="text-xl font-bold">0</p>
+        </div>
+         <div class="glass p-6 rounded-xl">
+            <p class="text-sm text-slate-400 mb-1">Threats Blocked</p>
+            <p class="text-xl font-bold">0</p>
+        </div>
+         <div class="glass p-6 rounded-xl">
+            <p class="text-sm text-slate-400 mb-1">Last Scan</p>
+            <p class="text-xl font-bold">Just now</p>
+        </div>
+    </div>
+
+    <div class="glass rounded-xl p-8 text-center text-slate-400">
+        <span class="material-symbols-outlined text-4xl mb-4 text-slate-600">inbox</span>
+        <p>Your inbox is currently being monitored by AI.</p>
+        <p class="text-sm mt-2">No threats detected in recent messages.</p>
+    </div>
+
+  </main>
+
+  <script>
+    // Simple session check logic equivalent to app.js
+    const USER_KEY = 'phishnet_user';
+    const userStr = localStorage.getItem(USER_KEY);
+    
+    if (!userStr) {
+        window.location.href = '/';
+    } else {
+        const user = JSON.parse(userStr);
+        document.getElementById('user-welcome').textContent = `Connected account: ${user.email}`;
+    }
+
+    function logout() {
+        localStorage.removeItem(USER_KEY);
+        localStorage.removeItem('phishnet_access_token');
+        window.location.href = '/';
+    }
+  </script>
+</body>
+</html>

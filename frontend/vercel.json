@@ -26,10 +26,9 @@
       ]
     }
   ],
-  "rewrites": [
-    {
-      "source": "/dashboard",
-      "destination": "https://phishnet-tau.vercel.app/"
-    }
-  ]
+  {
+    "source": "/dashboard",
+    "destination": "/dashboard.html"
+  }
+]
 }
