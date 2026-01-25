@@ -56,9 +56,12 @@ function checkAuthStatus() {
 function updateUIForAuthenticatedUser(user) {
     const authButton = document.getElementById('auth-button');
     if (authButton) {
-        authButton.textContent = 'Go to Dashboard';
+        authButton.textContent = user.email ? `Connected: ${user.email}` : 'Go to Dashboard';
+        authButton.classList.remove('bg-primary', 'text-background-dark');
+        authButton.classList.add('bg-emerald-500', 'text-white'); // Success state style
         authButton.onclick = () => {
-            window.location.href = CONFIG.DASHBOARD_URL;
+            // Already connected explanation
+            showNotification(`Active Protection: ${user.email}`, 'success');
         };
     }
 
@@ -144,10 +147,36 @@ function handleOAuthCallback() {
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
     const error = urlParams.get('error');
+    const oauth_success = urlParams.get('oauth_success');
+    const gmail_email = urlParams.get('gmail_email');
 
     if (error) {
         console.error('OAuth error:', error);
         showNotification('Authentication failed. Please try again.', 'error');
+        return;
+    }
+
+    // Handle "Nuclear/Zero-Dependency" Auth Flow
+    if (oauth_success === 'true' && gmail_email) {
+        console.log('OAuth success detected:', gmail_email);
+
+        // Create a simulated user session
+        const user = {
+            email: gmail_email,
+            name: gmail_email.split('@')[0],
+            is_active: true
+        };
+
+        localStorage.setItem(CONFIG.USER_KEY, JSON.stringify(user));
+        localStorage.setItem(CONFIG.TOKEN_KEY, 'simulated_access_token');
+
+        // Clean up URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+
+        showNotification(`Successfully connected ${gmail_email}!`, 'success');
+
+        // Update UI immediately
+        updateUIForAuthenticatedUser(user);
         return;
     }
 
