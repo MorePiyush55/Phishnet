@@ -74,11 +74,11 @@ except Exception as e:
     gmail_simple_router = APIRouter()
 
 try:
-    from app.api.test_oauth import router as oauth_router
+    from app.api.simple_auth import router as auth_router
 except Exception as e:
-    print(f"CRITICAL: test_oauth router import failed: {e}")
+    print(f"CRITICAL: simple_auth router import failed: {e}")
     from fastapi import APIRouter
-    oauth_router = APIRouter()
+    auth_router = APIRouter()
 
 try:
     from app.api.gmail_oauth import router as gmail_oauth_router
@@ -256,11 +256,11 @@ except Exception as e:
     router_errors.append(f"Health: {e}")
 
 try:
-    app.include_router(oauth_router, tags=["OAuth"])
-    logger.info("OAuth router loaded successfully")  
+    app.include_router(auth_router)
+    logger.info("Auth router loaded successfully")  
 except Exception as e:
-    logger.error(f"OAuth router failed to load: {e}")
-    router_errors.append(f"OAuth: {e}")
+    logger.error(f"Auth router failed to load: {e}")
+    router_errors.append(f"Auth: {e}")
 
 try:
     app.include_router(gmail_simple_router, tags=["Gmail Simple Analysis"])
