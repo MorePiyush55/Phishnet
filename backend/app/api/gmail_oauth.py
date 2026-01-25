@@ -1,13 +1,14 @@
 """
-Zero-Dependency Gmail OAuth Router.
-Guaranteed to load regardless of other project errors.
+Zero-Dependency Gmail OAuth Router (Bulletproof).
+Imports external libs lazily to prevent load-time failures.
 """
 
-import os
-import httpx
 from fastapi import APIRouter, Request, Query
 from fastapi.responses import RedirectResponse
 from typing import Optional
+import os
+
+print("DEBUG: Loading bulletproof gmail_oauth router...")
 
 # Create router - completely standalone
 router = APIRouter(prefix="/api/v1/auth/gmail", tags=["Gmail OAuth"])
@@ -22,25 +23,28 @@ async def handle_gmail_oauth_callback(
 ):
     """
     Handle OAuth callback from Google.
-    Zero-dependency version to ensure 404 resolution.
+    Lazy-import version to ensure router loading.
     """
-    # Hardcoded or OS-env based config
-    # We try to replicate the frontend URL logic
-    frontend_url_base = os.getenv("FRONTEND_URL", "https://phishnet-tau.vercel.app")
-    
-    if error:
-        return RedirectResponse(
-            url=f"{frontend_url_base}/dashboard?oauth_error={error}", 
-            status_code=302
-        )
-    
     try:
+        # Lazy import to avoid Top-Level import errors
+        import httpx
+        
+        # Hardcoded or OS-env based config
+        frontend_url_base = os.getenv("FRONTEND_URL", "https://phishnet-tau.vercel.app")
+        
+        if error:
+            return RedirectResponse(
+                url=f"{frontend_url_base}/dashboard?oauth_error={error}", 
+                status_code=302
+            )
+        
         # Configuration
         client_id = os.getenv("GMAIL_CLIENT_ID") or os.getenv("GOOGLE_CLIENT_ID")
         client_secret = os.getenv("GMAIL_CLIENT_SECRET") or os.getenv("GOOGLE_CLIENT_SECRET")
         redirect_uri = os.getenv("GMAIL_REDIRECT_URI") or os.getenv("GOOGLE_REDIRECT_URI")
         
         if not (client_id and client_secret and redirect_uri):
+             print(f"DEBUG: Missing config. ID={bool(client_id)}, Secret={bool(client_secret)}, URI={bool(redirect_uri)}")
              return RedirectResponse(
                 url=f"{frontend_url_base}/dashboard?oauth_error=server_misconfiguration_missing_env", 
                 status_code=302
@@ -57,10 +61,11 @@ async def handle_gmail_oauth_callback(
         }
         
         async with httpx.AsyncClient() as client:
+            print(f"DEBUG: Exchanging token for code starting with {code[:5]}...")
             token_response = await client.post(token_url, data=token_data)
             
             if token_response.status_code != 200:
-                print(f"Token error: {token_response.text}")
+                print(f"DEBUG: Token error: {token_response.text}")
                 return RedirectResponse(
                     url=f"{frontend_url_base}/dashboard?oauth_error=token_exchange_failed", 
                     status_code=302
@@ -77,18 +82,23 @@ async def handle_gmail_oauth_callback(
             if user_response.status_code == 200:
                 user_info = user_response.json()
                 email = user_info.get("email")
+                print(f"DEBUG: OAuth success for {email}")
                 
                 # SUCCESS: Redirect to dashboard
                 target = f"{frontend_url_base}/dashboard?oauth_success=true&gmail_email={email}"
                 return RedirectResponse(url=target, status_code=302)
             else:
+                print(f"DEBUG: User info failed: {user_response.text}")
                 return RedirectResponse(
                     url=f"{frontend_url_base}/dashboard?oauth_error=user_info_failed", 
                     status_code=302
                 )
 
     except Exception as e:
-        print(f"Callback exception: {e}")
+        print(f"DEBUG: Callback exception: {e}")
+        import traceback
+        traceback.print_exc()
+        frontend_url_base = os.getenv("FRONTEND_URL", "https://phishnet-tau.vercel.app")
         return RedirectResponse(
             url=f"{frontend_url_base}/dashboard?oauth_error=unexpected_error", 
             status_code=302
@@ -96,4 +106,4 @@ async def handle_gmail_oauth_callback(
 
 @router.get("/health")
 async def gmail_oauth_health():
-    return {"status": "healthy", "mode": "zero_dependency"}
+    return {"status": "healthy", "mode": "bulletproof"}
