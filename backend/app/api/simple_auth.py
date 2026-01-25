@@ -11,6 +11,7 @@ import os
 import secrets
 import urllib.parse
 from app.config.settings import settings
+import traceback
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -25,6 +26,33 @@ async def auth_status():
         "oauth_configured": True,
         "mode": "production"
     }
+
+
+@router.get("/debug-gmail-oauth")
+async def debug_gmail_oauth_import():
+    """
+    Debug endpoint to check why gmail_oauth router is failing to load.
+    """
+    results = {}
+    try:
+        import app.api.gmail_oauth
+        results["import_api"] = "SUCCESS"
+    except Exception as e:
+        results["import_api"] = {
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+        
+    try:
+        import app.services.gmail_oauth
+        results["import_service"] = "SUCCESS"
+    except Exception as e:
+        results["import_service"] = {
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+        
+    return results
 
 
 @router.get("/google")
