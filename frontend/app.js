@@ -9,7 +9,7 @@ const CONFIG = {
     BACKEND_URL: 'https://phishnet-backend-iuoc.onrender.com',
 
     // OAuth endpoints
-    AUTH_ENDPOINT: '/auth/google',
+    AUTH_ENDPOINT: '/test-oauth/google',
     CALLBACK_ENDPOINT: '/auth/callback',
     DASHBOARD_URL: '/dashboard',
 
