@@ -10,7 +10,7 @@ from fastapi.responses import RedirectResponse
 import os
 import secrets
 import urllib.parse
-from env import settings # Assuming settings import is available globally or adjust as needed
+from app.config.settings import settings
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
