@@ -11,7 +11,7 @@ const CONFIG = {
     // OAuth endpoints
     AUTH_ENDPOINT: '/auth/google',
     CALLBACK_ENDPOINT: '/auth/callback',
-    DASHBOARD_URL: '/dashboard',
+    DASHBOARD_URL: '/dashboard.html',
 
     // Storage keys
     TOKEN_KEY: 'phishnet_access_token',
@@ -173,10 +173,15 @@ function handleOAuthCallback() {
         // Clean up URL
         window.history.replaceState({}, document.title, window.location.pathname);
 
-        showNotification(`Successfully connected ${gmail_email}!`, 'success');
+        showNotification(`Successfully connected ${gmail_email}! Redirecting...`, 'success');
 
-        // Update UI immediately
+        // Update UI immediately (fallback)
         updateUIForAuthenticatedUser(user);
+
+        // Auto-redirect to dashboard
+        setTimeout(() => {
+            window.location.href = CONFIG.DASHBOARD_URL;
+        }, 1500);
         return;
     }
 
