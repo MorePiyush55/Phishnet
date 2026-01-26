@@ -32,8 +32,15 @@
     }
   </script>
   <style>
-    body { font-family: 'Inter', sans-serif; }
-    .glass { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+
+    .glass {
+      background: rgba(255, 255, 255, 0.03);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
   </style>
 </head>
 
@@ -45,10 +52,11 @@
       <h2 class="font-display text-lg font-bold">PhishNet</h2>
     </div>
     <div class="flex items-center gap-4">
-      <div class="bg-emerald-500/10 text-emerald-500 px-3 py-1 rounded-full text-xs font-bold border border-emerald-500/20 flex items-center gap-2">
+      <div
+        class="bg-emerald-500/10 text-emerald-500 px-3 py-1 rounded-full text-xs font-bold border border-emerald-500/20 flex items-center gap-2">
         <span class="relative flex h-2 w-2">
-            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
-            <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
         </span>
         PROTECTION ACTIVE
       </div>
@@ -64,28 +72,28 @@
 
     <!-- Stats -->
     <div class="grid md:grid-cols-4 gap-6 mb-8">
-        <div class="glass p-6 rounded-xl">
-            <p class="text-sm text-slate-400 mb-1">Inbox Status</p>
-            <p class="text-xl font-bold text-emerald-500">Secure</p>
-        </div>
-        <div class="glass p-6 rounded-xl">
-            <p class="text-sm text-slate-400 mb-1">Emails Scanned</p>
-            <p class="text-xl font-bold">0</p>
-        </div>
-         <div class="glass p-6 rounded-xl">
-            <p class="text-sm text-slate-400 mb-1">Threats Blocked</p>
-            <p class="text-xl font-bold">0</p>
-        </div>
-         <div class="glass p-6 rounded-xl">
-            <p class="text-sm text-slate-400 mb-1">Last Scan</p>
-            <p class="text-xl font-bold">Just now</p>
-        </div>
+      <div class="glass p-6 rounded-xl">
+        <p class="text-sm text-slate-400 mb-1">Inbox Status</p>
+        <p class="text-xl font-bold text-emerald-500">Secure</p>
+      </div>
+      <div class="glass p-6 rounded-xl">
+        <p class="text-sm text-slate-400 mb-1">Emails Scanned</p>
+        <p class="text-xl font-bold">0</p>
+      </div>
+      <div class="glass p-6 rounded-xl">
+        <p class="text-sm text-slate-400 mb-1">Threats Blocked</p>
+        <p class="text-xl font-bold">0</p>
+      </div>
+      <div class="glass p-6 rounded-xl">
+        <p class="text-sm text-slate-400 mb-1">Last Scan</p>
+        <p class="text-xl font-bold">Just now</p>
+      </div>
     </div>
 
     <div class="glass rounded-xl p-8 text-center text-slate-400">
-        <span class="material-symbols-outlined text-4xl mb-4 text-slate-600">inbox</span>
-        <p>Your inbox is currently being monitored by AI.</p>
-        <p class="text-sm mt-2">No threats detected in recent messages.</p>
+      <span class="material-symbols-outlined text-4xl mb-4 text-slate-600">inbox</span>
+      <p>Your inbox is currently being monitored by AI.</p>
+      <p class="text-sm mt-2">No threats detected in recent messages.</p>
     </div>
 
   </main>
@@ -94,19 +102,23 @@
     // Simple session check logic equivalent to app.js
     const USER_KEY = 'phishnet_user';
     const userStr = localStorage.getItem(USER_KEY);
-    
+
     if (!userStr) {
-        window.location.href = '/';
+      // Debug mode: Don't redirect, just show error
+      console.error("No user found in localStorage");
+      document.getElementById('user-welcome').textContent = "Debug: No session found. Check console.";
+      // window.location.href = '/'; 
     } else {
-        const user = JSON.parse(userStr);
-        document.getElementById('user-welcome').textContent = `Connected account: ${user.email}`;
+      const user = JSON.parse(userStr);
+      document.getElementById('user-welcome').textContent = `Connected account: ${user.email}`;
     }
 
     function logout() {
-        localStorage.removeItem(USER_KEY);
-        localStorage.removeItem('phishnet_access_token');
-        window.location.href = '/';
+      localStorage.removeItem(USER_KEY);
+      localStorage.removeItem('phishnet_access_token');
+      window.location.href = '/';
     }
   </script>
 </body>
+
 </html>
