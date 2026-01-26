@@ -34,7 +34,7 @@ async def handle_gmail_oauth_callback(
         
         if error:
             return RedirectResponse(
-                url=f"{frontend_url_base}/dashboard?oauth_error={error}", 
+                url=f"{frontend_url_base}/?oauth_error={error}", 
                 status_code=302
             )
         
@@ -46,7 +46,7 @@ async def handle_gmail_oauth_callback(
         if not (client_id and client_secret and redirect_uri):
              print(f"DEBUG: Missing config. ID={bool(client_id)}, Secret={bool(client_secret)}, URI={bool(redirect_uri)}")
              return RedirectResponse(
-                url=f"{frontend_url_base}/dashboard?oauth_error=server_misconfiguration_missing_env", 
+                url=f"{frontend_url_base}/?oauth_error=server_misconfiguration_missing_env", 
                 status_code=302
             )
 
@@ -67,7 +67,7 @@ async def handle_gmail_oauth_callback(
             if token_response.status_code != 200:
                 print(f"DEBUG: Token error: {token_response.text}")
                 return RedirectResponse(
-                    url=f"{frontend_url_base}/dashboard?oauth_error=token_exchange_failed", 
+                    url=f"{frontend_url_base}/?oauth_error=token_exchange_failed", 
                     status_code=302
                 )
             
@@ -85,12 +85,12 @@ async def handle_gmail_oauth_callback(
                 print(f"DEBUG: OAuth success for {email}")
                 
                 # SUCCESS: Redirect to dashboard
-                target = f"{frontend_url_base}/dashboard?oauth_success=true&gmail_email={email}"
+            target = f"{frontend_url_base}/?oauth_success=true&gmail_email={email}"
                 return RedirectResponse(url=target, status_code=302)
             else:
                 print(f"DEBUG: User info failed: {user_response.text}")
                 return RedirectResponse(
-                    url=f"{frontend_url_base}/dashboard?oauth_error=user_info_failed", 
+                    url=f"{frontend_url_base}/?oauth_error=user_info_failed", 
                     status_code=302
                 )
 
@@ -100,7 +100,7 @@ async def handle_gmail_oauth_callback(
         traceback.print_exc()
         frontend_url_base = os.getenv("FRONTEND_URL", "https://phishnet-tau.vercel.app")
         return RedirectResponse(
-            url=f"{frontend_url_base}/dashboard?oauth_error=unexpected_error", 
+            url=f"{frontend_url_base}/?oauth_error=unexpected_error", 
             status_code=302
         )
 
