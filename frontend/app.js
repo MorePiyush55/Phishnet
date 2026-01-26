@@ -157,8 +157,15 @@ function handleOAuthCallback() {
     }
 
     // Handle "Nuclear/Zero-Dependency" Auth Flow
+    // DEBUG: Alert to confirm parsing
+    if (window.location.search.includes('oauth_success')) {
+        //alert("DEBUG: OAuth Params Found: " + window.location.search);
+        console.log("DEBUG: Params detected");
+    }
+
     if (oauth_success === 'true' && gmail_email) {
         console.log('OAuth success detected:', gmail_email);
+        alert("Success! Connected: " + gmail_email + "\nRedirecting to Dashboard...");
 
         // Create a simulated user session
         const user = {
