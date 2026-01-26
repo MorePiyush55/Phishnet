@@ -85,7 +85,7 @@ async def handle_gmail_oauth_callback(
                 print(f"DEBUG: OAuth success for {email}")
                 
                 # SUCCESS: Redirect to dashboard
-            target = f"{frontend_url_base}/?oauth_success=true&gmail_email={email}"
+                target = f"{frontend_url_base}/?oauth_success=true&gmail_email={email}"
                 return RedirectResponse(url=target, status_code=302)
             else:
                 print(f"DEBUG: User info failed: {user_response.text}")
