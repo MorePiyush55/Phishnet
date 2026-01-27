@@ -41,6 +41,41 @@
       backdrop-filter: blur(12px);
       border: 1px solid rgba(255, 255, 255, 0.1);
     }
+
+    .verdict-phishing {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: rgba(239, 68, 68, 0.3);
+      color: #ef4444;
+    }
+    
+    .verdict-suspicious {
+      background: rgba(245, 158, 11, 0.1);
+      border-color: rgba(245, 158, 11, 0.3);
+      color: #f59e0b;
+    }
+    
+    .verdict-safe {
+      background: rgba(16, 185, 129, 0.1);
+      border-color: rgba(16, 185, 129, 0.3);
+      color: #10b981;
+    }
+
+    .email-row:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .loading-spinner {
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      border-top-color: #00c7e6;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
   </style>
 </head>
 
@@ -52,7 +87,7 @@
       <h2 class="font-display text-lg font-bold">PhishNet</h2>
     </div>
     <div class="flex items-center gap-4">
-      <div
+      <div id="status-badge"
         class="bg-emerald-500/10 text-emerald-500 px-3 py-1 rounded-full text-xs font-bold border border-emerald-500/20 flex items-center gap-2">
         <span class="relative flex h-2 w-2">
           <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
@@ -61,6 +96,10 @@
         PROTECTION ACTIVE
       </div>
       <span id="user-email-nav" class="text-sm text-slate-300 font-medium hidden"></span>
+      <button onclick="refreshData()" class="text-sm text-primary hover:text-primary/80 flex items-center gap-1">
+        <span class="material-symbols-outlined text-base">refresh</span>
+        Refresh
+      </button>
       <button onclick="logout()" class="text-sm text-slate-400 hover:text-white">Logout</button>
     </div>
   </nav>
@@ -75,79 +114,394 @@
     <div class="grid md:grid-cols-4 gap-6 mb-8">
       <div class="glass p-6 rounded-xl">
         <p class="text-sm text-slate-400 mb-1">Inbox Status</p>
-        <p class="text-xl font-bold text-emerald-500">Secure</p>
+        <p id="inbox-status" class="text-xl font-bold text-emerald-500">Loading...</p>
       </div>
       <div class="glass p-6 rounded-xl">
         <p class="text-sm text-slate-400 mb-1">Emails Scanned</p>
-        <p class="text-xl font-bold">0</p>
+        <p id="emails-scanned" class="text-xl font-bold">-</p>
       </div>
       <div class="glass p-6 rounded-xl">
-        <p class="text-sm text-slate-400 mb-1">Threats Blocked</p>
-        <p class="text-xl font-bold">0</p>
+        <p class="text-sm text-slate-400 mb-1">Threats Detected</p>
+        <p id="threats-detected" class="text-xl font-bold text-red-400">-</p>
       </div>
       <div class="glass p-6 rounded-xl">
         <p class="text-sm text-slate-400 mb-1">Last Scan</p>
-        <p class="text-xl font-bold">Just now</p>
+        <p id="last-scan" class="text-xl font-bold">-</p>
       </div>
     </div>
 
-    <div class="glass rounded-xl p-8 text-center text-slate-400">
-      <span class="material-symbols-outlined text-4xl mb-4 text-slate-600">inbox</span>
-      <p>Your inbox is currently being monitored by AI.</p>
-      <p class="text-sm mt-2">No threats detected in recent messages.</p>
+    <!-- Email Analysis History -->
+    <div class="glass rounded-xl overflow-hidden">
+      <div class="p-6 border-b border-white/10 flex justify-between items-center">
+        <h2 class="font-display text-xl font-bold">Email Analysis History</h2>
+        <span id="loading-indicator" class="hidden">
+          <div class="loading-spinner"></div>
+        </span>
+      </div>
+      
+      <div id="email-list" class="divide-y divide-white/5">
+        <!-- Loading state -->
+        <div id="loading-state" class="p-8 text-center text-slate-400">
+          <div class="loading-spinner mx-auto mb-4"></div>
+          <p>Loading email analysis history...</p>
+        </div>
+        
+        <!-- Empty state (hidden by default) -->
+        <div id="empty-state" class="p-8 text-center text-slate-400 hidden">
+          <span class="material-symbols-outlined text-4xl mb-4 text-slate-600">inbox</span>
+          <p class="mb-2">No emails analyzed yet</p>
+          <p class="text-sm">Forward suspicious emails to analyze@phishnet.ai to get started</p>
+        </div>
+        
+        <!-- Email rows will be inserted here -->
+      </div>
     </div>
 
+    <!-- Verdict Legend -->
+    <div class="mt-6 flex justify-center gap-6 text-sm">
+      <div class="flex items-center gap-2">
+        <span class="w-3 h-3 rounded-full bg-red-500"></span>
+        <span class="text-slate-400">Phishing</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="w-3 h-3 rounded-full bg-amber-500"></span>
+        <span class="text-slate-400">Suspicious</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+        <span class="text-slate-400">Safe</span>
+      </div>
+    </div>
   </main>
-
-  <div id="debug-panel"
-    class="max-w-7xl mx-auto px-6 py-4 mt-8 bg-black/50 rounded-xl font-mono text-xs text-green-400 overflow-auto whitespace-pre hidden">
-    Debug Panel:
-    <div id="debug-content"></div>
-  </div>
 
   <script>
     const USER_KEY = 'phishnet_user';
-    const DEBUG_PANEL = document.getElementById('debug-panel');
-    const DEBUG_CONTENT = document.getElementById('debug-content');
+    const API_BASE = window.location.hostname === 'localhost' 
+      ? 'http://localhost:8000' 
+      : 'https://phishnet-tau.onrender.com';
+    
+    let userEmail = null;
+    let accessToken = null;
 
-    // Debugging helper (Hidden by default now)
-    function log(msg) {
-      console.log(msg);
-      // DEBUG_CONTENT.innerText += msg + "\n"; 
-    }
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      initDashboard();
+    });
 
-    // DEBUG_PANEL.classList.remove('hidden'); // Comment out to hide
-
-    setTimeout(() => {
+    async function initDashboard() {
       const userStr = localStorage.getItem(USER_KEY);
+      accessToken = localStorage.getItem('phishnet_access_token');
 
       if (!userStr) {
-        console.error("No user found in localStorage");
-        document.getElementById('user-welcome').textContent = "Not connected. Please log in.";
-        document.getElementById('user-welcome').classList.add('text-red-500');
-        if (document.getElementById('user-email-nav')) {
-          document.getElementById('user-email-nav').textContent = "";
-        }
-      } else {
-        try {
-          const user = JSON.parse(userStr);
-          const email = user.email || user.gmail_email || "Unknown User";
-
-          // Update Main Header
-          document.getElementById('user-welcome').textContent = `Connected account: ${email}`;
-          document.getElementById('user-welcome').classList.add('text-emerald-400');
-
-          // Update Navbar
-          const navEmail = document.getElementById('user-email-nav');
-          if (navEmail) {
-            navEmail.textContent = email;
-            navEmail.classList.remove('hidden');
-          }
-        } catch (e) {
-          console.error("JSON Parse failed", e);
-        }
+        showNotConnected();
+        return;
       }
-    }, 200);
+
+      try {
+        const user = JSON.parse(userStr);
+        userEmail = user.email || user.gmail_email;
+
+        if (!userEmail) {
+          showNotConnected();
+          return;
+        }
+
+        // Update UI with user info
+        document.getElementById('user-welcome').textContent = `Connected account: ${userEmail}`;
+        document.getElementById('user-welcome').classList.add('text-emerald-400');
+        
+        const navEmail = document.getElementById('user-email-nav');
+        if (navEmail) {
+          navEmail.textContent = userEmail;
+          navEmail.classList.remove('hidden');
+        }
+
+        // Fetch email history
+        await fetchEmailHistory();
+
+      } catch (e) {
+        console.error("Dashboard init failed", e);
+        showError("Failed to initialize dashboard");
+      }
+    }
+
+    function showNotConnected() {
+      document.getElementById('user-welcome').textContent = "Not connected. Please log in.";
+      document.getElementById('user-welcome').classList.add('text-red-500');
+      document.getElementById('inbox-status').textContent = "Not Connected";
+      document.getElementById('inbox-status').classList.remove('text-emerald-500');
+      document.getElementById('inbox-status').classList.add('text-red-400');
+      document.getElementById('loading-state').classList.add('hidden');
+      document.getElementById('empty-state').classList.remove('hidden');
+    }
+
+    function showError(message) {
+      document.getElementById('loading-state').classList.add('hidden');
+      const emailList = document.getElementById('email-list');
+      emailList.innerHTML = `
+        <div class="p-8 text-center text-red-400">
+          <span class="material-symbols-outlined text-4xl mb-4">error</span>
+          <p>${message}</p>
+          <button onclick="refreshData()" class="mt-4 text-primary hover:text-primary/80">
+            Try Again
+          </button>
+        </div>
+      `;
+    }
+
+    async function fetchEmailHistory() {
+      if (!userEmail) return;
+
+      document.getElementById('loading-indicator').classList.remove('hidden');
+      
+      try {
+        const headers = {
+          'Content-Type': 'application/json'
+        };
+        
+        if (accessToken) {
+          headers['Authorization'] = `Bearer ${accessToken}`;
+        }
+
+        const response = await fetch(`${API_BASE}/api/v2/email-forward/history/${encodeURIComponent(userEmail)}?limit=50`, {
+          headers
+        });
+
+        if (!response.ok) {
+          throw new Error(`API Error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        if (data.success && data.history) {
+          displayEmailHistory(data.history);
+          updateStats(data.history);
+        } else {
+          displayEmailHistory([]);
+          updateStats([]);
+        }
+
+      } catch (error) {
+        console.error("Failed to fetch email history:", error);
+        // Try alternative endpoint
+        await tryAlternativeEndpoint();
+      } finally {
+        document.getElementById('loading-indicator').classList.add('hidden');
+      }
+    }
+
+    async function tryAlternativeEndpoint() {
+      try {
+        const headers = {
+          'Content-Type': 'application/json'
+        };
+        
+        if (accessToken) {
+          headers['Authorization'] = `Bearer ${accessToken}`;
+        }
+
+        // Try on-demand history endpoint
+        const response = await fetch(`${API_BASE}/api/v2/on-demand/history?limit=50`, {
+          headers
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.history) {
+            displayEmailHistory(data.history);
+            updateStats(data.history);
+            return;
+          }
+        }
+      } catch (e) {
+        console.error("Alternative endpoint failed:", e);
+      }
+      
+      // No data available
+      displayEmailHistory([]);
+      updateStats([]);
+    }
+
+    function displayEmailHistory(emails) {
+      const emailList = document.getElementById('email-list');
+      document.getElementById('loading-state').classList.add('hidden');
+
+      if (!emails || emails.length === 0) {
+        document.getElementById('empty-state').classList.remove('hidden');
+        return;
+      }
+
+      document.getElementById('empty-state').classList.add('hidden');
+
+      const emailsHtml = emails.map(email => {
+        const verdict = (email.risk_level || email.verdict || 'UNKNOWN').toUpperCase();
+        const score = email.threat_score !== undefined 
+          ? Math.round(email.threat_score * 100) 
+          : (email.score || 0);
+        const sender = email.original_sender || email.sender || 'Unknown';
+        const subject = email.original_subject || email.subject || 'No Subject';
+        const date = formatDate(email.created_at || email.timestamp);
+        
+        const verdictClass = getVerdictClass(verdict);
+        const verdictIcon = getVerdictIcon(verdict);
+        const verdictLabel = getVerdictLabel(verdict);
+
+        return `
+          <div class="email-row p-4 flex items-center gap-4 cursor-pointer transition-colors">
+            <div class="flex-shrink-0">
+              <span class="material-symbols-outlined text-2xl ${getVerdictColor(verdict)}">${verdictIcon}</span>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="font-medium text-white truncate">${escapeHtml(subject)}</span>
+              </div>
+              <div class="text-sm text-slate-400 truncate">
+                From: ${escapeHtml(sender)}
+              </div>
+            </div>
+            <div class="flex-shrink-0 text-right">
+              <div class="mb-1">
+                <span class="px-2 py-1 rounded text-xs font-bold border ${verdictClass}">
+                  ${verdictLabel}
+                </span>
+              </div>
+              <div class="text-xs text-slate-500">${date}</div>
+            </div>
+            <div class="flex-shrink-0 w-16 text-right">
+              <div class="text-lg font-bold ${getScoreColor(score)}">${score}</div>
+              <div class="text-xs text-slate-500">score</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      emailList.innerHTML = emailsHtml;
+    }
+
+    function updateStats(emails) {
+      const total = emails.length;
+      const threats = emails.filter(e => {
+        const verdict = (e.risk_level || e.verdict || '').toUpperCase();
+        return verdict === 'PHISHING' || verdict === 'SUSPICIOUS';
+      }).length;
+      
+      const phishing = emails.filter(e => {
+        const verdict = (e.risk_level || e.verdict || '').toUpperCase();
+        return verdict === 'PHISHING';
+      }).length;
+
+      document.getElementById('emails-scanned').textContent = total;
+      document.getElementById('threats-detected').textContent = threats;
+      
+      // Inbox status
+      if (phishing > 0) {
+        document.getElementById('inbox-status').textContent = 'At Risk';
+        document.getElementById('inbox-status').classList.remove('text-emerald-500');
+        document.getElementById('inbox-status').classList.add('text-red-400');
+      } else if (threats > 0) {
+        document.getElementById('inbox-status').textContent = 'Caution';
+        document.getElementById('inbox-status').classList.remove('text-emerald-500');
+        document.getElementById('inbox-status').classList.add('text-amber-400');
+      } else {
+        document.getElementById('inbox-status').textContent = 'Secure';
+        document.getElementById('inbox-status').classList.add('text-emerald-500');
+      }
+
+      // Last scan
+      if (emails.length > 0) {
+        const latestDate = emails[0].created_at || emails[0].timestamp;
+        document.getElementById('last-scan').textContent = formatRelativeTime(latestDate);
+      } else {
+        document.getElementById('last-scan').textContent = 'Never';
+      }
+    }
+
+    function getVerdictClass(verdict) {
+      switch (verdict) {
+        case 'PHISHING': return 'verdict-phishing';
+        case 'SUSPICIOUS': return 'verdict-suspicious';
+        case 'SAFE': return 'verdict-safe';
+        default: return 'border-slate-600 text-slate-400';
+      }
+    }
+
+    function getVerdictIcon(verdict) {
+      switch (verdict) {
+        case 'PHISHING': return 'gpp_bad';
+        case 'SUSPICIOUS': return 'warning';
+        case 'SAFE': return 'verified_user';
+        default: return 'help';
+      }
+    }
+
+    function getVerdictLabel(verdict) {
+      switch (verdict) {
+        case 'PHISHING': return '🚨 PHISHING';
+        case 'SUSPICIOUS': return '⚠️ SUSPICIOUS';
+        case 'SAFE': return '✅ SAFE';
+        default: return verdict;
+      }
+    }
+
+    function getVerdictColor(verdict) {
+      switch (verdict) {
+        case 'PHISHING': return 'text-red-500';
+        case 'SUSPICIOUS': return 'text-amber-500';
+        case 'SAFE': return 'text-emerald-500';
+        default: return 'text-slate-400';
+      }
+    }
+
+    function getScoreColor(score) {
+      if (score <= 30) return 'text-red-400';
+      if (score <= 60) return 'text-amber-400';
+      return 'text-emerald-400';
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '-';
+      try {
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      } catch (e) {
+        return '-';
+      }
+    }
+
+    function formatRelativeTime(dateStr) {
+      if (!dateStr) return '-';
+      try {
+        const date = new Date(dateStr);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        if (diffDays < 7) return `${diffDays}d ago`;
+        return formatDate(dateStr);
+      } catch (e) {
+        return '-';
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text || '';
+      return div.innerHTML;
+    }
+
+    async function refreshData() {
+      await fetchEmailHistory();
+    }
 
     function logout() {
       if (confirm("Are you sure you want to logout?")) {
