@@ -335,6 +335,30 @@ except Exception as e:
     print(f"DEBUG: On-demand router failed: {e}")
     router_errors.append(f"On-Demand Check: {e}")
 
+# ============================================================================
+# NEW MODE-SEPARATED ROUTERS (Refactored Architecture)
+# ============================================================================
+
+# Mode 1 - IMAP Bulk Forward (New Refactored Version)
+try:
+    from app.api.v1.imap import router as imap_mode_router
+    app.include_router(imap_mode_router, prefix="/api/v1", tags=["Mode 1 - IMAP (Refactored)"])
+    logger.info("Mode 1 IMAP router (refactored) loaded successfully")
+except Exception as e:
+    logger.warning(f"Mode 1 IMAP router (refactored) failed to load: {e}")
+    router_errors.append(f"Mode 1 IMAP Refactored: {e}")
+
+# Mode 2 - Gmail On-Demand (New Refactored Version)
+try:
+    from app.api.v2.gmail import router as gmail_mode_router
+    app.include_router(gmail_mode_router, prefix="/api/v2", tags=["Mode 2 - Gmail (Refactored)"])
+    logger.info("Mode 2 Gmail router (refactored) loaded successfully")
+except Exception as e:
+    logger.warning(f"Mode 2 Gmail router (refactored) failed to load: {e}")
+    router_errors.append(f"Mode 2 Gmail Refactored: {e}")
+
+# ============================================================================
+
 # Email Forward Analysis Router (Mode 3: Mobile-Friendly Email Forwarding)
 try:
     from app.api.v2.email_forward import router as email_forward_router
