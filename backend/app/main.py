@@ -85,9 +85,30 @@ try:
 except Exception as e:
     print(f"CRITICAL: gmail_oauth router import failed: {e}")
     import traceback
-    print(f"Traceback: {traceback.format_exc()}")
+    tb = traceback.format_exc()
+    print(f"Traceback: {tb}")
+    
+    # Create fallback router to expose the error to the user
     from fastapi import APIRouter
-    gmail_oauth_router = APIRouter()
+    gmail_oauth_router = APIRouter(prefix="/api/v1/auth/gmail", tags=["Gmail OAuth ERROR"])
+    
+    @gmail_oauth_router.get("/callback")
+    async def debug_oauth_error_callback(state: str = "", code: str = "", error: str = ""):
+        return {
+            "status": "error",
+            "message": "The Gmail OAuth router failed to load on the server.",
+            "detail": str(e),
+            "traceback": tb.splitlines()
+        }
+    
+    @gmail_oauth_router.get("/{path:path}")
+    async def debug_oauth_error_catchall(path: str):
+         return {
+            "status": "error",
+            "message": "The Gmail OAuth router failed to load on the server.",
+            "detail": str(e),
+            "traceback": tb.splitlines()
+        }
 
 # Use structured logger if available
 logger = get_structured_logger(__name__) if OBSERVABILITY_AVAILABLE else get_logger(__name__)
