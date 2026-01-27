@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from enum import Enum
 from beanie import Document, Indexed
-from pydantic import Field, EmailStr
+from pydantic import Field, EmailStr, BaseModel
 from pymongo import IndexModel, ASCENDING, DESCENDING
 
 class TenantStatus(str, Enum):
@@ -25,10 +25,13 @@ class PolicyAction(str, Enum):
     NOTIFY_SOC = "notify_soc"   # Email/Webhook to SOC
     WEBHOOK = "webhook"         # Generic webhook
 
-class ThreatConditions(Document):
+class ThreatConditions(BaseModel):
     """
     Conditions for triggering a policy.
     e.g., If score >= 80 AND credential_harvesting=True
+    
+    Note: This is a Pydantic BaseModel for embedded use within Tenant documents,
+    not a separate MongoDB collection.
     """
     min_score: int = 0
     max_score: int = 100
@@ -37,8 +40,12 @@ class ThreatConditions(Document):
     
     # Advanced logic could go here
 
-class PolicyRule(Document):
-    """A single rule within a policy"""
+class PolicyRule(BaseModel):
+    """A single rule within a policy
+    
+    Note: This is a Pydantic BaseModel for embedded use within Tenant documents,
+    not a separate MongoDB collection.
+    """
     name: str
     priority: int = 10
     conditions: ThreatConditions

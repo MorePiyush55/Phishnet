@@ -306,6 +306,15 @@ except Exception as e:
     logger.warning(f"IMAP email router failed to load: {e}")
     router_errors.append(f"IMAP Emails: {e}")
 
+# Mode 1 Enterprise Router (Automatic Email Processing Pipeline)
+try:
+    from app.api.v1.mode1 import router as mode1_router
+    app.include_router(mode1_router, prefix="/api/v1", tags=["Mode 1 - Enterprise Email Processing"])
+    logger.info("Mode 1 enterprise router loaded successfully")
+except Exception as e:
+    logger.warning(f"Mode 1 enterprise router failed to load: {e}")
+    router_errors.append(f"Mode 1 Enterprise: {e}")
+
 # On-Demand Phishing Detection Router (New unified workflow)
 try:
     from app.api.v1.ondemand import router as ondemand_v1_router
@@ -343,13 +352,6 @@ try:
 except Exception as e:
     logger.warning(f"Organization analytics router failed to load: {e}")
     router_errors.append(f"Organization Analytics: {e}")
-
-# Debug Seed Router
-try:
-    from app.api.debug_seed import router as debug_seed_router
-    app.include_router(debug_seed_router, prefix="/api/debug", tags=["Debug"])
-except Exception as e:
-    logger.warning(f"Debug seed router failed: {e}")
 
 # Add routers directly with robust error handling (excluding manually loaded ones)
 routers_to_add = [

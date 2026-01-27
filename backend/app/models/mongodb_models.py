@@ -458,6 +458,16 @@ class ForwardedEmailAnalysis(Document):
         ]
 
 
+# Import Mode 1 Enterprise models
+try:
+    from app.services.deduplication import ContentHash
+    from app.services.mode1_audit import Mode1AuditLog
+    from app.services.tenant_mailbox import MailboxConfig
+    MODE1_MODELS = [ContentHash, Mode1AuditLog, MailboxConfig]
+except ImportError:
+    MODE1_MODELS = []
+
+
 # List of all document models for Beanie initialization
 DOCUMENT_MODELS = [
     User,
@@ -476,4 +486,4 @@ DOCUMENT_MODELS = [
     Tenant,
     PolicyRule,
     PolicyEvaluationResult,
-]
+] + MODE1_MODELS

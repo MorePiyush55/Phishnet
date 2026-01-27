@@ -321,10 +321,6 @@ class OnDemandOrchestrator:
 
             # Already persisted in Step 4
             logger.info(f"[Job {job.job_id}] Job cycle finished.")
-            except Exception as e:
-                import traceback
-                logger.error(f"[Job {job.job_id}] Failed to persist to MongoDB: {repr(e)}")
-                logger.error(f"Traceback: {traceback.format_exc()}")
             
             return job
             
