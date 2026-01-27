@@ -120,34 +120,62 @@
 
     setTimeout(() => {
       const userStr = localStorage.getItem(USER_KEY);
+      const token = localStorage.getItem('phishnet_access_token'); // Ensure we have a token
 
-      if (!userStr) {
-        console.error("No user found in localStorage");
-        document.getElementById('user-welcome').textContent = "Not connected. Please log in.";
-        document.getElementById('user-welcome').classList.add('text-red-500');
-        if (document.getElementById('user-email-nav')) {
-          document.getElementById('user-email-nav').textContent = "";
-        }
+      if (!userStr || !token) {
+        console.error("No user/token found");
+        window.location.href = '/'; // Force login
       } else {
         try {
           const user = JSON.parse(userStr);
           const email = user.email || user.gmail_email || "Unknown User";
+          const domain = email.split('@')[1]; // Derive domain from email
 
-          // Update Main Header
-          document.getElementById('user-welcome').textContent = `Connected account: ${email}`;
+          // Update UI
+          document.getElementById('user-welcome').textContent = `Organization: ${domain}`;
           document.getElementById('user-welcome').classList.add('text-emerald-400');
 
-          // Update Navbar
           const navEmail = document.getElementById('user-email-nav');
           if (navEmail) {
             navEmail.textContent = email;
             navEmail.classList.remove('hidden');
           }
+
+          // Fetch Enterprise Stats
+          fetchStats(domain, token);
+
         } catch (e) {
-          console.error("JSON Parse failed", e);
+          console.error("Dashboard init failed", e);
         }
       }
     }, 200);
+
+    async function fetchStats(domain, token) {
+      try {
+        const res = await fetch(`/api/v2/organization/stats/${domain}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!res.ok) throw new Error("API Error");
+
+        const data = await res.json();
+
+        // Update counters
+        document.querySelector('[class*="text-xl font-bold"]:nth-child(2)').textContent = data.total_checks || 0; // Scanned
+        document.querySelector('[class*="text-xl font-bold"]:nth-child(3)').textContent = data.verdict_counts?.PHISHING || 0; // Blocked
+
+        // Update Scan Status
+        if (data.recent_history && data.recent_history.length > 0) {
+          const lastScan = new Date(data.recent_history[0].created_at).toLocaleString();
+          document.querySelector('[class*="text-xl font-bold"]:nth-child(4)').textContent = lastScan;
+        }
+
+      } catch (e) {
+        console.error("Failed to fetch stats", e);
+        // Fallback to 0 or error state
+      }
+    }
+
 
     function logout() {
       if (confirm("Are you sure you want to logout?")) {

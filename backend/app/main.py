@@ -344,6 +344,13 @@ except Exception as e:
     logger.warning(f"Organization analytics router failed to load: {e}")
     router_errors.append(f"Organization Analytics: {e}")
 
+# Debug Seed Router
+try:
+    from app.api.debug_seed import router as debug_seed_router
+    app.include_router(debug_seed_router, prefix="/api/debug", tags=["Debug"])
+except Exception as e:
+    logger.warning(f"Debug seed router failed: {e}")
+
 # Add routers directly with robust error handling (excluding manually loaded ones)
 routers_to_add = [
     ("app.api.analytics", "Analytics Dashboard"),
