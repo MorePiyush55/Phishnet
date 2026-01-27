@@ -101,17 +101,29 @@
   <script>
     // Simple session check logic equivalent to app.js
     const USER_KEY = 'phishnet_user';
-    const userStr = localStorage.getItem(USER_KEY);
 
-    if (!userStr) {
-      // Debug mode: Don't redirect, just show error
-      console.error("No user found in localStorage");
-      document.getElementById('user-welcome').textContent = "Debug: No session found. Check console.";
-      // window.location.href = '/'; 
-    } else {
-      const user = JSON.parse(userStr);
-      document.getElementById('user-welcome').textContent = `Connected account: ${user.email}`;
-    }
+    // Add a small delay to ensure localStorage is settled if coming from a fast redirect
+    setTimeout(() => {
+      const userStr = localStorage.getItem(USER_KEY);
+      console.log("Dashboard checking auth:", userStr);
+
+      if (!userStr) {
+        console.error("No user found in localStorage");
+        document.getElementById('user-welcome').textContent = "Not connected. Please log in.";
+        document.getElementById('user-welcome').classList.add('text-red-500');
+      } else {
+        try {
+          const user = JSON.parse(userStr);
+          // Ensure email is displayed even if other fields are missing
+          const email = user.email || user.gmail_email || "Unknown User";
+          document.getElementById('user-welcome').textContent = `Connected account: ${email}`;
+          document.getElementById('user-welcome').classList.add('text-emerald-400');
+        } catch (e) {
+          console.error("Error parsing user data:", e);
+          document.getElementById('user-welcome').textContent = "Session Error. Please re-login.";
+        }
+      }
+    }, 100);
 
     function logout() {
       localStorage.removeItem(USER_KEY);

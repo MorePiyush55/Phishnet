@@ -165,7 +165,8 @@ function handleOAuthCallback() {
 
     if (oauth_success === 'true' && gmail_email) {
         console.log('OAuth success detected:', gmail_email);
-        alert("Success! Connected: " + gmail_email + "\nRedirecting to Dashboard...");
+        // Alert removed for better UX
+        // alert("Success! Connected: " + gmail_email + "\nRedirecting to Dashboard...");
 
         // Create a simulated user session
         const user = {
