@@ -60,6 +60,7 @@
         </span>
         PROTECTION ACTIVE
       </div>
+      <span id="user-email-nav" class="text-sm text-slate-300 font-medium hidden"></span>
       <button onclick="logout()" class="text-sm text-slate-400 hover:text-white">Logout</button>
     </div>
   </nav>
@@ -109,49 +110,47 @@
     const DEBUG_PANEL = document.getElementById('debug-panel');
     const DEBUG_CONTENT = document.getElementById('debug-content');
 
+    // Debugging helper (Hidden by default now)
     function log(msg) {
       console.log(msg);
-      DEBUG_CONTENT.textContent += msg + '\n';
+      // DEBUG_CONTENT.innerText += msg + "\n"; 
     }
 
-    // Force debug panel visible for now to diagnose
-    DEBUG_PANEL.classList.remove('hidden');
-
-    log("Dashboard script loaded.");
+    // DEBUG_PANEL.classList.remove('hidden'); // Comment out to hide
 
     setTimeout(() => {
       const userStr = localStorage.getItem(USER_KEY);
-      log("Reading localStorage['phishnet_user']: " + (userStr || "NULL"));
 
       if (!userStr) {
-        log("ERROR: No user data found in storage.");
-        document.getElementById('user-welcome').textContent = "Not connected (No Data).";
+        console.error("No user found in localStorage");
+        document.getElementById('user-welcome').textContent = "Not connected. Please log in.";
         document.getElementById('user-welcome').classList.add('text-red-500');
-
-        // Detailed help
-        log("\nPOSSIBLE CAUSES:");
-        log("1. app.js failed to save the data before redirecting.");
-        log("2. You are in Incognito mode and storage was partitioned.");
-        log("3. Domain mismatch (e.g. redirected from http to https).");
+        if (document.getElementById('user-email-nav')) {
+          document.getElementById('user-email-nav').textContent = "";
+        }
       } else {
         try {
           const user = JSON.parse(userStr);
-          log("Parsed User Object: " + JSON.stringify(user, null, 2));
-
           const email = user.email || user.gmail_email || "Unknown User";
-          log("Extracted Email: " + email);
 
+          // Update Main Header
           document.getElementById('user-welcome').textContent = `Connected account: ${email}`;
           document.getElementById('user-welcome').classList.add('text-emerald-400');
+
+          // Update Navbar
+          const navEmail = document.getElementById('user-email-nav');
+          if (navEmail) {
+            navEmail.textContent = email;
+            navEmail.classList.remove('hidden');
+          }
         } catch (e) {
-          log("CRITICAL ERROR: JSON Parse failed - " + e.message);
-          document.getElementById('user-welcome').textContent = "Data Error.";
+          console.error("JSON Parse failed", e);
         }
       }
-    }, 500); // Increased delay to 500ms to be safe
+    }, 200);
 
     function logout() {
-      if (confirm("Clear session and logout?")) {
+      if (confirm("Are you sure you want to logout?")) {
         localStorage.removeItem(USER_KEY);
         localStorage.removeItem('phishnet_access_token');
         window.location.href = '/';
