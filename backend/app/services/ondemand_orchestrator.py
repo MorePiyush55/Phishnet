@@ -29,6 +29,8 @@ from app.services.gemini import GeminiClient
 from app.services.email_sender import send_email
 from app.models.mongodb_models import ForwardedEmailAnalysis
 from app.config.settings import get_settings
+from app.models.tenant import Tenant, PolicyAction
+from app.services.policy_engine import get_policy_engine
 
 settings = get_settings()
 
@@ -115,6 +117,14 @@ class OnDemandOrchestrator:
                 logger.info("Orchestrator: Redis connection for locking initialized")
             except Exception as e:
                 logger.warning(f"Orchestrator: Redis initialization failed: {e}")
+                
+        self.policy_engine = get_policy_engine()
+
+    async def _resolve_tenant(self, domain: str) -> Optional[Tenant]:
+        """Resolve tenant from organization domain"""
+        if not domain:
+            return None
+        return await Tenant.find_one(Tenant.domain == domain)
     
     def _generate_job_id(self, mail_uid: str) -> str:
         """Generate unique job ID"""
@@ -236,56 +246,81 @@ class OnDemandOrchestrator:
             logger.info(f"[Job {job.job_id}] Interpretation complete: {len(interpretation.reasons)} reasons")
             
             # ═══════════════════════════════════════════════════════════════
-            # STEP 4: Client Response (SMTP)
+            # STEP 4: Persist Analysis (Needed for Policy Engine)
+            # ═══════════════════════════════════════════════════════════════
+            email_metadata = {
+                "uid": mail_uid,
+                "subject": job.original_subject,
+                "date": email_data.get('received_date').isoformat() if email_data.get('received_date') else None
+            }
+            if email_data.get('message_id'):
+                email_metadata["message_id"] = email_data.get('message_id')
+            
+            analysis_doc = ForwardedEmailAnalysis(
+                user_id=job.forwarded_by,
+                forwarded_by=job.forwarded_by,
+                org_domain=job.org_domain,
+                original_sender=email_data.get('from', 'Unknown'),
+                original_subject=job.original_subject,
+                threat_score=float(detection_result.total_score) / 100.0,
+                risk_level=detection_result.final_verdict,
+                analysis_result={
+                    "verdict": detection_result.final_verdict,
+                    "score": detection_result.total_score,
+                    "confidence": detection_result.confidence,
+                    "risk_factors": detection_result.risk_factors
+                },
+                email_metadata=email_metadata,
+                reply_sent=False, # Will be set during policy execution
+                reply_sent_at=None
+            )
+            await analysis_doc.save()
+            logger.info(f"[Job {job.job_id}] Analysis persisted to MongoDB")
+
+            # ═══════════════════════════════════════════════════════════════
+            # STEP 5: Policy Execution (Enterprise Logic)
             # ═══════════════════════════════════════════════════════════════
             job.status = JobStatus.RESPONDING
             
-            await self._send_analysis_response(job)
+            # Resolve Tenant
+            tenant = await self._resolve_tenant(job.org_domain)
+            if not tenant:
+                # Create a specialized "Public" tenant strictly for policy evaluation defaults
+                # Use in-memory dummy to avoid DB clutter, or fetch a "public" doc
+                logger.info(f"[Job {job.job_id}] No explicit tenant found for {job.org_domain}. Using Default Policy.")
+                tenant = Tenant(
+                    name="Public User", 
+                    domain="public", 
+                    admin_email="admin@phishnet.ai"
+                ) # Stub for checking default policies
+
+            # Evaluate Policies
+            policy_decisions = await self.policy_engine.evaluate(tenant, analysis_doc, job.job_id)
             
+            # Execute Actions
+            for decision in policy_decisions:
+                for action in decision.actions_taken:
+                    if action == PolicyAction.REPLY_USER:
+                        success = await self._send_analysis_response(job)
+                        if success:
+                            analysis_doc.reply_sent = True
+                            analysis_doc.reply_sent_at = datetime.utcnow()
+                            await analysis_doc.save()
+                    
+                    elif action == PolicyAction.NOTIFY_SOC:
+                        logger.info(f"[Job {job.job_id}] ACTION: Notify SOC triggered (Implementation Pending)")
+                        
+                    elif action == PolicyAction.QUARANTINE:
+                         logger.info(f"[Job {job.job_id}] ACTION: Quarantine triggered (Implementation Pending)")
+
             # ═══════════════════════════════════════════════════════════════
             # Complete
             # ═══════════════════════════════════════════════════════════════
             job.status = JobStatus.COMPLETED
             job.completed_at = datetime.utcnow()
 
-            # ═══════════════════════════════════════════════════════════════
-            # STEP 5: Persist to Database (Critical for Deduplication)
-            # ═══════════════════════════════════════════════════════════════
-            try:
-                # Provide a message_id if available, otherwise it might be missing
-                # We need to re-fetch or pass it down. 
-                # Ideally email_data has it.
-                message_id = email_data.get('message_id')
-                
-                # Prepare email metadata, excluding message_id if None to avoid unique index violation
-                email_metadata = {
-                    "uid": mail_uid,
-                    "subject": job.original_subject,
-                    "date": email_data.get('received_date').isoformat() if email_data.get('received_date') else None
-                }
-                if message_id:
-                    email_metadata["message_id"] = message_id
-                
-                analysis_doc = ForwardedEmailAnalysis(
-                    user_id=job.forwarded_by,
-                    forwarded_by=job.forwarded_by,
-                    org_domain=job.org_domain,
-                    original_sender=email_data.get('from', 'Unknown'),
-                    original_subject=job.original_subject,
-                    threat_score=float(detection_result.total_score) / 100.0,
-                    risk_level=detection_result.final_verdict,
-                    analysis_result={
-                        "verdict": detection_result.final_verdict,
-                        "score": detection_result.total_score,
-                        "confidence": detection_result.confidence,
-                        "risk_factors": detection_result.risk_factors
-                    },
-                    email_metadata=email_metadata,
-                    reply_sent=True,
-                    reply_sent_at=datetime.utcnow()
-                )
-                await analysis_doc.save()
-                logger.info(f"[Job {job.job_id}] Analysis persisted to MongoDB for deduplication")
+            # Already persisted in Step 4
+            logger.info(f"[Job {job.job_id}] Job cycle finished.")
             except Exception as e:
                 import traceback
                 logger.error(f"[Job {job.job_id}] Failed to persist to MongoDB: {repr(e)}")

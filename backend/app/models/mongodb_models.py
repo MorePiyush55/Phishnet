@@ -9,6 +9,9 @@ from pydantic import Field, EmailStr
 from pymongo import IndexModel, ASCENDING, DESCENDING
 
 
+
+from app.models.tenant import Tenant, PolicyRule, PolicyEvaluationResult
+
 class ThreatLevel(str, Enum):
     """Threat severity levels."""
     LOW = "low"
@@ -470,4 +473,7 @@ DOCUMENT_MODELS = [
     OAuthCredentials,
     OnDemandAnalysis,
     ForwardedEmailAnalysis,
+    Tenant,
+    PolicyRule,
+    PolicyEvaluationResult,
 ]
