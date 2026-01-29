@@ -2,7 +2,12 @@
 
 ## Overview
 
-This guide covers deploying PhishNet backend to Render with **both Mode 1 (automatic IMAP) and Mode 2 (on-demand Gmail API)** running on the same instance.
+This guide covers deploying PhishNet backend to Render with **both modes running independently** on the same instance:
+
+- **Mode 1 (Bulk Forward/IMAP)**: Automatic analysis of forwarded emails via IMAP polling
+- **Mode 2 (On-Demand/Gmail API)**: User-triggered analysis via Gmail API (explicit per-email consent)
+
+**Important**: These modes are **completely separate** and do not share data or workflows.
 
 ---
 
@@ -147,11 +152,14 @@ Expected:
 }
 ```
 
-### Check Mode 2 (On-Demand)
+### Check Mode 2 (On-Demand/Gmail API)
 
 Mode 2 is automatically available at:
-- `/api/v2/request-check` - Request email analysis
-- `/api/v2/auth/google` - OAuth flow
+- `/api/v2/gmail/check/request` - Request email analysis (user-triggered)
+- `/api/v2/gmail/auth/google` - OAuth flow for Gmail access
+- `/api/v2/gmail/check/history` - User's analysis history
+
+**Trigger**: User explicitly clicks "Check This Email" in dashboard UI
 
 ---
 
@@ -165,19 +173,70 @@ NEXT_PUBLIC_API_URL=https://phishnet-backend.onrender.com
 
 ---
 
+## Understanding Mode 1 vs Mode 2
+
+### Mode 1: Bulk Forward (IMAP-based)
+
+**Trigger**: System (IMAP polling worker runs every 60 seconds)
+
+**Flow**:
+1. User forwards emails to `phishnet.ai@gmail.com` (or sets up auto-forward)
+2. IMAP worker automatically fetches new emails
+3. AI analyzes **all forwarded emails** without user intervention
+4. Results stored in database
+5. AI sends reply email with verdict
+
+**Control**: User delegates control by forwarding. AI decides everything after that.
+
+**Privacy**: Medium (all forwarded emails are analyzed and stored)
+
+### Mode 2: On-Demand Check (Gmail API)
+
+**Trigger**: User (explicit button click per email)
+
+**Flow**:
+1. User sees suspicious email in Gmail
+2. User clicks "Check This Email" in PhishNet dashboard
+3. Gmail API fetches **only that specific email**
+4. AI analyzes the single email
+5. Verdict shown in dashboard UI
+6. Data deleted immediately (unless user consents to storage)
+
+**Control**: User has full control. AI does nothing unless explicitly asked.
+
+**Privacy**: High (only selected emails analyzed, no storage by default)
+
+### Key Differences
+
+| Aspect | Mode 1 (Bulk Forward) | Mode 2 (On-Demand) |
+|--------|----------------------|-------------------|
+| **Trigger** | System (automatic) | User (manual click) |
+| **Scope** | All forwarded emails | Single selected email |
+| **Storage** | Always stored | Only if user consents |
+| **Email Access** | IMAP inbox | Gmail API (readonly) |
+| **User Control** | Delegation | Per-email consent |
+
+**Critical**: These modes are **completely independent**. They do not share:
+- Email data
+- Analysis results
+- User workflows
+- Database tables
+
+---
+
 ## Important Notes
 
-### Mode 1 + Mode 2 Coordination
+### Mode 1 + Mode 2 Independence
 
-Both modes run on the same instance:
-- **Mode 1**: Automatically polls IMAP inbox every 60 seconds
-- **Mode 2**: Handles on-demand requests via API
+Both modes run on the same backend instance but operate **completely independently**:
 
-**IMAP Ownership**: By default, Mode 1 owns the IMAP inbox. If you want both modes to access the same inbox, set:
-```
-# In mailbox config
-ownership: "shared"
-```
+- **Mode 1**: Polls `phishnet.ai@gmail.com` IMAP inbox every 60 seconds for forwarded emails
+- **Mode 2**: Responds to user-triggered API requests to check specific emails via Gmail API
+
+**No Shared Data**: 
+- Mode 1 emails → Stored in `email_analysis` collection (forwarded emails)
+- Mode 2 emails → Stored in `ondemand_analysis` collection (only if user consents)
+- Different databases, different workflows, no connection
 
 ### Render Free Tier Limitations
 
