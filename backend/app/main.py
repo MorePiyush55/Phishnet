@@ -164,10 +164,91 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"On-demand email polling worker failed to start: {e}")
     
+    # Initialize Mode 1 Enterprise Orchestrator (Automatic IMAP Processing)
+    mode1_orchestrator = None
+    mode1_lock = None
+    
+    try:
+        mode1_enabled = getattr(settings, 'MODE1_ENABLED', False)
+        mode1_auto_start = getattr(settings, 'MODE1_AUTO_START', False)
+        mode1_fail_fast = getattr(settings, 'MODE1_FAIL_FAST', True)
+        mode1_health_check = getattr(settings, 'MODE1_STARTUP_HEALTH_CHECK', True)
+        
+        if mode1_enabled and mode1_auto_start:
+            from app.services.mode1_orchestrator import get_mode1_orchestrator
+            from app.services.mode1_lock import get_mode1_lock
+            
+            mode1_orchestrator = get_mode1_orchestrator()
+            mode1_lock = get_mode1_lock()
+            
+            # Generate unique orchestrator ID
+            import uuid
+            orchestrator_id = f"mode1-{uuid.uuid4().hex[:8]}"
+            
+            # Acquire singleton lock
+            lock_acquired = await mode1_lock.acquire_lock(orchestrator_id)
+            
+            if not lock_acquired:
+                error_msg = "Another Mode 1 orchestrator is already running"
+                
+                if settings.is_development() and mode1_fail_fast:
+                    # Fail fast in development
+                    raise RuntimeError(error_msg)
+                else:
+                    # Degrade gracefully in production
+                    logger.warning(f"{error_msg}, skipping startup")
+                    mode1_orchestrator = None
+            else:
+                # Start orchestrator
+                await mode1_orchestrator.start_all_mailbox_polling()
+                logger.info(f"Mode 1 Enterprise Orchestrator started (ID: {orchestrator_id})")
+                
+                # Health check
+                if mode1_health_check:
+                    if not mode1_orchestrator.is_healthy():
+                        error_msg = "Mode 1 orchestrator failed health check"
+                        
+                        if settings.is_development() and mode1_fail_fast:
+                            # Release lock and fail
+                            await mode1_lock.release_lock(orchestrator_id)
+                            raise RuntimeError(error_msg)
+                        else:
+                            logger.warning(error_msg)
+                
+        elif mode1_enabled:
+            logger.info("Mode 1 enabled but auto-start disabled - start manually via API")
+        else:
+            logger.info("Mode 1 disabled - set MODE1_ENABLED=true to enable")
+            
+    except Exception as e:
+        # Environment-aware error handling
+        if settings.is_development() and getattr(settings, 'MODE1_FAIL_FAST', True):
+            # Fail fast in development - propagate exception
+            logger.error(f"Mode 1 orchestrator startup failed: {e}")
+            raise
+        else:
+            # Degrade gracefully in production
+            logger.warning(f"Mode 1 orchestrator failed to start: {e}")
+            mode1_orchestrator = None
+    
     yield
     
     # Shutdown
     logger.info("Shutting down PhishNet application")
+    
+    # Stop Mode 1 orchestrator
+    try:
+        if mode1_orchestrator and mode1_lock:
+            # Stop polling
+            await mode1_orchestrator.stop_all_polling()
+            
+            # Release singleton lock
+            orchestrator_id = mode1_orchestrator.orchestrator_id if hasattr(mode1_orchestrator, 'orchestrator_id') else "unknown"
+            await mode1_lock.release_lock(orchestrator_id)
+            
+            logger.info("Mode 1 orchestrator stopped and lock released")
+    except Exception as e:
+        logger.warning(f"Error stopping Mode 1 orchestrator: {e}")
     
     # Stop real-time monitoring
     try:
@@ -314,6 +395,15 @@ try:
 except Exception as e:
     logger.warning(f"Mode 1 enterprise router failed to load: {e}")
     router_errors.append(f"Mode 1 Enterprise: {e}")
+
+# Mode 1 Management API (Control & Monitoring)
+try:
+    from app.api.v1.mode1_management import router as mode1_mgmt_router
+    app.include_router(mode1_mgmt_router, prefix="/api/v1", tags=["Mode 1 - Management"])
+    logger.info("Mode 1 management router loaded successfully")
+except Exception as e:
+    logger.warning(f"Mode 1 management router failed to load: {e}")
+    router_errors.append(f"Mode 1 Management: {e}")
 
 # On-Demand Phishing Detection Router (New unified workflow)
 try:

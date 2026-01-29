@@ -32,6 +32,13 @@ class MailboxStatus(str, Enum):
     CREDENTIALS_EXPIRED = "credentials_expired"
 
 
+class IMAPOwnership(str, Enum):
+    """IMAP mailbox ownership for coordination."""
+    MODE1 = "mode1"  # Automatic processing (Mode 1 orchestrator)
+    ONDEMAND = "ondemand"  # On-demand worker only
+    SHARED = "shared"  # Both (requires Redis lock coordination)
+
+
 class MailboxConfig(Document):
     """
     IMAP mailbox configuration for a tenant.
@@ -48,6 +55,10 @@ class MailboxConfig(Document):
     # IMAP Configuration
     imap_host: str
     imap_port: int = 993
+    
+    # Ownership & Coordination
+    ownership: IMAPOwnership = IMAPOwnership.MODE1
+    coordination_lock_key: Optional[str] = None  # Redis lock key for SHARED ownership
     imap_user: str
     imap_password: str  # In production: reference to secrets manager
     imap_folder: str = "INBOX"

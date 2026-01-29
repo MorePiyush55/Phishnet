@@ -168,18 +168,109 @@ except ImportError:
 
 
 # ============================================================================
-# Analysis Engine Aliases
+# Analysis Engine Aliases (PHASE 4: Core Extraction)
 # ============================================================================
 
 try:
-    # EnhancedPhishingAnalyzer will eventually move to core/analysis
-    # For now, keep the original import working
-    from app.services.enhanced_phishing_analyzer import (
-        EnhancedPhishingAnalyzer,
+    # NEW: Import from core/analysis
+    from app.core.analysis.phishing_analyzer import (
+        EnhancedPhishingAnalyzer as _EnhancedPhishingAnalyzer,
         ComprehensivePhishingAnalysis,
+        SenderAnalysis,
+        ContentAnalysis,
+        LinkAnalysis,
+        AuthenticationAnalysis,
+        AttachmentAnalysis,
     )
+    
+    # Provide backward compatibility for old import path
+    class EnhancedPhishingAnalyzer(_EnhancedPhishingAnalyzer):
+        """
+        DEPRECATED: Use app.core.analysis.phishing_analyzer.EnhancedPhishingAnalyzer instead.
+        """
+        def __init__(self, *args, **kwargs):
+            _deprecated_import("app.services.enhanced_phishing_analyzer", "app.core.analysis.phishing_analyzer")
+            super().__init__(*args, **kwargs)
+    
 except ImportError:
-    pass
+    # Fallback to old location if core/ migration not complete
+    try:
+        from app.services.enhanced_phishing_analyzer import (
+            EnhancedPhishingAnalyzer,
+            ComprehensivePhishingAnalysis,
+            SenderAnalysis,
+            ContentAnalysis,
+            LinkAnalysis,
+            AuthenticationAnalysis,
+            AttachmentAnalysis,
+        )
+    except ImportError:
+        pass
+
+
+# ============================================================================
+# AI Services Aliases (PHASE 4: Core Extraction)
+# ============================================================================
+
+try:
+    # NEW: Import from core/ai
+    from app.core.ai.gemini import GeminiClient as _GeminiClient
+    
+    class GeminiClient(_GeminiClient):
+        """
+        DEPRECATED: Use app.core.ai.gemini.GeminiClient instead.
+        """
+        def __init__(self, *args, **kwargs):
+            _deprecated_import("app.services.gemini", "app.core.ai.gemini")
+            super().__init__(*args, **kwargs)
+    
+    # Alias for backward compatibility
+    GeminiAI = GeminiClient
+    
+except ImportError:
+    # Fallback to old location
+    try:
+        from app.services.gemini import GeminiClient
+        GeminiAI = GeminiClient
+    except ImportError:
+        pass
+
+
+# ============================================================================
+# Messaging Services Aliases (PHASE 4: Core Extraction)
+# ============================================================================
+
+try:
+    # NEW: Import from core/messaging (these are functions, not classes)
+    from app.core.messaging.sender import (
+        send_email,
+        send_email_sync,
+        send_email_smtp_with_fallback,
+        send_email_via_resend,
+        send_email_via_brevo,
+    )
+    
+    # Log deprecation warning when module is imported
+    import warnings
+    warnings.warn(
+        "Importing from app.services.email_sender is deprecated. Use app.core.messaging.sender instead.",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    
+except ImportError:
+    # Fallback to old location
+    try:
+        from app.services.email_sender import (
+            send_email,
+            send_email_sync,
+            send_email_smtp_with_fallback,
+            send_email_via_resend,
+            send_email_via_brevo,
+        )
+    except ImportError:
+        pass
+
 
 
 # ============================================================================
@@ -213,7 +304,20 @@ __all__ = [
     "EmailFetcher",
     "ModeOrchestrator",
     
-    # Analysis (temporary)
+    # Core Services (Phase 4)
     "EnhancedPhishingAnalyzer",
     "ComprehensivePhishingAnalysis",
+    "SenderAnalysis",
+    "ContentAnalysis",
+    "LinkAnalysis",
+    "AuthenticationAnalysis",
+    "AttachmentAnalysis",
+    "GeminiClient",
+    "GeminiAI",
+    # Email sender functions
+    "send_email",
+    "send_email_sync",
+    "send_email_smtp_with_fallback",
+    "send_email_via_resend",
+    "send_email_via_brevo",
 ]

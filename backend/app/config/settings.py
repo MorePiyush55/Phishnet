@@ -67,6 +67,17 @@ class Settings(BaseSettings):
     IMAP_FOLDER: str = "INBOX"
     IMAP_POLL_INTERVAL: int = 60  # Poll every 60 seconds
     
+    # Mode 1 - Automatic IMAP Processing (Enterprise)
+    MODE1_ENABLED: bool = False
+    MODE1_AUTO_START: bool = False
+    MODE1_DEFAULT_POLL_INTERVAL: int = 60
+    MODE1_BATCH_SIZE: int = 50
+    MODE1_MAX_CONCURRENT_TENANTS: int = 10
+    MODE1_DEDUP_ENABLED: bool = True
+    MODE1_POLICY_ENGINE_ENABLED: bool = True
+    MODE1_FAIL_FAST: bool = True  # Fail fast in dev, degrade gracefully in prod
+    MODE1_STARTUP_HEALTH_CHECK: bool = True
+    
     # SMTP Configuration (For sending replies - blocked on Render free tier)
     SMTP_ENABLED: bool = False
     SMTP_HOST: str = "smtp.gmail.com"

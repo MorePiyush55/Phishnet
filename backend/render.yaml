@@ -1,9 +1,144 @@
 services:
+  # PhishNet Backend (Mode 1 + Mode 2)
   - type: web
     name: phishnet-backend
     env: python
+    region: oregon
+    plan: starter
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.0
+      # Application
+      - key: ENVIRONMENT
+        value: production
+      
+      - key: LOG_LEVEL
+        value: INFO
+      
+      # Database
+      - key: MONGODB_URI
+        sync: false  # Set in Render dashboard (secret)
+      
+      - key: REDIS_URL
+        sync: false  # Set in Render dashboard (secret)
+      
+      # Mode 1 - Automatic IMAP Processing
+      - key: MODE1_ENABLED
+        value: true
+      
+      - key: MODE1_AUTO_START
+        value: true
+      
+      - key: MODE1_FAIL_FAST
+        value: false  # Graceful degradation in production
+      
+      - key: MODE1_STARTUP_HEALTH_CHECK
+        value: true
+      
+      - key: MODE1_DEFAULT_POLL_INTERVAL
+        value: 60
+      
+      - key: MODE1_BATCH_SIZE
+        value: 50
+      
+      - key: MODE1_MAX_CONCURRENT_TENANTS
+        value: 10
+      
+      - key: MODE1_DEDUP_ENABLED
+        value: true
+      
+      - key: MODE1_POLICY_ENGINE_ENABLED
+        value: true
+      
+      # IMAP Configuration (Mode 1)
+      - key: IMAP_CLIENT_TYPE
+        value: real  # Use real IMAP in production
+      
+      - key: IMAP_HOST
+        value: imap.gmail.com
+      
+      - key: IMAP_PORT
+        value: 993
+      
+      - key: IMAP_USER
+        sync: false  # Set in Render dashboard (secret)
+      
+      - key: IMAP_PASSWORD
+        sync: false  # Set in Render dashboard (secret - use app password)
+      
+      # Gmail API (Mode 2 - On-Demand)
+      - key: GMAIL_CLIENT_ID
+        sync: false  # Set in Render dashboard (secret)
+      
+      - key: GMAIL_CLIENT_SECRET
+        sync: false  # Set in Render dashboard (secret)
+      
+      # External APIs
+      - key: VIRUSTOTAL_API_KEY
+        sync: false  # Set in Render dashboard (secret)
+      
+      - key: GOOGLE_API_KEY
+        sync: false  # Set in Render dashboard (secret - Gemini)
+      
+      - key: ABUSEIPDB_API_KEY
+        sync: false  # Set in Render dashboard (secret)
+      
+      # SMTP (for email replies)
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      
+      - key: SMTP_PORT
+        value: 587
+      
+      - key: SMTP_USER
+        sync: false  # Set in Render dashboard (secret)
+      
+      - key: SMTP_PASSWORD
+        sync: false  # Set in Render dashboard (secret - use app password)
+      
+      # Circuit Breakers & Rate Limiting
+      - key: CIRCUIT_BREAKER_FAILURE_THRESHOLD
+        value: 5
+      
+      - key: CIRCUIT_BREAKER_TIMEOUT_SECONDS
+        value: 60
+      
+      - key: RATE_LIMIT_REQUESTS_PER_MINUTE
+        value: 100
+      
+      # CORS
+      - key: CORS_ORIGINS
+        value: https://phishnet-tau.vercel.app,http://localhost:3000
+      
+      # Secrets Manager (optional - use Render secrets for now)
+      - key: SECRETS_PROVIDER
+        value: env  # Use environment variables on Render
+    
+    # Auto-deploy from main branch
+    autoDeploy: true
+    
+    # Health check configuration
+    healthCheck:
+      path: /health
+      interval: 30s
+      timeout: 10s
+      unhealthyThreshold: 3
+      healthyThreshold: 2
+
+# Note: Set secret environment variables in Render Dashboard
+# Dashboard → Service → Environment → Add Environment Variable
+# 
+# Required Secrets:
+# - MONGODB_URI
+# - REDIS_URL
+# - IMAP_USER
+# - IMAP_PASSWORD (Gmail app password)
+# - GMAIL_CLIENT_ID
+# - GMAIL_CLIENT_SECRET
+# - VIRUSTOTAL_API_KEY
+# - GOOGLE_API_KEY (Gemini)
+# - ABUSEIPDB_API_KEY
+# - SMTP_USER
+# - SMTP_PASSWORD (Gmail app password)
