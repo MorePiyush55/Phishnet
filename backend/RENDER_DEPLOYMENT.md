@@ -216,27 +216,60 @@ NEXT_PUBLIC_API_URL=https://phishnet-backend.onrender.com
 | **Email Access** | IMAP inbox | Gmail API (readonly) |
 | **User Control** | Delegation | Per-email consent |
 
-**Critical**: These modes are **completely independent**. They do not share:
-- Email data
-- Analysis results
-- User workflows
-- Database tables
+**Critical**: Mode 1 and Mode 2 **share the same database and schema** but are **logically isolated** through:
+- Different triggers (automatic vs manual)
+- Different execution pipelines
+- Different data-retention policies
+- Different consent models
+
+**Storage Architecture**:
+- **Single database instance** (MongoDB)
+- **Two logical collections** with identical schemas:
+  - `email_analysis` - Mode 1 forwarded emails
+  - `ondemand_analysis` - Mode 2 on-demand checks
+- **Separation is policy-driven**, not infrastructure-driven
+
+**What Is Actually Separated**:
+
+| Layer | Separated? | How |
+|-------|-----------|-----|
+| Trigger | ✅ | IMAP worker vs user click |
+| Pipeline | ✅ | Bulk pipeline vs on-demand pipeline |
+| Storage lifecycle | ✅ | Persistent vs ephemeral |
+| Consent model | ✅ | Delegation vs explicit consent |
+| Collections | ✅ | Mode-tagged collections |
+| Schema | ❌ | Same schema (by design) |
+| Database engine | ❌ | Same MongoDB instance |
 
 ---
 
 ## Important Notes
 
-### Mode 1 + Mode 2 Independence
+### Mode 1 + Mode 2 Logical Separation
 
-Both modes run on the same backend instance but operate **completely independently**:
+**Mode 1 and Mode 2 share the same database and schema but are logically isolated at the execution, trigger, and data-lifecycle level.**
 
-- **Mode 1**: Polls `phishnet.ai@gmail.com` IMAP inbox every 60 seconds for forwarded emails
-- **Mode 2**: Responds to user-triggered API requests to check specific emails via Gmail API
+Both modes write to separate logical collections with identical schemas. The critical difference is *when* data is written, *why* it is written, and *how long* it is retained — not the database technology itself.
 
-**No Shared Data**: 
-- Mode 1 emails → Stored in `email_analysis` collection (forwarded emails)
-- Mode 2 emails → Stored in `ondemand_analysis` collection (only if user consents)
-- Different databases, different workflows, no connection
+**Architecture**:
+```
+Mode 1 → IMAP Pipeline → MongoDB (email_analysis collection, persistent)
+Mode 2 → On-Demand Pipeline → MongoDB (ondemand_analysis collection, ephemeral by default)
+```
+
+**Storage Behavior**:
+
+**Mode 1 (Bulk Forward)**:
+- Data is **written automatically** when emails arrive
+- Stored **by default** (persistent)
+- Retained according to retention policy
+- User opts out globally (stop forwarding)
+
+**Mode 2 (On-Demand)**:
+- Data is **written only after explicit user action**
+- Storage is **optional** (user must consent)
+- Default behavior is **immediate deletion**
+- User consents **per email**
 
 ### Render Free Tier Limitations
 

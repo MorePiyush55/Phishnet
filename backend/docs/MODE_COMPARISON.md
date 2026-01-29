@@ -2,8 +2,41 @@
 
 ## One-Line Summary
 
+**Mode 1 and Mode 2 share the same database and schema but are logically isolated through different triggers, pipelines, and data-retention policies.**
+
 - **Mode 1** → *"Scan everything unless I stop you."* (Bulk Forward)
 - **Mode 2** → *"Scan only when I explicitly ask."* (On-Demand)
+
+---
+
+## Database Architecture (Critical Understanding)
+
+### ✅ What Is Actually True
+
+**Single database instance with two logical collections (Mode 1 & Mode 2) sharing the same schema.**
+
+This is not a weakness. This is normal, cost-effective architecture.
+
+### Storage Reality
+
+| Component | Reality |
+|-----------|---------|
+| **Database Engine** | Single MongoDB instance |
+| **Collections** | Two separate collections (`email_analysis`, `ondemand_analysis`) |
+| **Schema** | Identical schema (by design) |
+| **Separation** | Logical (policy-driven), not physical |
+
+### What Is Separated
+
+| Layer | Separated? | How |
+|-------|-----------|-----|
+| **Trigger** | ✅ | IMAP worker vs user click |
+| **Pipeline** | ✅ | Bulk pipeline vs on-demand pipeline |
+| **Storage lifecycle** | ✅ | Persistent vs ephemeral |
+| **Consent model** | ✅ | Delegation vs explicit consent |
+| **Collections** | ✅ | Mode-tagged collections |
+| **Schema** | ❌ | Same schema (by design) |
+| **Database engine** | ❌ | Same MongoDB instance |
 
 ---
 
@@ -119,20 +152,20 @@ No auto-analysis.
 
 ## Common Misconceptions (WRONG)
 
+### ❌ "Mode 1 and Mode 2 use different databases"
+
+**NO.**
+
+- **Reality**: Single MongoDB instance
+- **Separation**: Two logical collections with identical schemas
+- **Isolation**: Policy-driven (triggers, pipelines, retention)
+
 ### ❌ "User forwarded the email, so it's same as on-demand"
 
 **NO.**
 
 - **Forwarding** = Permanent permission ("scan everything I forward")
 - **On-Demand** = Temporary permission ("scan this one email right now")
-
-### ❌ "Mode 1 and Mode 2 share the same database"
-
-**NO.**
-
-- Mode 1 → `email_analysis` collection
-- Mode 2 → `ondemand_analysis` collection
-- Completely separate
 
 ### ❌ "Mode 2 uses a Chrome extension"
 
@@ -169,32 +202,72 @@ No auto-analysis.
 
 ## Technical Architecture
 
-### Mode 1 Architecture
+### Correct Architecture Diagram
+
+```
+                    ┌─────────────────────────────┐
+                    │   MongoDB (Single Instance) │
+                    │                             │
+                    │  ┌────────────────────────┐ │
+                    │  │ email_analysis         │ │ ← Mode 1
+                    │  │ (persistent storage)   │ │
+                    │  └────────────────────────┘ │
+                    │                             │
+                    │  ┌────────────────────────┐ │
+                    │  │ ondemand_analysis      │ │ ← Mode 2
+                    │  │ (ephemeral by default) │ │
+                    │  └────────────────────────┘ │
+                    └─────────────────────────────┘
+                              ▲         ▲
+                              │         │
+                    ┌─────────┘         └─────────┐
+                    │                             │
+          ┌─────────────────┐         ┌─────────────────┐
+          │  Mode 1 Pipeline│         │  Mode 2 Pipeline│
+          │  (IMAP Worker)  │         │  (On-Demand API)│
+          └─────────────────┘         └─────────────────┘
+                    ▲                           ▲
+                    │                           │
+          ┌─────────────────┐         ┌─────────────────┐
+          │ Forwarded Emails│         │  User Click     │
+          │ (Automatic)     │         │  (Manual)       │
+          └─────────────────┘         └─────────────────┘
+```
+
+**Key Points**:
+- ✅ **Logical separation** (different collections)
+- ✅ **Policy-driven lifecycle** (persistent vs ephemeral)
+- ✅ **Shared schema** (same data model)
+- ✅ **Single database** (cost-effective)
+
+### Mode 1 Flow
 
 ```
 User → Forwards Email → phishnet.ai@gmail.com
                               ↓
-                        IMAP Polling Worker (60s interval)
+                  IMAP Polling Worker (60s interval)
                               ↓
-                        Email Analysis Pipeline
+                  Email Analysis Pipeline
                               ↓
-                        Store in email_analysis DB
+                  MongoDB.email_analysis (persistent)
                               ↓
-                        Send Reply Email to User
+                  Send Reply Email to User
 ```
 
-### Mode 2 Architecture
+### Mode 2 Flow
 
 ```
 User → Dashboard UI → Click "Check Email"
                               ↓
-                        Gmail API (fetch message_id)
+                  Gmail API (fetch message_id)
                               ↓
-                        Email Analysis Pipeline
+                  Email Analysis Pipeline
                               ↓
-                        Show Result in Dashboard
+                  MongoDB.ondemand_analysis (ephemeral)
                               ↓
-                        Delete (unless user consents to storage)
+                  Show Result in Dashboard
+                              ↓
+                  Delete (unless user consents)
 ```
 
 ---
@@ -223,13 +296,19 @@ User → Dashboard UI → Click "Check Email"
 
 **You**: 
 
-> "PhishNet has two completely independent modes:
+> "PhishNet has two execution modes that share the same database but are logically isolated:
 > 
-> **Mode 1 is bulk forward mode** where users forward emails to our IMAP inbox. An IMAP polling worker automatically fetches and analyzes all forwarded emails every 60 seconds. The user delegates control — once they forward, AI handles everything automatically. Results are always stored.
+> **Mode 1 is bulk forward mode** where users forward emails to our IMAP inbox. An IMAP polling worker automatically fetches and analyzes all forwarded emails every 60 seconds. The user delegates control — once they forward, AI handles everything automatically. Results are stored persistently in the `email_analysis` collection.
 > 
-> **Mode 2 is on-demand mode** where users explicitly click 'Check This Email' in our dashboard. We use Gmail API to fetch only that specific email, analyze it, show the result, and delete it immediately unless the user consents to storage. The user has full control — AI does nothing unless explicitly asked.
+> **Mode 2 is on-demand mode** where users explicitly click 'Check This Email' in our dashboard. We use Gmail API to fetch only that specific email, analyze it, show the result, and delete it immediately unless the user consents to storage. Results go to the `ondemand_analysis` collection. The user has full control — AI does nothing unless explicitly asked.
 > 
-> They're separate systems with different databases, different triggers, and different privacy models. Mode 1 is for automation, Mode 2 is for user control."
+> Both modes use the same MongoDB instance and identical schemas, but they're separated through different triggers (automatic vs manual), different pipelines, and different data-retention policies. Mode 1 is persistent by default, Mode 2 is ephemeral by default. This gives us logical isolation without the cost of maintaining separate databases."
+
+**Interviewer**: "So they share the same database?"
+
+**You**:
+
+> "Yes, same MongoDB instance, but logically separated. Think of it as two execution paths over the same data model, governed by different triggers and consent rules. The separation happens at the control and lifecycle level, not the schema level. This is actually stronger from a privacy perspective because we can enforce different retention policies programmatically rather than relying on infrastructure separation."
 
 ---
 
@@ -240,11 +319,14 @@ User → Dashboard UI → Click "Check Email"
 | **Trigger** | Automatic (IMAP worker) | Manual (user click) |
 | **Email Access** | IMAP inbox | Gmail API |
 | **Scope** | All forwarded emails | Single selected email |
-| **Storage** | Always | Opt-in only |
+| **Storage** | Persistent (always) | Ephemeral (opt-in) |
 | **Privacy** | Medium | High |
 | **Control** | Delegation | Per-email consent |
 | **Use Case** | Enterprise/automation | Privacy-conscious users |
-| **Database** | `email_analysis` | `ondemand_analysis` |
+| **Collection** | `email_analysis` | `ondemand_analysis` |
+| **Database** | **Shared MongoDB** | **Shared MongoDB** |
+| **Schema** | **Identical** | **Identical** |
+| **Separation** | **Logical (policy-driven)** | **Logical (policy-driven)** |
 | **Reply** | Automatic email | Dashboard UI |
 
 ---
@@ -253,10 +335,12 @@ User → Dashboard UI → Click "Check Email"
 
 Remember this:
 
-- **Mode 1** = "I trust you to scan everything I forward"
-- **Mode 2** = "I'll tell you exactly what to scan, when"
+- **Mode 1** = "I trust you to scan everything I forward" (Delegation)
+- **Mode 2** = "I'll tell you exactly what to scan, when" (Consent)
 
 **Forwarding ≠ On-Demand**
 
-Forwarding is **delegation**.
-On-Demand is **consent**.
+**Forwarding is delegation. On-Demand is consent.**
+
+**Same database, different execution paths, different policies.**
+
