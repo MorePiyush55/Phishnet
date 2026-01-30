@@ -84,6 +84,35 @@ async def handle_gmail_oauth_callback(
                 email = user_info.get("email")
                 print(f"DEBUG: OAuth success for {email}")
                 
+                # Store the access token in MongoDB for later use
+                try:
+                    from motor.motor_asyncio import AsyncIOMotorClient
+                    mongodb_uri = os.getenv("MONGODB_URI")
+                    if mongodb_uri:
+                        mongo_client = AsyncIOMotorClient(mongodb_uri)
+                        db = mongo_client.phishnet
+                        
+                        # Update or insert user with Gmail tokens
+                        await db.users.update_one(
+                            {"email": email},
+                            {
+                                "$set": {
+                                    "email": email,
+                                    "gmail_access_token": access_token,
+                                    "gmail_refresh_token": tokens.get("refresh_token"),
+                                    "gmail_token_expires_in": tokens.get("expires_in"),
+                                    "gmail_scopes": scope.split(" ") if scope else [],
+                                    "oauth_connected_at": __import__("datetime").datetime.utcnow(),
+                                }
+                            },
+                            upsert=True
+                        )
+                        print(f"DEBUG: Stored Gmail token for {email} in MongoDB")
+                        mongo_client.close()
+                except Exception as store_err:
+                    print(f"DEBUG: Failed to store token in MongoDB: {store_err}")
+                    # Continue anyway - user can still login
+                
                 # SUCCESS: Redirect to dashboard
                 target = f"{frontend_url_base}/?oauth_success=true&gmail_email={email}"
                 return RedirectResponse(url=target, status_code=302)
