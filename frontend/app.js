@@ -110,15 +110,8 @@ function setupEventListeners() {
 function handleAuthClick(event) {
     event.preventDefault();
 
-    // Check if already authenticated
-    const token = localStorage.getItem(CONFIG.TOKEN_KEY);
-    if (token) {
-        // Redirect to dashboard
-        window.location.href = CONFIG.DASHBOARD_URL;
-        return;
-    }
-
-    // Start OAuth flow
+    // Always start fresh OAuth flow to allow account switching
+    // Users can click login to switch accounts
     initiateOAuth();
 }
 
@@ -127,6 +120,12 @@ function handleAuthClick(event) {
  */
 function initiateOAuth() {
     console.log('Initiating OAuth flow...');
+
+    // Clear any existing auth data to allow switching accounts
+    localStorage.removeItem(CONFIG.TOKEN_KEY);
+    localStorage.removeItem(CONFIG.USER_KEY);
+    localStorage.removeItem('gmail_access_token');
+    console.log('Cleared previous auth data for fresh login');
 
     // Store the current URL to return after authentication
     sessionStorage.setItem('phishnet_return_url', window.location.href);

@@ -87,6 +87,7 @@ async def google_oauth_redirect():
     state = secrets.token_urlsafe(32)
     
     # Build authorization URL
+    # Use 'select_account consent' to force account picker every time
     auth_url = "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode({
         "client_id": client_id,
         "redirect_uri": redirect_uri,
@@ -94,7 +95,7 @@ async def google_oauth_redirect():
         "scope": " ".join(scopes),
         "state": state,
         "access_type": "offline",
-        "prompt": "consent"
+        "prompt": "select_account consent"
     })
     
     return RedirectResponse(url=auth_url, status_code=302)
