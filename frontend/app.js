@@ -163,6 +163,8 @@ function handleOAuthCallback() {
         console.log("DEBUG: Params detected");
     }
 
+    const access_token_param = urlParams.get('access_token');
+    
     if (oauth_success === 'true' && gmail_email) {
         console.log('OAuth success detected:', gmail_email);
         // Alert removed for better UX
@@ -176,7 +178,14 @@ function handleOAuthCallback() {
         };
 
         localStorage.setItem(CONFIG.USER_KEY, JSON.stringify(user));
-        localStorage.setItem(CONFIG.TOKEN_KEY, 'simulated_access_token');
+        // Store the real access token if provided, otherwise use placeholder
+        if (access_token_param) {
+            localStorage.setItem(CONFIG.TOKEN_KEY, access_token_param);
+            localStorage.setItem('gmail_access_token', access_token_param);
+            console.log('Stored real Gmail access token');
+        } else {
+            localStorage.setItem(CONFIG.TOKEN_KEY, 'simulated_access_token');
+        }
 
         // Clean up URL
         window.history.replaceState({}, document.title, window.location.pathname);

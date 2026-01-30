@@ -5,7 +5,7 @@ Gmail On-Demand Check Routes
 Endpoints for privacy-first on-demand email checking via Gmail API.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Header
 from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
 from datetime import datetime
@@ -335,7 +335,8 @@ class InboxScanResponse(BaseModel):
 async def scan_inbox(
     user_email: str,
     limit: int = 50,
-    access_token: Optional[str] = None
+    access_token: Optional[str] = None,
+    authorization: Optional[str] = Header(None)
 ):
     """
     Scan user's Gmail inbox and analyze emails for phishing.
@@ -348,6 +349,7 @@ async def scan_inbox(
         user_email: The user's Gmail address
         limit: Maximum number of emails to fetch (default 50)
         access_token: Gmail OAuth access token (optional, will try stored token)
+        authorization: Authorization header with Bearer token
         
     Returns:
         List of emails with phishing analysis
@@ -358,21 +360,37 @@ async def scan_inbox(
     try:
         logger.info(f"Inbox scan requested for {user_email}, limit={limit}")
         
-        # Try to get access token from stored user data if not provided
+        # Try to get access token from various sources:
+        # 1. Query parameter
+        # 2. Authorization header (Bearer token)
+        # 3. Stored in database
         gmail_access_token = access_token
+        
+        if not gmail_access_token and authorization:
+            if authorization.startswith("Bearer "):
+                gmail_access_token = authorization[7:]
+                logger.info(f"Using token from Authorization header for {user_email}")
         
         if not gmail_access_token:
             try:
                 from motor.motor_asyncio import AsyncIOMotorClient
                 from app.config.settings import settings
                 
-                client = AsyncIOMotorClient(settings.MONGODB_URI)
+                mongodb_uri = settings.MONGODB_URI
+                # Handle potentially quoted URI from env
+                if mongodb_uri:
+                    mongodb_uri = mongodb_uri.strip().strip('"').strip("'")
+                    
+                client = AsyncIOMotorClient(mongodb_uri)
                 db = client.phishnet
                 
                 user_doc = await db.users.find_one({"email": user_email})
                 if user_doc:
                     gmail_access_token = user_doc.get("gmail_access_token")
                     logger.info(f"Found stored token for {user_email}")
+                else:
+                    logger.warning(f"No user document found for {user_email}")
+                client.close()
             except Exception as e:
                 logger.warning(f"Could not retrieve stored token: {e}")
         

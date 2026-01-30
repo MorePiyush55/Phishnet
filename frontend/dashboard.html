@@ -190,7 +190,9 @@
 
     async function initDashboard() {
       const userStr = localStorage.getItem(USER_KEY);
-      accessToken = localStorage.getItem('phishnet_access_token');
+      // Try both token keys (legacy and Gmail OAuth token)
+      accessToken = localStorage.getItem('phishnet_access_token') || localStorage.getItem('gmail_access_token');
+      console.log('Dashboard init - access token present:', !!accessToken);
 
       if (!userStr) {
         showNotConnected();

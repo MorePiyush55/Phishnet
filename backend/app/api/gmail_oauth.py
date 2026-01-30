@@ -88,7 +88,10 @@ async def handle_gmail_oauth_callback(
                 try:
                     from motor.motor_asyncio import AsyncIOMotorClient
                     mongodb_uri = os.getenv("MONGODB_URI")
+                    # Remove any surrounding quotes from the URI
                     if mongodb_uri:
+                        mongodb_uri = mongodb_uri.strip().strip('"').strip("'")
+                        print(f"DEBUG: MongoDB URI starts with: {mongodb_uri[:30]}...")
                         mongo_client = AsyncIOMotorClient(mongodb_uri)
                         db = mongo_client.phishnet
                         
@@ -111,10 +114,15 @@ async def handle_gmail_oauth_callback(
                         mongo_client.close()
                 except Exception as store_err:
                     print(f"DEBUG: Failed to store token in MongoDB: {store_err}")
+                    import traceback
+                    traceback.print_exc()
                     # Continue anyway - user can still login
                 
-                # SUCCESS: Redirect to dashboard
-                target = f"{frontend_url_base}/?oauth_success=true&gmail_email={email}"
+                # SUCCESS: Redirect to dashboard with access token
+                # Pass the token so frontend can use it directly
+                import urllib.parse
+                encoded_token = urllib.parse.quote(access_token, safe='')
+                target = f"{frontend_url_base}/?oauth_success=true&gmail_email={email}&access_token={encoded_token}"
                 return RedirectResponse(url=target, status_code=302)
             else:
                 print(f"DEBUG: User info failed: {user_response.text}")
