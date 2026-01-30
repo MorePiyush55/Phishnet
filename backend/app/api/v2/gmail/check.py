@@ -294,3 +294,280 @@ async def delete_check_result(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
+
+
+# ============================================================================
+# Inbox Scan Endpoint (Mode 2 - Dashboard Display)
+# ============================================================================
+
+class InboxScanRequest(BaseModel):
+    """Request to scan user's inbox."""
+    user_email: str = Field(..., description="User's Gmail address")
+    access_token: Optional[str] = Field(None, description="Gmail Access Token")
+    limit: int = Field(50, ge=1, le=100, description="Maximum emails to scan")
+
+
+class EmailWithAnalysis(BaseModel):
+    """Email with phishing analysis result."""
+    id: str
+    subject: str
+    sender: str
+    received_at: Optional[str] = None
+    snippet: str = ""
+    verdict: str = "UNKNOWN"
+    risk_level: str = "unknown"
+    threat_score: float = 0.0
+    confidence: float = 0.0
+    threat_indicators: list = []
+
+
+class InboxScanResponse(BaseModel):
+    """Response from inbox scan."""
+    success: bool
+    count: int = 0
+    emails: list = []
+    need_oauth: bool = False
+    oauth_url: Optional[str] = None
+    message: Optional[str] = None
+
+
+@router.get("/inbox/{user_email}", response_model=InboxScanResponse)
+async def scan_inbox(
+    user_email: str,
+    limit: int = 50,
+    access_token: Optional[str] = None
+):
+    """
+    Scan user's Gmail inbox and analyze emails for phishing.
+    
+    This is the main endpoint for Mode 2 dashboard display.
+    It fetches emails from the user's Gmail account using their OAuth token
+    and returns them with phishing analysis scores.
+    
+    Args:
+        user_email: The user's Gmail address
+        limit: Maximum number of emails to fetch (default 50)
+        access_token: Gmail OAuth access token (optional, will try stored token)
+        
+    Returns:
+        List of emails with phishing analysis
+    """
+    import httpx
+    import asyncio
+    
+    try:
+        logger.info(f"Inbox scan requested for {user_email}, limit={limit}")
+        
+        # Try to get access token from stored user data if not provided
+        gmail_access_token = access_token
+        
+        if not gmail_access_token:
+            try:
+                from motor.motor_asyncio import AsyncIOMotorClient
+                from app.config.settings import settings
+                
+                client = AsyncIOMotorClient(settings.MONGODB_URI)
+                db = client.phishnet
+                
+                user_doc = await db.users.find_one({"email": user_email})
+                if user_doc:
+                    gmail_access_token = user_doc.get("gmail_access_token")
+                    logger.info(f"Found stored token for {user_email}")
+            except Exception as e:
+                logger.warning(f"Could not retrieve stored token: {e}")
+        
+        if not gmail_access_token:
+            # User needs to authenticate
+            logger.info(f"No access token for {user_email}, OAuth required")
+            return InboxScanResponse(
+                success=False,
+                need_oauth=True,
+                oauth_url=f"/auth/google?prompt=consent",
+                message="Please connect your Gmail account first."
+            )
+        
+        # Fetch emails from Gmail API
+        headers = {
+            "Authorization": f"Bearer {gmail_access_token}",
+            "Content-Type": "application/json"
+        }
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            # Get list of messages
+            messages_url = "https://gmail.googleapis.com/gmail/v1/users/me/messages"
+            params = {"maxResults": min(limit, 100), "q": "in:inbox"}
+            
+            response = await client.get(messages_url, headers=headers, params=params)
+            
+            if response.status_code == 401:
+                logger.warning(f"Token expired for {user_email}")
+                return InboxScanResponse(
+                    success=False,
+                    need_oauth=True,
+                    oauth_url=f"/auth/google?prompt=consent",
+                    message="Session expired. Please reconnect your Gmail account."
+                )
+            
+            if response.status_code != 200:
+                logger.error(f"Gmail API error: {response.status_code} - {response.text}")
+                return InboxScanResponse(
+                    success=False,
+                    message=f"Gmail API error: {response.status_code}"
+                )
+            
+            messages_data = response.json()
+            messages = messages_data.get("messages", [])
+            
+            if not messages:
+                return InboxScanResponse(
+                    success=True,
+                    count=0,
+                    emails=[],
+                    message="No emails found in inbox."
+                )
+            
+            logger.info(f"Found {len(messages)} messages for {user_email}")
+            
+            # Fetch email details in parallel (batched)
+            emails_with_analysis = []
+            
+            async def fetch_and_analyze_email(message_id: str) -> Optional[Dict[str, Any]]:
+                """Fetch a single email and analyze it."""
+                try:
+                    msg_url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}"
+                    params = {"format": "metadata", "metadataHeaders": ["From", "Subject", "Date"]}
+                    
+                    msg_response = await client.get(msg_url, headers=headers, params=params)
+                    
+                    if msg_response.status_code != 200:
+                        return None
+                    
+                    msg_data = msg_response.json()
+                    
+                    # Extract headers
+                    headers_list = msg_data.get("payload", {}).get("headers", [])
+                    subject = next((h["value"] for h in headers_list if h["name"].lower() == "subject"), "No Subject")
+                    sender = next((h["value"] for h in headers_list if h["name"].lower() == "from"), "Unknown")
+                    date = next((h["value"] for h in headers_list if h["name"].lower() == "date"), None)
+                    snippet = msg_data.get("snippet", "")
+                    
+                    # Perform quick phishing analysis
+                    analysis = await analyze_email_for_phishing(sender, subject, snippet)
+                    
+                    return {
+                        "id": message_id,
+                        "subject": subject,
+                        "sender": sender,
+                        "received_at": date,
+                        "snippet": snippet[:200] if snippet else "",
+                        "verdict": analysis.get("verdict", "UNKNOWN"),
+                        "risk_level": analysis.get("risk_level", "unknown"),
+                        "threat_score": analysis.get("threat_score", 0.0),
+                        "confidence": analysis.get("confidence", 0.0),
+                        "threat_indicators": analysis.get("threat_indicators", [])
+                    }
+                except Exception as e:
+                    logger.error(f"Error processing email {message_id}: {e}")
+                    return None
+            
+            # Process emails in batches of 10
+            batch_size = 10
+            for i in range(0, min(len(messages), limit), batch_size):
+                batch = messages[i:i + batch_size]
+                tasks = [fetch_and_analyze_email(msg["id"]) for msg in batch]
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                for result in results:
+                    if result and not isinstance(result, Exception):
+                        emails_with_analysis.append(result)
+            
+            logger.info(f"Successfully analyzed {len(emails_with_analysis)} emails for {user_email}")
+            
+            return InboxScanResponse(
+                success=True,
+                count=len(emails_with_analysis),
+                emails=emails_with_analysis,
+                message=f"Analyzed {len(emails_with_analysis)} emails."
+            )
+            
+    except Exception as e:
+        logger.error(f"Inbox scan failed for {user_email}: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+
+async def analyze_email_for_phishing(sender: str, subject: str, snippet: str) -> Dict[str, Any]:
+    """
+    Perform quick phishing analysis on email metadata.
+    
+    Uses heuristics and pattern matching for fast analysis.
+    """
+    threat_indicators = []
+    threat_score = 0.0
+    
+    # Check sender patterns
+    sender_lower = sender.lower()
+    
+    # Suspicious sender patterns
+    if any(term in sender_lower for term in ["noreply", "no-reply", "donotreply"]):
+        threat_score += 0.1
+    
+    # Check for spoofed domains (homoglyphs)
+    suspicious_domains = ["paypa1", "amaz0n", "goog1e", "micr0soft", "app1e", "faceb00k", "netf1ix"]
+    if any(domain in sender_lower for domain in suspicious_domains):
+        threat_indicators.append("Suspicious sender domain (possible spoofing)")
+        threat_score += 0.4
+    
+    # Check subject patterns
+    subject_lower = subject.lower()
+    
+    urgency_keywords = ["urgent", "immediate", "action required", "suspended", "verify now", 
+                       "account locked", "security alert", "unusual activity", "expire",
+                       "password reset", "confirm your", "update your payment"]
+    
+    for keyword in urgency_keywords:
+        if keyword in subject_lower:
+            threat_indicators.append(f"Urgency language: '{keyword}'")
+            threat_score += 0.15
+    
+    # Check for suspicious patterns in snippet
+    snippet_lower = snippet.lower()
+    
+    phishing_patterns = ["click here", "verify your", "confirm your identity", 
+                        "log in immediately", "enter your password", "update payment",
+                        "wire transfer", "bitcoin", "gift card", "lottery winner",
+                        "inheritance", "prince", "million dollars"]
+    
+    for pattern in phishing_patterns:
+        if pattern in snippet_lower:
+            threat_indicators.append(f"Phishing phrase detected: '{pattern}'")
+            threat_score += 0.2
+    
+    # Cap the score at 1.0
+    threat_score = min(threat_score, 1.0)
+    
+    # Determine verdict based on score
+    if threat_score >= 0.7:
+        verdict = "PHISHING"
+        risk_level = "high"
+    elif threat_score >= 0.4:
+        verdict = "SUSPICIOUS"
+        risk_level = "medium"
+    elif threat_score >= 0.2:
+        verdict = "CAUTION"
+        risk_level = "low"
+    else:
+        verdict = "SAFE"
+        risk_level = "safe"
+    
+    return {
+        "verdict": verdict,
+        "risk_level": risk_level,
+        "threat_score": threat_score,
+        "confidence": 0.75 if threat_indicators else 0.6,
+        "threat_indicators": threat_indicators[:5]  # Limit indicators
+    }

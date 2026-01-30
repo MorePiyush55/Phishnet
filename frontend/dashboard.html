@@ -263,7 +263,8 @@
           headers['Authorization'] = `Bearer ${accessToken}`;
         }
 
-        const response = await fetch(`${API_BASE}/api/v2/email-forward/history/${encodeURIComponent(userEmail)}?limit=50`, {
+        // Mode 2: Scan user's own Gmail inbox via OAuth
+        const response = await fetch(`${API_BASE}/api/v2/gmail/check/inbox/${encodeURIComponent(userEmail)}?limit=50`, {
           headers
         });
 
@@ -273,9 +274,12 @@
 
         const data = await response.json();
         
-        if (data.success && data.history) {
-          displayEmailHistory(data.history);
-          updateStats(data.history);
+        if (data.success && data.emails) {
+          displayEmailHistory(data.emails);
+          updateStats(data.emails);
+        } else if (data.need_oauth) {
+          // User needs to authenticate with Gmail
+          showOAuthRequired(data.oauth_url);
         } else {
           displayEmailHistory([]);
           updateStats([]);
@@ -283,11 +287,26 @@
 
       } catch (error) {
         console.error("Failed to fetch email history:", error);
-        // Try alternative endpoint
+        // Try alternative endpoint (Mode 1 forwarded emails fallback)
         await tryAlternativeEndpoint();
       } finally {
         document.getElementById('loading-indicator').classList.add('hidden');
       }
+    }
+
+    function showOAuthRequired(oauthUrl) {
+      const emailList = document.getElementById('email-list');
+      document.getElementById('loading-state').classList.add('hidden');
+      emailList.innerHTML = `
+        <div class="p-8 text-center">
+          <span class="material-symbols-outlined text-4xl mb-4 text-primary">lock_open</span>
+          <h3 class="text-lg font-bold mb-2">Connect Your Gmail</h3>
+          <p class="text-slate-400 mb-4">To scan your inbox for phishing threats, please connect your Gmail account.</p>
+          <a href="${API_BASE}${oauthUrl}" class="inline-block bg-primary hover:bg-primary/80 text-background-dark px-6 py-3 rounded-lg font-bold transition-all">
+            Connect Gmail
+          </a>
+        </div>
+      `;
     }
 
     async function tryAlternativeEndpoint() {
@@ -300,14 +319,14 @@
           headers['Authorization'] = `Bearer ${accessToken}`;
         }
 
-        // Try on-demand history endpoint
-        const response = await fetch(`${API_BASE}/api/v2/on-demand/history?limit=50`, {
+        // Try Mode 1 forwarded email history as fallback
+        const response = await fetch(`${API_BASE}/api/v2/email-forward/history/${encodeURIComponent(userEmail)}?limit=50`, {
           headers
         });
 
         if (response.ok) {
           const data = await response.json();
-          if (data.history) {
+          if (data.history && data.history.length > 0) {
             displayEmailHistory(data.history);
             updateStats(data.history);
             return;

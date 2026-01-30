@@ -1,4 +1,4 @@
-# IMAP Email Integration - Quick Start Guide
+IMAP Email Integration - Quick Start Guide
 
 ## 🚀 What's New
 
