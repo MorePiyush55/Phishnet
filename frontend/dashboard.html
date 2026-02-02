@@ -508,11 +508,26 @@
       
       document.getElementById('preview-score').textContent = score;
 
-      // Update body - preserve line breaks and format nicely
-      const formattedBody = escapeHtml(body)
-        .replace(/\n/g, '<br>')
-        .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" class="text-primary hover:underline" target="_blank" rel="noopener">$1</a>');
-      document.getElementById('preview-body').innerHTML = formattedBody;
+      // Format the email body for display
+      // Clean any remaining HTML artifacts and format nicely
+      let cleanBody = body;
+      
+      // Check if body still contains HTML (shouldn't after backend fix, but safety check)
+      if (cleanBody.includes('<!DOCTYPE') || cleanBody.includes('<html') || cleanBody.includes('<head')) {
+        // Use snippet instead if body is still HTML
+        cleanBody = email.snippet || 'Email content not available in text format.';
+      }
+      
+      // Escape HTML for safe display
+      cleanBody = escapeHtml(cleanBody);
+      
+      // Format for display
+      const formattedBody = cleanBody
+        .replace(/\n\n/g, '</p><p class="mb-3">')  // Paragraphs
+        .replace(/\n/g, '<br>')  // Line breaks
+        .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" class="text-primary hover:underline" target="_blank" rel="noopener">$1</a>');  // Links
+      
+      document.getElementById('preview-body').innerHTML = `<p class="mb-3">${formattedBody}</p>`;
     }
 
     function updateStats(emails) {

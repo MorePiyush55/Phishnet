@@ -300,54 +300,130 @@ async def delete_check_result(
 # Helper function to extract email body from Gmail API response
 # ============================================================================
 
+def clean_html_to_text(html: str) -> str:
+    """
+    Convert HTML email to clean readable text like Gmail/Outlook displays.
+    Properly handles complex HTML newsletters (Reddit, LinkedIn, etc.)
+    """
+    import re
+    from html import unescape
+    
+    if not html:
+        return ""
+    
+    text = html
+    
+    # Remove entire script and style blocks
+    text = re.sub(r'<script[^>]*>.*?</script>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'<style[^>]*>.*?</style>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'<head[^>]*>.*?</head>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    
+    # Remove HTML comments and conditional comments (<!--[if gte mso 9]> etc.)
+    text = re.sub(r'<!--.*?-->', '', text, flags=re.DOTALL)
+    text = re.sub(r'<!\[CDATA\[.*?\]\]>', '', text, flags=re.DOTALL)
+    
+    # Remove DOCTYPE and XML declarations
+    text = re.sub(r'<!DOCTYPE[^>]*>', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'<\?xml[^>]*\?>', '', text, flags=re.IGNORECASE)
+    
+    # Convert common block elements to newlines
+    text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'</(p|div|tr|li|h[1-6])>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'<(p|div|tr|h[1-6])[^>]*>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'<li[^>]*>', '\n• ', text, flags=re.IGNORECASE)
+    
+    # Extract link text and URLs for important links
+    def replace_link(match):
+        full_tag = match.group(0)
+        href_match = re.search(r'href=["\']([^"\']+)["\']', full_tag)
+        # Get the text between <a> and </a>
+        text_match = re.search(r'>([^<]*)</a>', full_tag, re.IGNORECASE)
+        if text_match:
+            link_text = text_match.group(1).strip()
+            if link_text:
+                return link_text + ' '
+        return ''
+    
+    text = re.sub(r'<a[^>]*>.*?</a>', replace_link, text, flags=re.DOTALL | re.IGNORECASE)
+    
+    # Remove all remaining HTML tags
+    text = re.sub(r'<[^>]+>', ' ', text)
+    
+    # Decode HTML entities
+    text = unescape(text)
+    
+    # Clean up whitespace
+    text = re.sub(r'[ \t]+', ' ', text)  # Multiple spaces to single
+    text = re.sub(r'\n\s*\n', '\n\n', text)  # Multiple newlines to double
+    text = re.sub(r'\n{3,}', '\n\n', text)  # Max 2 newlines
+    
+    # Remove leading/trailing whitespace from each line
+    lines = [line.strip() for line in text.split('\n')]
+    text = '\n'.join(line for line in lines if line)  # Remove empty lines
+    
+    return text.strip()
+
+
 def extract_email_body(payload: dict) -> str:
     """
-    Extract the plain text body from a Gmail message payload.
-    Handles multipart messages and base64 decoding.
+    Extract the readable text body from a Gmail message payload.
+    Handles multipart messages, base64 decoding, and HTML conversion.
+    Returns clean text suitable for display like Gmail/Outlook.
     """
     import base64
     
-    body = ""
+    plain_text = ""
+    html_text = ""
     
-    # Check for direct body data
+    def extract_from_part(part: dict):
+        """Extract text from a single part."""
+        nonlocal plain_text, html_text
+        
+        mime_type = part.get("mimeType", "")
+        body_data = part.get("body", {}).get("data", "")
+        
+        if body_data:
+            try:
+                decoded = base64.urlsafe_b64decode(body_data).decode("utf-8", errors="ignore")
+                
+                if mime_type == "text/plain" and not plain_text:
+                    plain_text = decoded
+                elif mime_type == "text/html" and not html_text:
+                    html_text = decoded
+            except Exception:
+                pass
+        
+        # Recursively check nested parts
+        if "parts" in part:
+            for nested_part in part["parts"]:
+                extract_from_part(nested_part)
+    
+    # Check direct body first
     if "body" in payload and payload["body"].get("data"):
         try:
-            body = base64.urlsafe_b64decode(payload["body"]["data"]).decode("utf-8", errors="ignore")
+            decoded = base64.urlsafe_b64decode(payload["body"]["data"]).decode("utf-8", errors="ignore")
+            mime_type = payload.get("mimeType", "")
+            if "html" in mime_type.lower():
+                html_text = decoded
+            else:
+                plain_text = decoded
         except Exception:
             pass
     
-    # Check for multipart content
+    # Check multipart content
     if "parts" in payload:
         for part in payload["parts"]:
-            mime_type = part.get("mimeType", "")
-            
-            # Prefer plain text
-            if mime_type == "text/plain" and part.get("body", {}).get("data"):
-                try:
-                    body = base64.urlsafe_b64decode(part["body"]["data"]).decode("utf-8", errors="ignore")
-                    break
-                except Exception:
-                    pass
-            
-            # Fallback to HTML (strip tags)
-            if mime_type == "text/html" and not body and part.get("body", {}).get("data"):
-                try:
-                    html_body = base64.urlsafe_b64decode(part["body"]["data"]).decode("utf-8", errors="ignore")
-                    # Simple HTML tag stripping
-                    import re
-                    body = re.sub(r'<[^>]+>', ' ', html_body)
-                    body = re.sub(r'\s+', ' ', body).strip()
-                except Exception:
-                    pass
-            
-            # Recursively check nested parts
-            if "parts" in part:
-                nested_body = extract_email_body(part)
-                if nested_body:
-                    body = nested_body
-                    break
+            extract_from_part(part)
     
-    return body.strip()
+    # Prefer plain text if available, otherwise convert HTML
+    if plain_text and len(plain_text.strip()) > 50:
+        return plain_text.strip()
+    elif html_text:
+        return clean_html_to_text(html_text)
+    elif plain_text:
+        return plain_text.strip()
+    
+    return ""
 
 
 # ============================================================================
@@ -522,13 +598,20 @@ async def scan_inbox(
                     subject = next((h["value"] for h in headers_list if h["name"].lower() == "subject"), "No Subject")
                     sender = next((h["value"] for h in headers_list if h["name"].lower() == "from"), "Unknown")
                     date = next((h["value"] for h in headers_list if h["name"].lower() == "date"), None)
+                    
+                    # Gmail provides a clean text snippet - this is the best summary
                     snippet = msg_data.get("snippet", "")
                     
-                    # Extract body content
+                    # Extract and clean body content (handles HTML conversion)
                     body = extract_email_body(msg_data.get("payload", {}))
                     
-                    # Perform quick phishing analysis
-                    analysis = await analyze_email_for_phishing(sender, subject, body or snippet)
+                    # Use cleaned body, but fallback to snippet if body extraction failed
+                    # or if body still contains HTML artifacts
+                    display_body = body if body and not body.startswith('<!DOCTYPE') and '<html' not in body.lower()[:100] else snippet
+                    
+                    # Perform quick phishing analysis using available content
+                    analysis_text = display_body or snippet or subject
+                    analysis = await analyze_email_for_phishing(sender, subject, analysis_text)
                     
                     return {
                         "id": message_id,
@@ -536,7 +619,7 @@ async def scan_inbox(
                         "sender": sender,
                         "received_at": date,
                         "snippet": snippet[:200] if snippet else "",
-                        "body": body[:5000] if body else snippet,  # Limit body size
+                        "body": display_body[:5000] if display_body else snippet,  # Clean text for display
                         "verdict": analysis.get("verdict", "UNKNOWN"),
                         "risk_level": analysis.get("risk_level", "unknown"),
                         "threat_score": analysis.get("threat_score", 0.0),
