@@ -1,0 +1,24 @@
+{
+    "name": "phishnet-inbox-dependencies",
+    "description": "Required dependencies for PhishNet Inbox System",
+    "dependencies": {
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0",
+        "react-window": "^1.8.10",
+        "react-virtualized-auto-sizer": "^1.0.24",
+        "zustand": "^4.5.0",
+        "axios": "^1.6.5",
+        "dompurify": "^3.0.8",
+        "lucide-react": "^0.309.0"
+    },
+    "devDependencies": {
+        "@types/react": "^18.2.48",
+        "@types/react-dom": "^18.2.18",
+        "@types/react-window": "^1.8.8",
+        "@types/dompurify": "^3.0.5"
+    },
+    "scripts": {
+        "install-inbox-deps": "npm install react-window react-virtualized-auto-sizer zustand axios dompurify lucide-react",
+        "install-inbox-types": "npm install -D @types/react-window @types/dompurify"
+    }
+}

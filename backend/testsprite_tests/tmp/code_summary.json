@@ -1,0 +1,582 @@
+{
+  "tech_stack": [
+    "Python 3.13",
+    "FastAPI",
+    "React 18.3.1",
+    "TypeScript",
+    "Material-UI (MUI)",
+    "Vite",
+    "MongoDB",
+    "PostgreSQL",
+    "Redis",
+    "SQLAlchemy 2.0.35",
+    "Beanie ODM",
+    "JWT Authentication",
+    "OAuth 2.0",
+    "Google APIs",
+    "WebSockets",
+    "Celery",
+    "Docker",
+    "Render",
+    "Vercel"
+  ],
+  "features": [
+    {
+      "name": "Gmail OAuth Authentication",
+      "description": "Complete Gmail OAuth 2.0 flow with secure token management, Google API integration, and user authentication",
+      "files": [
+        "backend/app/api/gmail_oauth.py",
+        "backend/app/api/test_oauth.py",
+        "backend/app/services/gmail_oauth.py",
+        "frontend/src/contexts/AuthContext.tsx"
+      ],
+      "api_doc": {
+        "openapi": "3.0.0",
+        "info": {
+          "title": "Gmail OAuth API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/api/v1/auth/gmail/start": {
+            "post": {
+              "summary": "Initiate Gmail OAuth flow",
+              "responses": {
+                "200": {
+                  "description": "OAuth URL generated successfully",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "auth_url": {"type": "string"},
+                          "state": {"type": "string"}
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "/api/v1/auth/gmail/callback": {
+            "get": {
+              "summary": "Handle Gmail OAuth callback",
+              "parameters": [
+                {"name": "code", "in": "query", "required": true, "schema": {"type": "string"}},
+                {"name": "state", "in": "query", "required": true, "schema": {"type": "string"}}
+              ],
+              "responses": {
+                "200": {
+                  "description": "OAuth callback processed successfully"
+                }
+              }
+            }
+          },
+          "/api/v1/auth/gmail/status": {
+            "get": {
+              "summary": "Get Gmail OAuth connection status",
+              "responses": {
+                "200": {
+                  "description": "OAuth status retrieved",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "connected": {"type": "boolean"},
+                          "gmail_email": {"type": "string"},
+                          "scopes_granted": {"type": "array", "items": {"type": "string"}}
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Email Analysis & Phishing Detection",
+      "description": "Advanced phishing detection using ML models, threat intelligence, and rule-based analysis for Gmail emails",
+      "files": [
+        "backend/app/api/email_analysis.py",
+        "backend/app/api/gmail_simple.py",
+        "backend/app/services/email_processor.py",
+        "backend/app/analyzers/real_threat_analyzer.py",
+        "frontend/src/components/EmailAnalysis.tsx"
+      ],
+      "api_doc": {
+        "openapi": "3.0.0",
+        "info": {
+          "title": "Email Analysis API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/api/email-analysis/analyze": {
+            "post": {
+              "summary": "Analyze email for phishing threats",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "subject": {"type": "string"},
+                        "sender": {"type": "string"},
+                        "content": {"type": "string"},
+                        "headers": {"type": "object"}
+                      }
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "Email analysis completed",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "threat_score": {"type": "number"},
+                          "risk_level": {"type": "string"},
+                          "detections": {"type": "array"},
+                          "analysis_details": {"type": "object"}
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "/api/gmail-simple/analyze": {
+            "post": {
+              "summary": "Analyze user's Gmail emails for phishing",
+              "responses": {
+                "200": {
+                  "description": "Gmail emails analyzed successfully"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Analytics Dashboard",
+      "description": "Real-time security operations dashboard with threat visualization, metrics, and live monitoring",
+      "files": [
+        "frontend/src/components/SimpleDashboard.tsx",
+        "backend/app/api/analytics_dashboard.py",
+        "backend/app/services/analytics.py",
+        "frontend/src/components/analytics"
+      ],
+      "api_doc": {
+        "openapi": "3.0.0",
+        "info": {
+          "title": "Analytics Dashboard API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/api/v1/analytics/dashboard": {
+            "get": {
+              "summary": "Get dashboard analytics data",
+              "responses": {
+                "200": {
+                  "description": "Dashboard data retrieved",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "total_emails": {"type": "number"},
+                          "threats_detected": {"type": "number"},
+                          "threat_trends": {"type": "array"},
+                          "recent_detections": {"type": "array"}
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "/api/v1/analytics/metrics": {
+            "get": {
+              "summary": "Get system performance metrics",
+              "responses": {
+                "200": {
+                  "description": "Metrics data retrieved"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Link Analysis",
+      "description": "URL and link analysis for phishing detection, redirect chain tracking, and reputation scoring",
+      "files": [
+        "backend/app/api/v1/links.py",
+        "frontend/pages/LinkAnalysisPage.tsx",
+        "backend/app/services/link_analyzer.py"
+      ],
+      "api_doc": {
+        "openapi": "3.0.0",
+        "info": {
+          "title": "Link Analysis API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/api/v1/links/emails/{email_id}/links": {
+            "get": {
+              "summary": "Get links from a specific email",
+              "parameters": [
+                {"name": "email_id", "in": "path", "required": true, "schema": {"type": "integer"}}
+              ],
+              "responses": {
+                "200": {
+                  "description": "Email links retrieved"
+                }
+              }
+            }
+          },
+          "/api/v1/links/analyze": {
+            "post": {
+              "summary": "Analyze a specific URL for threats",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "url": {"type": "string"},
+                        "context": {"type": "string"}
+                      }
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "URL analysis completed"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "User Management & Authentication",
+      "description": "JWT-based user authentication, role management, and secure session handling",
+      "files": [
+        "backend/app/api/secure_auth.py",
+        "backend/app/models/user.py",
+        "backend/app/core/auth.py",
+        "frontend/src/contexts/AuthContext.tsx"
+      ],
+      "api_doc": {
+        "openapi": "3.0.0",
+        "info": {
+          "title": "Authentication API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/api/v1/auth/login": {
+            "post": {
+              "summary": "User login",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "email": {"type": "string"},
+                        "password": {"type": "string"}
+                      }
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "Login successful",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "access_token": {"type": "string"},
+                          "token_type": {"type": "string"},
+                          "user": {"type": "object"}
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "/api/v1/auth/me": {
+            "get": {
+              "summary": "Get current user information",
+              "security": [{"bearerAuth": []}],
+              "responses": {
+                "200": {
+                  "description": "User information retrieved"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Health Check & Monitoring",
+      "description": "System health monitoring, uptime checks, and service status endpoints",
+      "files": [
+        "backend/app/api/health.py",
+        "backend/app/observability/health.py"
+      ],
+      "api_doc": {
+        "openapi": "3.0.0",
+        "info": {
+          "title": "Health Check API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/health": {
+            "get": {
+              "summary": "Basic health check",
+              "responses": {
+                "200": {
+                  "description": "Service is healthy",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "status": {"type": "string"},
+                          "timestamp": {"type": "string"},
+                          "version": {"type": "string"}
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "/health/detailed": {
+            "get": {
+              "summary": "Detailed health check with dependencies",
+              "responses": {
+                "200": {
+                  "description": "Detailed health status"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Gmail Watch & Real-time Monitoring",
+      "description": "Real-time Gmail monitoring using Google Pub/Sub for instant phishing detection",
+      "files": [
+        "backend/app/api/gmail_oauth.py",
+        "backend/app/services/gmail_watch.py",
+        "backend/app/services/realtime_monitoring.py"
+      ],
+      "api_doc": {
+        "openapi": "3.0.0",
+        "info": {
+          "title": "Gmail Watch API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/api/v1/auth/gmail/watch/setup": {
+            "post": {
+              "summary": "Setup Gmail watch for real-time monitoring",
+              "responses": {
+                "200": {
+                  "description": "Gmail watch setup successful"
+                }
+              }
+            }
+          },
+          "/api/v1/auth/gmail/watch/stop": {
+            "post": {
+              "summary": "Stop Gmail watch monitoring",
+              "responses": {
+                "200": {
+                  "description": "Gmail watch stopped"
+                }
+              }
+            }
+          },
+          "/api/v1/auth/gmail/webhook/notifications": {
+            "post": {
+              "summary": "Handle Gmail Pub/Sub notifications",
+              "responses": {
+                "200": {
+                  "description": "Notification processed"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Production Data Management",
+      "description": "MongoDB-based production data persistence with audit logging and data retention policies",
+      "files": [
+        "backend/app/api/production_endpoints.py",
+        "backend/app/db/production_persistence.py",
+        "backend/app/repositories/production_repositories.py"
+      ],
+      "api_doc": {
+        "openapi": "3.0.0",
+        "info": {
+          "title": "Production Data API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/api/v1/production/users": {
+            "post": {
+              "summary": "Create production user",
+              "responses": {
+                "201": {
+                  "description": "User created successfully"
+                }
+              }
+            }
+          },
+          "/api/v1/production/emails/{user_id}/analyses": {
+            "get": {
+              "summary": "Get user email analyses",
+              "parameters": [
+                {"name": "user_id", "in": "path", "required": true, "schema": {"type": "string"}}
+              ],
+              "responses": {
+                "200": {
+                  "description": "Email analyses retrieved"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "File Upload & Analysis",
+      "description": "Email file upload functionality for .eml/.msg file analysis and phishing detection",
+      "files": [
+        "backend/app/api/email_analysis.py",
+        "backend/app/services/file_processor.py"
+      ],
+      "api_doc": {
+        "openapi": "3.0.0",
+        "info": {
+          "title": "File Analysis API",
+          "version": "1.0.0"
+        },
+        "paths": {
+          "/api/email-analysis/analyze-file": {
+            "post": {
+              "summary": "Analyze uploaded email file",
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "multipart/form-data": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "file": {"type": "string", "format": "binary"}
+                      }
+                    }
+                  }
+                }
+              },
+              "responses": {
+                "200": {
+                  "description": "File analysis completed"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Frontend Dashboard Application",
+      "description": "React-based responsive dashboard with Material-UI components, real-time updates, and comprehensive email security management",
+      "files": [
+        "frontend/src/App.tsx",
+        "frontend/src/components/SimpleDashboard.tsx",
+        "frontend/src/components/EmailAnalysis.tsx",
+        "frontend/src/components/AuthLandingPage.tsx",
+        "frontend/src/contexts/AuthContext.tsx"
+      ],
+      "api_doc": {
+        "openapi": "3.0.0",
+        "info": {
+          "title": "Frontend Application",
+          "version": "1.0.0",
+          "description": "React-based frontend dashboard application"
+        },
+        "paths": {
+          "/": {
+            "get": {
+              "summary": "Landing page with authentication",
+              "responses": {
+                "200": {
+                  "description": "Landing page served"
+                }
+              }
+            }
+          },
+          "/dashboard": {
+            "get": {
+              "summary": "Main security dashboard (protected)",
+              "responses": {
+                "200": {
+                  "description": "Dashboard served"
+                }
+              }
+            }
+          },
+          "/emails": {
+            "get": {
+              "summary": "Email analysis interface (protected)",
+              "responses": {
+                "200": {
+                  "description": "Email analysis page served"
+                }
+              }
+            }
+          },
+          "/link-analysis": {
+            "get": {
+              "summary": "Link analysis interface (protected)",
+              "responses": {
+                "200": {
+                  "description": "Link analysis page served"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
