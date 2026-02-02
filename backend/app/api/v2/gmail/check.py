@@ -297,6 +297,60 @@ async def delete_check_result(
 
 
 # ============================================================================
+# Helper function to extract email body from Gmail API response
+# ============================================================================
+
+def extract_email_body(payload: dict) -> str:
+    """
+    Extract the plain text body from a Gmail message payload.
+    Handles multipart messages and base64 decoding.
+    """
+    import base64
+    
+    body = ""
+    
+    # Check for direct body data
+    if "body" in payload and payload["body"].get("data"):
+        try:
+            body = base64.urlsafe_b64decode(payload["body"]["data"]).decode("utf-8", errors="ignore")
+        except Exception:
+            pass
+    
+    # Check for multipart content
+    if "parts" in payload:
+        for part in payload["parts"]:
+            mime_type = part.get("mimeType", "")
+            
+            # Prefer plain text
+            if mime_type == "text/plain" and part.get("body", {}).get("data"):
+                try:
+                    body = base64.urlsafe_b64decode(part["body"]["data"]).decode("utf-8", errors="ignore")
+                    break
+                except Exception:
+                    pass
+            
+            # Fallback to HTML (strip tags)
+            if mime_type == "text/html" and not body and part.get("body", {}).get("data"):
+                try:
+                    html_body = base64.urlsafe_b64decode(part["body"]["data"]).decode("utf-8", errors="ignore")
+                    # Simple HTML tag stripping
+                    import re
+                    body = re.sub(r'<[^>]+>', ' ', html_body)
+                    body = re.sub(r'\s+', ' ', body).strip()
+                except Exception:
+                    pass
+            
+            # Recursively check nested parts
+            if "parts" in part:
+                nested_body = extract_email_body(part)
+                if nested_body:
+                    body = nested_body
+                    break
+    
+    return body.strip()
+
+
+# ============================================================================
 # Inbox Scan Endpoint (Mode 2 - Dashboard Display)
 # ============================================================================
 
@@ -453,7 +507,8 @@ async def scan_inbox(
                 """Fetch a single email and analyze it."""
                 try:
                     msg_url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}"
-                    params = {"format": "metadata", "metadataHeaders": ["From", "Subject", "Date"]}
+                    # Fetch full message to get body content
+                    params = {"format": "full"}
                     
                     msg_response = await client.get(msg_url, headers=headers, params=params)
                     
@@ -469,8 +524,11 @@ async def scan_inbox(
                     date = next((h["value"] for h in headers_list if h["name"].lower() == "date"), None)
                     snippet = msg_data.get("snippet", "")
                     
+                    # Extract body content
+                    body = extract_email_body(msg_data.get("payload", {}))
+                    
                     # Perform quick phishing analysis
-                    analysis = await analyze_email_for_phishing(sender, subject, snippet)
+                    analysis = await analyze_email_for_phishing(sender, subject, body or snippet)
                     
                     return {
                         "id": message_id,
@@ -478,6 +536,7 @@ async def scan_inbox(
                         "sender": sender,
                         "received_at": date,
                         "snippet": snippet[:200] if snippet else "",
+                        "body": body[:5000] if body else snippet,  # Limit body size
                         "verdict": analysis.get("verdict", "UNKNOWN"),
                         "risk_level": analysis.get("risk_level", "unknown"),
                         "threat_score": analysis.get("threat_score", 0.0),

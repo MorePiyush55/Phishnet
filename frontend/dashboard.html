@@ -130,30 +130,83 @@
       </div>
     </div>
 
-    <!-- Email Analysis History -->
+    <!-- Email Inbox - Gmail/Outlook Style -->
     <div class="glass rounded-xl overflow-hidden">
-      <div class="p-6 border-b border-white/10 flex justify-between items-center">
-        <h2 class="font-display text-xl font-bold">Email Analysis History</h2>
+      <div class="p-4 border-b border-white/10 flex justify-between items-center">
+        <h2 class="font-display text-xl font-bold">Inbox</h2>
         <span id="loading-indicator" class="hidden">
           <div class="loading-spinner"></div>
         </span>
       </div>
       
-      <div id="email-list" class="divide-y divide-white/5">
-        <!-- Loading state -->
-        <div id="loading-state" class="p-8 text-center text-slate-400">
-          <div class="loading-spinner mx-auto mb-4"></div>
-          <p>Loading email analysis history...</p>
+      <!-- Two-pane layout like Gmail -->
+      <div class="flex" style="min-height: 500px;">
+        <!-- Email List (Left Pane) -->
+        <div id="email-list" class="w-2/5 border-r border-white/10 divide-y divide-white/5 overflow-y-auto" style="max-height: 600px;">
+          <!-- Loading state -->
+          <div id="loading-state" class="p-8 text-center text-slate-400">
+            <div class="loading-spinner mx-auto mb-4"></div>
+            <p>Loading emails...</p>
+          </div>
+          
+          <!-- Empty state (hidden by default) -->
+          <div id="empty-state" class="p-8 text-center text-slate-400 hidden">
+            <span class="material-symbols-outlined text-4xl mb-4 text-slate-600">inbox</span>
+            <p class="mb-2">No emails found</p>
+          </div>
+          
+          <!-- Email rows will be inserted here -->
         </div>
         
-        <!-- Empty state (hidden by default) -->
-        <div id="empty-state" class="p-8 text-center text-slate-400 hidden">
-          <span class="material-symbols-outlined text-4xl mb-4 text-slate-600">inbox</span>
-          <p class="mb-2">No emails analyzed yet</p>
-          <p class="text-sm">Forward suspicious emails to analyze@phishnet.ai to get started</p>
+        <!-- Email Preview (Right Pane) -->
+        <div id="email-preview" class="w-3/5 p-6 overflow-y-auto" style="max-height: 600px;">
+          <div id="preview-placeholder" class="h-full flex flex-col items-center justify-center text-slate-500">
+            <span class="material-symbols-outlined text-6xl mb-4">mail</span>
+            <p class="text-lg">Select an email to read</p>
+          </div>
+          <div id="preview-content" class="hidden">
+            <!-- Email header -->
+            <div class="mb-6 pb-4 border-b border-white/10">
+              <div class="flex items-start justify-between mb-4">
+                <h3 id="preview-subject" class="text-xl font-bold text-white"></h3>
+                <span id="preview-badge" class="px-3 py-1 rounded text-xs font-bold"></span>
+              </div>
+              <div class="flex items-center gap-4 text-sm text-slate-400">
+                <div class="flex items-center gap-2">
+                  <div class="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                    <span id="preview-avatar" class="text-primary font-bold"></span>
+                  </div>
+                  <div>
+                    <p id="preview-sender" class="text-white font-medium"></p>
+                    <p id="preview-sender-email" class="text-slate-500 text-xs"></p>
+                  </div>
+                </div>
+                <div class="ml-auto text-right">
+                  <p id="preview-date" class="text-slate-500"></p>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Threat Analysis Banner -->
+            <div id="preview-threat-banner" class="mb-4 p-4 rounded-lg">
+              <div class="flex items-center gap-3">
+                <span id="preview-threat-icon" class="material-symbols-outlined text-2xl"></span>
+                <div>
+                  <p id="preview-threat-title" class="font-bold"></p>
+                  <p id="preview-threat-desc" class="text-sm opacity-80"></p>
+                </div>
+                <div class="ml-auto text-right">
+                  <p class="text-2xl font-bold" id="preview-score"></p>
+                  <p class="text-xs opacity-70">Threat Score</p>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Email Body -->
+            <div id="preview-body" class="prose prose-invert max-w-none text-slate-300 leading-relaxed">
+            </div>
+          </div>
         </div>
-        
-        <!-- Email rows will be inserted here -->
       </div>
     </div>
 
@@ -182,6 +235,7 @@
     
     let userEmail = null;
     let accessToken = null;
+    let emailsData = []; // Store emails for preview access
 
     // Initialize
     document.addEventListener('DOMContentLoaded', () => {
@@ -353,50 +407,112 @@
       }
 
       document.getElementById('empty-state').classList.add('hidden');
+      emailsData = emails; // Store for preview access
 
-      const emailsHtml = emails.map(email => {
+      const emailsHtml = emails.map((email, index) => {
         const verdict = (email.risk_level || email.verdict || 'UNKNOWN').toUpperCase();
-        const score = email.threat_score !== undefined 
-          ? Math.round(email.threat_score * 100) 
-          : (email.score || 0);
         const sender = email.original_sender || email.sender || 'Unknown';
         const subject = email.original_subject || email.subject || 'No Subject';
         const date = formatDate(email.created_at || email.timestamp);
+        const snippet = (email.snippet || email.body || '').substring(0, 80);
         
-        const verdictClass = getVerdictClass(verdict);
         const verdictIcon = getVerdictIcon(verdict);
-        const verdictLabel = getVerdictLabel(verdict);
 
         return `
-          <div class="email-row p-4 flex items-center gap-4 cursor-pointer transition-colors">
-            <div class="flex-shrink-0">
-              <span class="material-symbols-outlined text-2xl ${getVerdictColor(verdict)}">${verdictIcon}</span>
-            </div>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 mb-1">
-                <span class="font-medium text-white truncate">${escapeHtml(subject)}</span>
+          <div class="email-row p-3 cursor-pointer transition-colors hover:bg-white/5" onclick="showEmailPreview(${index})" data-index="${index}">
+            <div class="flex items-center gap-3">
+              <span class="material-symbols-outlined text-lg ${getVerdictColor(verdict)}">${verdictIcon}</span>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center justify-between mb-1">
+                  <span class="font-medium text-white text-sm truncate">${escapeHtml(sender.split('<')[0].trim())}</span>
+                  <span class="text-xs text-slate-500 ml-2 flex-shrink-0">${date}</span>
+                </div>
+                <p class="text-sm text-white truncate font-medium">${escapeHtml(subject)}</p>
+                <p class="text-xs text-slate-500 truncate">${escapeHtml(snippet)}...</p>
               </div>
-              <div class="text-sm text-slate-400 truncate">
-                From: ${escapeHtml(sender)}
-              </div>
-            </div>
-            <div class="flex-shrink-0 text-right">
-              <div class="mb-1">
-                <span class="px-2 py-1 rounded text-xs font-bold border ${verdictClass}">
-                  ${verdictLabel}
-                </span>
-              </div>
-              <div class="text-xs text-slate-500">${date}</div>
-            </div>
-            <div class="flex-shrink-0 w-16 text-right">
-              <div class="text-lg font-bold ${getScoreColor(score)}">${score}</div>
-              <div class="text-xs text-slate-500">score</div>
             </div>
           </div>
         `;
       }).join('');
 
       emailList.innerHTML = emailsHtml;
+      
+      // Auto-select first email
+      if (emails.length > 0) {
+        showEmailPreview(0);
+      }
+    }
+
+    function showEmailPreview(index) {
+      const email = emailsData[index];
+      if (!email) return;
+
+      // Highlight selected email row
+      document.querySelectorAll('.email-row').forEach((row, i) => {
+        if (i === index) {
+          row.classList.add('bg-primary/10', 'border-l-2', 'border-primary');
+        } else {
+          row.classList.remove('bg-primary/10', 'border-l-2', 'border-primary');
+        }
+      });
+
+      // Show preview content
+      document.getElementById('preview-placeholder').classList.add('hidden');
+      document.getElementById('preview-content').classList.remove('hidden');
+
+      const verdict = (email.risk_level || email.verdict || 'UNKNOWN').toUpperCase();
+      const score = email.threat_score !== undefined 
+        ? Math.round(email.threat_score * 100) 
+        : (email.score || 0);
+      const sender = email.original_sender || email.sender || 'Unknown';
+      const senderName = sender.split('<')[0].trim() || sender.split('@')[0];
+      const senderEmail = sender.match(/<(.+)>/) ? sender.match(/<(.+)>/)[1] : sender;
+      const subject = email.original_subject || email.subject || 'No Subject';
+      const date = formatDate(email.created_at || email.timestamp);
+      const body = email.body || email.snippet || 'No content available';
+
+      // Update preview header
+      document.getElementById('preview-subject').textContent = subject;
+      document.getElementById('preview-sender').textContent = senderName;
+      document.getElementById('preview-sender-email').textContent = senderEmail;
+      document.getElementById('preview-avatar').textContent = senderName.charAt(0).toUpperCase();
+      document.getElementById('preview-date').textContent = date;
+
+      // Update threat badge
+      const badge = document.getElementById('preview-badge');
+      badge.textContent = getVerdictLabel(verdict);
+      badge.className = `px-3 py-1 rounded text-xs font-bold border ${getVerdictClass(verdict)}`;
+
+      // Update threat banner
+      const banner = document.getElementById('preview-threat-banner');
+      const threatIcon = document.getElementById('preview-threat-icon');
+      const threatTitle = document.getElementById('preview-threat-title');
+      const threatDesc = document.getElementById('preview-threat-desc');
+      
+      if (verdict === 'PHISHING') {
+        banner.className = 'mb-4 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400';
+        threatIcon.textContent = 'gpp_bad';
+        threatTitle.textContent = '⚠️ Phishing Detected';
+        threatDesc.textContent = 'This email appears to be a phishing attempt. Do not click any links.';
+      } else if (verdict === 'SUSPICIOUS') {
+        banner.className = 'mb-4 p-4 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400';
+        threatIcon.textContent = 'warning';
+        threatTitle.textContent = '⚡ Suspicious Content';
+        threatDesc.textContent = 'This email contains suspicious elements. Proceed with caution.';
+      } else {
+        banner.className = 'mb-4 p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400';
+        threatIcon.textContent = 'verified_user';
+        threatTitle.textContent = '✓ Safe Email';
+        threatDesc.textContent = 'No threats detected in this email.';
+      }
+      
+      document.getElementById('preview-score').textContent = score;
+
+      // Update body - preserve line breaks and format nicely
+      const formattedBody = escapeHtml(body)
+        .replace(/\n/g, '<br>')
+        .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" class="text-primary hover:underline" target="_blank" rel="noopener">$1</a>');
+      document.getElementById('preview-body').innerHTML = formattedBody;
     }
 
     function updateStats(emails) {
