@@ -4,13 +4,10 @@
 <head>
   <meta charset="utf-8" />
   <meta content="width=device-width, initial-scale=1.0" name="viewport" />
-  <title>PhishNet Dashboard</title>
+  <title>PhishNet - Secure Inbox</title>
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap"
-    rel="stylesheet" />
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
-    rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
 
   <script>
     tailwind.config = {
@@ -20,8 +17,9 @@
           colors: {
             "primary": "#00c7e6",
             "secondary": "#8026C0",
-            "background-light": "#f1f2f4",
-            "background-dark": "#050505",
+            "background-dark": "#0a0a0a",
+            "sidebar-dark": "#0f0f0f",
+            "card-dark": "#141414",
           },
           fontFamily: {
             "display": ["Space Grotesk", "sans-serif"],
@@ -32,637 +30,1041 @@
     }
   </script>
   <style>
-    body {
-      font-family: 'Inter', sans-serif;
-    }
-
+    body { font-family: 'Inter', sans-serif; }
+    
     .glass {
-      background: rgba(255, 255, 255, 0.03);
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    .verdict-phishing {
-      background: rgba(239, 68, 68, 0.1);
-      border-color: rgba(239, 68, 68, 0.3);
-      color: #ef4444;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.08);
     }
     
-    .verdict-suspicious {
-      background: rgba(245, 158, 11, 0.1);
-      border-color: rgba(245, 158, 11, 0.3);
-      color: #f59e0b;
-    }
+    /* Scrollbar styling */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
     
-    .verdict-safe {
-      background: rgba(16, 185, 129, 0.1);
-      border-color: rgba(16, 185, 129, 0.3);
-      color: #10b981;
-    }
-
-    .email-row:hover {
-      background: rgba(255, 255, 255, 0.05);
-    }
-
-    .loading-spinner {
-      border: 2px solid rgba(255, 255, 255, 0.1);
-      border-top-color: #00c7e6;
-      border-radius: 50%;
-      width: 20px;
-      height: 20px;
-      animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
+    /* Email row states */
+    .email-row { transition: all 0.15s ease; }
+    .email-row:hover { background: rgba(255, 255, 255, 0.03); }
+    .email-row.selected { background: rgba(0, 199, 230, 0.08); border-left: 3px solid #00c7e6; }
+    .email-row.unread { background: rgba(255, 255, 255, 0.02); }
+    .email-row.unread .email-subject { font-weight: 600; color: white; }
+    
+    /* Folder item states */
+    .folder-item { transition: all 0.15s ease; }
+    .folder-item:hover { background: rgba(255, 255, 255, 0.05); }
+    .folder-item.active { background: rgba(0, 199, 230, 0.1); color: #00c7e6; }
+    
+    /* Threat badges */
+    .badge-safe { background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981; }
+    .badge-suspicious { background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); color: #f59e0b; }
+    .badge-phishing { background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #ef4444; }
+    
+    /* Checkbox styling */
+    .email-checkbox { opacity: 0; transition: opacity 0.15s; }
+    .email-row:hover .email-checkbox, .email-checkbox:checked { opacity: 1; }
+    
+    /* Star styling */
+    .star-btn { color: #4b5563; transition: color 0.15s; }
+    .star-btn:hover { color: #fbbf24; }
+    .star-btn.starred { color: #fbbf24; }
+    
+    /* Loading spinner */
+    .spinner { border: 2px solid rgba(255,255,255,0.1); border-top-color: #00c7e6; border-radius: 50%; width: 24px; height: 24px; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    
+    /* Toast notification */
+    .toast { transform: translateY(100px); opacity: 0; transition: all 0.3s ease; }
+    .toast.show { transform: translateY(0); opacity: 1; }
   </style>
 </head>
 
-<body class="bg-background-dark text-white min-h-screen">
-  <!-- Nav -->
-  <nav class="border-b border-white/10 px-6 py-4 flex justify-between items-center">
-    <div class="flex items-center gap-2 text-primary">
+<body class="bg-background-dark text-white min-h-screen flex flex-col">
+  
+  <!-- Top Navigation Bar -->
+  <header class="h-14 border-b border-white/10 flex items-center px-4 gap-4 flex-shrink-0 bg-background-dark/80 backdrop-blur-sm sticky top-0 z-50">
+    <!-- Logo -->
+    <div class="flex items-center gap-2 text-primary w-56">
       <span class="material-symbols-outlined text-2xl">shield_lock</span>
-      <h2 class="font-display text-lg font-bold">PhishNet</h2>
+      <h1 class="font-display text-lg font-bold">PhishNet</h1>
     </div>
-    <div class="flex items-center gap-4">
-      <div id="status-badge"
-        class="bg-emerald-500/10 text-emerald-500 px-3 py-1 rounded-full text-xs font-bold border border-emerald-500/20 flex items-center gap-2">
-        <span class="relative flex h-2 w-2">
-          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
-          <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-        </span>
-        PROTECTION ACTIVE
+    
+    <!-- Search Bar -->
+    <div class="flex-1 max-w-2xl">
+      <div class="relative">
+        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xl">search</span>
+        <input type="text" id="search-input" placeholder="Search emails..." 
+          class="w-full bg-white/5 border border-white/10 rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-primary/50 focus:bg-white/10 transition-all"
+          onkeyup="handleSearch(event)">
+        <kbd class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500 bg-white/5 px-1.5 py-0.5 rounded hidden md:inline">/</kbd>
       </div>
-      <span id="user-email-nav" class="text-sm text-slate-300 font-medium hidden"></span>
-      <button onclick="refreshData()" class="text-sm text-primary hover:text-primary/80 flex items-center gap-1">
-        <span class="material-symbols-outlined text-base">refresh</span>
-        Refresh
+    </div>
+    
+    <!-- Right side actions -->
+    <div class="flex items-center gap-3">
+      <button onclick="refreshData()" class="p-2 hover:bg-white/5 rounded-full transition-colors" title="Refresh">
+        <span class="material-symbols-outlined text-slate-400 hover:text-white">refresh</span>
       </button>
-      <button onclick="logout()" class="text-sm text-slate-400 hover:text-white">Logout</button>
+      <button class="p-2 hover:bg-white/5 rounded-full transition-colors" title="Settings">
+        <span class="material-symbols-outlined text-slate-400 hover:text-white">settings</span>
+      </button>
+      <div class="h-6 w-px bg-white/10"></div>
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+          <span id="user-avatar" class="text-primary text-sm font-bold">?</span>
+        </div>
+        <span id="user-email-display" class="text-sm text-slate-300 hidden md:inline"></span>
+      </div>
+      <button onclick="logout()" class="text-sm text-slate-400 hover:text-white px-2">Logout</button>
     </div>
-  </nav>
+  </header>
 
-  <main class="max-w-7xl mx-auto px-6 py-8">
-    <div class="mb-8">
-      <h1 class="font-display text-3xl font-bold mb-2">Security Dashboard</h1>
-      <p class="text-slate-400" id="user-welcome">Welcome back</p>
-    </div>
-
-    <!-- Stats -->
-    <div class="grid md:grid-cols-4 gap-6 mb-8">
-      <div class="glass p-6 rounded-xl">
-        <p class="text-sm text-slate-400 mb-1">Inbox Status</p>
-        <p id="inbox-status" class="text-xl font-bold text-emerald-500">Loading...</p>
-      </div>
-      <div class="glass p-6 rounded-xl">
-        <p class="text-sm text-slate-400 mb-1">Emails Scanned</p>
-        <p id="emails-scanned" class="text-xl font-bold">-</p>
-      </div>
-      <div class="glass p-6 rounded-xl">
-        <p class="text-sm text-slate-400 mb-1">Threats Detected</p>
-        <p id="threats-detected" class="text-xl font-bold text-red-400">-</p>
-      </div>
-      <div class="glass p-6 rounded-xl">
-        <p class="text-sm text-slate-400 mb-1">Last Scan</p>
-        <p id="last-scan" class="text-xl font-bold">-</p>
-      </div>
-    </div>
-
-    <!-- Email Inbox - Gmail/Outlook Style -->
-    <div class="glass rounded-xl overflow-hidden">
-      <div class="p-4 border-b border-white/10 flex justify-between items-center">
-        <h2 class="font-display text-xl font-bold">Inbox</h2>
-        <span id="loading-indicator" class="hidden">
-          <div class="loading-spinner"></div>
-        </span>
+  <!-- Main Content Area -->
+  <div class="flex flex-1 overflow-hidden">
+    
+    <!-- Left Sidebar -->
+    <aside class="w-56 border-r border-white/10 flex flex-col flex-shrink-0 bg-sidebar-dark">
+      <!-- Compose Button -->
+      <div class="p-4">
+        <button onclick="openCompose()" class="w-full bg-primary hover:bg-primary/90 text-background-dark font-semibold py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-primary/20">
+          <span class="material-symbols-outlined text-xl">edit</span>
+          Compose
+        </button>
       </div>
       
-      <!-- Two-pane layout like Gmail -->
-      <div class="flex" style="min-height: 500px;">
-        <!-- Email List (Left Pane) -->
-        <div id="email-list" class="w-2/5 border-r border-white/10 divide-y divide-white/5 overflow-y-auto" style="max-height: 600px;">
-          <!-- Loading state -->
-          <div id="loading-state" class="p-8 text-center text-slate-400">
-            <div class="loading-spinner mx-auto mb-4"></div>
+      <!-- Folder Navigation -->
+      <nav class="flex-1 px-2 overflow-y-auto">
+        <div class="space-y-1">
+          <button onclick="changeFolder('inbox')" class="folder-item active w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left" data-folder="inbox">
+            <span class="material-symbols-outlined text-xl">inbox</span>
+            <span class="flex-1">Inbox</span>
+            <span id="inbox-count" class="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full font-medium">0</span>
+          </button>
+          <button onclick="changeFolder('starred')" class="folder-item w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-slate-400" data-folder="starred">
+            <span class="material-symbols-outlined text-xl">star</span>
+            <span class="flex-1">Starred</span>
+          </button>
+          <button onclick="changeFolder('sent')" class="folder-item w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-slate-400" data-folder="sent">
+            <span class="material-symbols-outlined text-xl">send</span>
+            <span class="flex-1">Sent</span>
+          </button>
+          <button onclick="changeFolder('drafts')" class="folder-item w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-slate-400" data-folder="drafts">
+            <span class="material-symbols-outlined text-xl">draft</span>
+            <span class="flex-1">Drafts</span>
+            <span id="drafts-count" class="text-xs text-slate-500 hidden">0</span>
+          </button>
+          <button onclick="changeFolder('spam')" class="folder-item w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-slate-400" data-folder="spam">
+            <span class="material-symbols-outlined text-xl">report</span>
+            <span class="flex-1">Spam</span>
+            <span id="spam-count" class="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full font-medium hidden">0</span>
+          </button>
+          <button onclick="changeFolder('trash')" class="folder-item w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-slate-400" data-folder="trash">
+            <span class="material-symbols-outlined text-xl">delete</span>
+            <span class="flex-1">Trash</span>
+          </button>
+        </div>
+        
+        <!-- Labels Section -->
+        <div class="mt-6 pt-4 border-t border-white/10">
+          <div class="flex items-center justify-between px-3 mb-2">
+            <span class="text-xs font-medium text-slate-500 uppercase tracking-wider">Labels</span>
+            <button class="text-slate-500 hover:text-white">
+              <span class="material-symbols-outlined text-lg">add</span>
+            </button>
+          </div>
+          <div id="labels-list" class="space-y-1">
+            <!-- Labels will be inserted here -->
+          </div>
+        </div>
+      </nav>
+      
+      <!-- Storage/Stats Footer -->
+      <div class="p-4 border-t border-white/10">
+        <div class="flex items-center justify-between text-xs text-slate-500 mb-2">
+          <span>Threat Protection</span>
+          <span class="text-emerald-400">Active</span>
+        </div>
+        <div class="text-xs text-slate-500">
+          <span id="total-scanned">0</span> emails scanned
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Email Area -->
+    <main class="flex-1 flex flex-col overflow-hidden">
+      
+      <!-- Action Toolbar -->
+      <div class="h-12 border-b border-white/10 flex items-center px-4 gap-2 flex-shrink-0 bg-card-dark">
+        <!-- Select All Checkbox -->
+        <input type="checkbox" id="select-all" class="w-4 h-4 rounded border-slate-600 bg-transparent text-primary focus:ring-primary/50 cursor-pointer" onchange="toggleSelectAll()">
+        
+        <div class="h-5 w-px bg-white/10 mx-1"></div>
+        
+        <!-- Bulk Actions (shown when emails selected) -->
+        <div id="bulk-actions" class="hidden flex items-center gap-1">
+          <button onclick="bulkArchive()" class="p-2 hover:bg-white/5 rounded transition-colors" title="Archive">
+            <span class="material-symbols-outlined text-slate-400 text-xl">archive</span>
+          </button>
+          <button onclick="bulkDelete()" class="p-2 hover:bg-white/5 rounded transition-colors" title="Delete">
+            <span class="material-symbols-outlined text-slate-400 text-xl">delete</span>
+          </button>
+          <button onclick="bulkMarkRead()" class="p-2 hover:bg-white/5 rounded transition-colors" title="Mark as read">
+            <span class="material-symbols-outlined text-slate-400 text-xl">mark_email_read</span>
+          </button>
+          <button onclick="bulkMarkUnread()" class="p-2 hover:bg-white/5 rounded transition-colors" title="Mark as unread">
+            <span class="material-symbols-outlined text-slate-400 text-xl">mark_email_unread</span>
+          </button>
+          <button onclick="bulkSpam()" class="p-2 hover:bg-white/5 rounded transition-colors" title="Report spam">
+            <span class="material-symbols-outlined text-slate-400 text-xl">report</span>
+          </button>
+        </div>
+        
+        <!-- Default Actions (shown when no emails selected) -->
+        <div id="default-actions" class="flex items-center gap-1">
+          <button onclick="refreshData()" class="p-2 hover:bg-white/5 rounded transition-colors" title="Refresh">
+            <span class="material-symbols-outlined text-slate-400 text-xl">refresh</span>
+          </button>
+          <button class="p-2 hover:bg-white/5 rounded transition-colors" title="More">
+            <span class="material-symbols-outlined text-slate-400 text-xl">more_vert</span>
+          </button>
+        </div>
+        
+        <div class="flex-1"></div>
+        
+        <!-- Pagination Info -->
+        <div class="text-sm text-slate-500">
+          <span id="pagination-info">Loading...</span>
+        </div>
+        
+        <!-- Pagination Controls -->
+        <div class="flex items-center gap-1 ml-2">
+          <button onclick="prevPage()" class="p-1 hover:bg-white/5 rounded transition-colors disabled:opacity-30" id="prev-btn" disabled>
+            <span class="material-symbols-outlined text-slate-400">chevron_left</span>
+          </button>
+          <button onclick="nextPage()" class="p-1 hover:bg-white/5 rounded transition-colors disabled:opacity-30" id="next-btn" disabled>
+            <span class="material-symbols-outlined text-slate-400">chevron_right</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Email List + Preview Split View -->
+      <div class="flex-1 flex overflow-hidden">
+        
+        <!-- Email List Panel -->
+        <div id="email-list-panel" class="w-2/5 border-r border-white/10 overflow-y-auto bg-background-dark">
+          
+          <!-- Loading State -->
+          <div id="loading-state" class="flex flex-col items-center justify-center h-full text-slate-500">
+            <div class="spinner mb-4"></div>
             <p>Loading emails...</p>
           </div>
           
-          <!-- Empty state (hidden by default) -->
-          <div id="empty-state" class="p-8 text-center text-slate-400 hidden">
-            <span class="material-symbols-outlined text-4xl mb-4 text-slate-600">inbox</span>
-            <p class="mb-2">No emails found</p>
+          <!-- Empty State -->
+          <div id="empty-state" class="hidden flex flex-col items-center justify-center h-full text-slate-500 p-8">
+            <span class="material-symbols-outlined text-6xl mb-4 text-slate-600">inbox</span>
+            <p class="text-lg mb-2">No emails here</p>
+            <p class="text-sm text-slate-600">Your inbox is empty or filtered</p>
           </div>
           
-          <!-- Email rows will be inserted here -->
+          <!-- Email List Container -->
+          <div id="email-list" class="divide-y divide-white/5">
+            <!-- Email rows inserted by JS -->
+          </div>
+          
+          <!-- Load More -->
+          <div id="load-more" class="hidden p-4 text-center">
+            <button onclick="loadMoreEmails()" class="text-primary hover:text-primary/80 text-sm">
+              Load more emails...
+            </button>
+          </div>
         </div>
         
-        <!-- Email Preview (Right Pane) -->
-        <div id="email-preview" class="w-3/5 p-6 overflow-y-auto" style="max-height: 600px;">
-          <div id="preview-placeholder" class="h-full flex flex-col items-center justify-center text-slate-500">
-            <span class="material-symbols-outlined text-6xl mb-4">mail</span>
-            <p class="text-lg">Select an email to read</p>
+        <!-- Email Preview Panel -->
+        <div id="email-preview-panel" class="flex-1 overflow-y-auto bg-card-dark">
+          
+          <!-- No Email Selected State -->
+          <div id="preview-empty" class="flex flex-col items-center justify-center h-full text-slate-500">
+            <span class="material-symbols-outlined text-8xl mb-4 text-slate-700">mail</span>
+            <p class="text-xl mb-2">Select an email to read</p>
+            <p class="text-sm text-slate-600">Click on any email from the list</p>
           </div>
+          
+          <!-- Email Preview Content -->
           <div id="preview-content" class="hidden">
-            <!-- Email header -->
-            <div class="mb-6 pb-4 border-b border-white/10">
-              <div class="flex items-start justify-between mb-4">
-                <h3 id="preview-subject" class="text-xl font-bold text-white"></h3>
-                <span id="preview-badge" class="px-3 py-1 rounded text-xs font-bold"></span>
-              </div>
-              <div class="flex items-center gap-4 text-sm text-slate-400">
+            
+            <!-- Preview Header -->
+            <div class="sticky top-0 bg-card-dark/95 backdrop-blur-sm border-b border-white/10 p-4 z-10">
+              <div class="flex items-start justify-between gap-4">
+                <h2 id="preview-subject" class="text-xl font-semibold text-white flex-1"></h2>
                 <div class="flex items-center gap-2">
-                  <div class="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                    <span id="preview-avatar" class="text-primary font-bold"></span>
-                  </div>
-                  <div>
-                    <p id="preview-sender" class="text-white font-medium"></p>
-                    <p id="preview-sender-email" class="text-slate-500 text-xs"></p>
-                  </div>
-                </div>
-                <div class="ml-auto text-right">
-                  <p id="preview-date" class="text-slate-500"></p>
+                  <span id="preview-threat-badge" class="px-3 py-1 rounded-full text-xs font-bold"></span>
+                  <button onclick="toggleStar()" class="star-btn p-1" id="preview-star-btn">
+                    <span class="material-symbols-outlined">star</span>
+                  </button>
                 </div>
               </div>
             </div>
             
-            <!-- Threat Analysis Banner -->
-            <div id="preview-threat-banner" class="mb-4 p-4 rounded-lg">
-              <div class="flex items-center gap-3">
-                <span id="preview-threat-icon" class="material-symbols-outlined text-2xl"></span>
-                <div>
-                  <p id="preview-threat-title" class="font-bold"></p>
-                  <p id="preview-threat-desc" class="text-sm opacity-80"></p>
+            <!-- Preview Body -->
+            <div class="p-6">
+              
+              <!-- Sender Info -->
+              <div class="flex items-start gap-4 mb-6">
+                <div class="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+                  <span id="preview-avatar" class="text-primary text-lg font-bold"></span>
                 </div>
-                <div class="ml-auto text-right">
-                  <p class="text-2xl font-bold" id="preview-score"></p>
-                  <p class="text-xs opacity-70">Threat Score</p>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span id="preview-sender-name" class="font-semibold text-white"></span>
+                    <span id="preview-sender-email" class="text-sm text-slate-500"></span>
+                  </div>
+                  <div class="text-sm text-slate-500 mt-1">
+                    to <span id="preview-recipients">me</span>
+                  </div>
                 </div>
+                <div class="text-sm text-slate-500 flex-shrink-0">
+                  <span id="preview-date"></span>
+                </div>
+              </div>
+              
+              <!-- Threat Analysis Banner -->
+              <div id="preview-threat-banner" class="mb-6 p-4 rounded-xl border">
+                <div class="flex items-center gap-4">
+                  <span id="threat-icon" class="material-symbols-outlined text-3xl"></span>
+                  <div class="flex-1">
+                    <p id="threat-title" class="font-semibold"></p>
+                    <p id="threat-description" class="text-sm opacity-80"></p>
+                  </div>
+                  <div class="text-right">
+                    <p id="threat-score" class="text-2xl font-bold"></p>
+                    <p class="text-xs opacity-70">Threat Score</p>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Attachments -->
+              <div id="preview-attachments" class="hidden mb-6">
+                <div class="flex items-center gap-2 mb-3">
+                  <span class="material-symbols-outlined text-slate-400">attach_file</span>
+                  <span class="text-sm text-slate-400">Attachments</span>
+                </div>
+                <div id="attachments-list" class="flex flex-wrap gap-2">
+                  <!-- Attachment items -->
+                </div>
+              </div>
+              
+              <!-- Email Body -->
+              <div id="preview-body" class="prose prose-invert max-w-none text-slate-300 leading-relaxed">
+                <!-- Email content -->
               </div>
             </div>
             
-            <!-- Email Body -->
-            <div id="preview-body" class="prose prose-invert max-w-none text-slate-300 leading-relaxed">
+            <!-- Preview Actions Footer -->
+            <div class="sticky bottom-0 bg-card-dark/95 backdrop-blur-sm border-t border-white/10 p-4">
+              <div class="flex items-center gap-2">
+                <button onclick="replyEmail()" class="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg transition-colors">
+                  <span class="material-symbols-outlined text-lg">reply</span>
+                  Reply
+                </button>
+                <button onclick="replyAllEmail()" class="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg transition-colors">
+                  <span class="material-symbols-outlined text-lg">reply_all</span>
+                  Reply All
+                </button>
+                <button onclick="forwardEmail()" class="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg transition-colors">
+                  <span class="material-symbols-outlined text-lg">forward</span>
+                  Forward
+                </button>
+                <div class="flex-1"></div>
+                <button onclick="deleteEmail()" class="p-2 hover:bg-white/5 rounded-lg transition-colors text-slate-400 hover:text-red-400">
+                  <span class="material-symbols-outlined">delete</span>
+                </button>
+                <button onclick="archiveEmail()" class="p-2 hover:bg-white/5 rounded-lg transition-colors text-slate-400">
+                  <span class="material-symbols-outlined">archive</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </main>
+  </div>
 
-    <!-- Verdict Legend -->
-    <div class="mt-6 flex justify-center gap-6 text-sm">
-      <div class="flex items-center gap-2">
-        <span class="w-3 h-3 rounded-full bg-red-500"></span>
-        <span class="text-slate-400">Phishing</span>
+  <!-- Toast Notification -->
+  <div id="toast" class="toast fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-800 border border-white/10 rounded-lg px-4 py-3 flex items-center gap-3 shadow-xl z-50">
+    <span id="toast-message" class="text-sm"></span>
+    <button id="toast-undo" class="text-primary font-medium text-sm hidden" onclick="undoAction()">Undo</button>
+    <button onclick="hideToast()" class="text-slate-400 hover:text-white">
+      <span class="material-symbols-outlined text-lg">close</span>
+    </button>
+  </div>
+
+  <!-- Compose Modal -->
+  <div id="compose-modal" class="hidden fixed inset-0 bg-black/50 flex items-end justify-end p-6 z-50">
+    <div class="bg-card-dark border border-white/10 rounded-xl w-full max-w-lg shadow-2xl">
+      <div class="flex items-center justify-between p-4 border-b border-white/10">
+        <h3 class="font-semibold">New Message</h3>
+        <button onclick="closeCompose()" class="text-slate-400 hover:text-white">
+          <span class="material-symbols-outlined">close</span>
+        </button>
       </div>
-      <div class="flex items-center gap-2">
-        <span class="w-3 h-3 rounded-full bg-amber-500"></span>
-        <span class="text-slate-400">Suspicious</span>
+      <div class="p-4 space-y-3">
+        <input type="text" placeholder="To" class="w-full bg-transparent border-b border-white/10 py-2 focus:outline-none focus:border-primary">
+        <input type="text" placeholder="Subject" class="w-full bg-transparent border-b border-white/10 py-2 focus:outline-none focus:border-primary">
+        <textarea rows="10" placeholder="Write your message..." class="w-full bg-transparent py-2 focus:outline-none resize-none"></textarea>
       </div>
-      <div class="flex items-center gap-2">
-        <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
-        <span class="text-slate-400">Safe</span>
+      <div class="flex items-center gap-2 p-4 border-t border-white/10">
+        <button class="bg-primary hover:bg-primary/90 text-background-dark font-semibold px-6 py-2 rounded-lg">Send</button>
+        <button class="p-2 hover:bg-white/5 rounded-lg text-slate-400">
+          <span class="material-symbols-outlined">attach_file</span>
+        </button>
+        <div class="flex-1"></div>
+        <button onclick="closeCompose()" class="p-2 hover:bg-white/5 rounded-lg text-slate-400">
+          <span class="material-symbols-outlined">delete</span>
+        </button>
       </div>
     </div>
-  </main>
+  </div>
 
   <script>
+    // ============================================================================
+    // State Management
+    // ============================================================================
     const USER_KEY = 'phishnet_user';
     const API_BASE = window.location.hostname === 'localhost' 
       ? 'http://localhost:8000' 
       : 'https://phishnet-backend-iuoc.onrender.com';
     
-    let userEmail = null;
-    let accessToken = null;
-    let emailsData = []; // Store emails for preview access
+    let state = {
+      user: null,
+      accessToken: null,
+      currentFolder: 'inbox',
+      emails: [],
+      selectedEmails: new Set(),
+      currentEmailIndex: -1,
+      searchQuery: '',
+      page: 1,
+      hasMore: false,
+      isLoading: false,
+      lastAction: null // For undo functionality
+    };
 
-    // Initialize
+    // ============================================================================
+    // Initialization
+    // ============================================================================
     document.addEventListener('DOMContentLoaded', () => {
       initDashboard();
+      setupKeyboardShortcuts();
     });
 
     async function initDashboard() {
       const userStr = localStorage.getItem(USER_KEY);
-      // Try both token keys (legacy and Gmail OAuth token)
-      accessToken = localStorage.getItem('phishnet_access_token') || localStorage.getItem('gmail_access_token');
-      console.log('Dashboard init - access token present:', !!accessToken);
-
+      state.accessToken = localStorage.getItem('phishnet_access_token') || localStorage.getItem('gmail_access_token');
+      
       if (!userStr) {
-        showNotConnected();
+        window.location.href = 'index.html';
         return;
       }
-
+      
       try {
-        const user = JSON.parse(userStr);
-        userEmail = user.email || user.gmail_email;
-
-        if (!userEmail) {
-          showNotConnected();
-          return;
-        }
-
-        // Update UI with user info
-        document.getElementById('user-welcome').textContent = `Connected account: ${userEmail}`;
-        document.getElementById('user-welcome').classList.add('text-emerald-400');
-        
-        const navEmail = document.getElementById('user-email-nav');
-        if (navEmail) {
-          navEmail.textContent = userEmail;
-          navEmail.classList.remove('hidden');
-        }
-
-        // Fetch email history
-        await fetchEmailHistory();
-
+        state.user = JSON.parse(userStr);
+        updateUserDisplay();
+        await fetchEmails();
       } catch (e) {
-        console.error("Dashboard init failed", e);
-        showError("Failed to initialize dashboard");
+        console.error('Init failed:', e);
+        showToast('Failed to load dashboard');
       }
     }
 
-    function showNotConnected() {
-      document.getElementById('user-welcome').textContent = "Not connected. Please log in.";
-      document.getElementById('user-welcome').classList.add('text-red-500');
-      document.getElementById('inbox-status').textContent = "Not Connected";
-      document.getElementById('inbox-status').classList.remove('text-emerald-500');
-      document.getElementById('inbox-status').classList.add('text-red-400');
-      document.getElementById('loading-state').classList.add('hidden');
-      document.getElementById('empty-state').classList.remove('hidden');
+    function updateUserDisplay() {
+      const email = state.user?.email || '';
+      document.getElementById('user-avatar').textContent = email.charAt(0).toUpperCase();
+      document.getElementById('user-email-display').textContent = email;
     }
 
-    function showError(message) {
-      document.getElementById('loading-state').classList.add('hidden');
-      const emailList = document.getElementById('email-list');
-      emailList.innerHTML = `
-        <div class="p-8 text-center text-red-400">
-          <span class="material-symbols-outlined text-4xl mb-4">error</span>
-          <p>${message}</p>
-          <button onclick="refreshData()" class="mt-4 text-primary hover:text-primary/80">
-            Try Again
-          </button>
-        </div>
-      `;
-    }
-
-    async function fetchEmailHistory() {
-      if (!userEmail) return;
-
-      document.getElementById('loading-indicator').classList.remove('hidden');
+    // ============================================================================
+    // Email Fetching
+    // ============================================================================
+    async function fetchEmails() {
+      if (state.isLoading) return;
+      state.isLoading = true;
+      
+      showLoading(true);
       
       try {
-        const headers = {
-          'Content-Type': 'application/json'
-        };
+        const headers = { 'Content-Type': 'application/json' };
+        if (state.accessToken) {
+          headers['Authorization'] = `Bearer ${state.accessToken}`;
+        }
         
-        if (accessToken) {
-          headers['Authorization'] = `Bearer ${accessToken}`;
-        }
-
-        // Mode 2: Scan user's own Gmail inbox via OAuth
-        const response = await fetch(`${API_BASE}/api/v2/gmail/check/inbox/${encodeURIComponent(userEmail)}?limit=50`, {
-          headers
-        });
-
-        if (!response.ok) {
-          throw new Error(`API Error: ${response.status}`);
-        }
-
+        const userEmail = state.user?.email;
+        if (!userEmail) throw new Error('No user email');
+        
+        const url = `${API_BASE}/api/v2/gmail/check/inbox/${encodeURIComponent(userEmail)}?limit=50`;
+        const response = await fetch(url, { headers });
         const data = await response.json();
         
         if (data.success && data.emails) {
-          displayEmailHistory(data.emails);
-          updateStats(data.emails);
+          state.emails = data.emails.map((email, index) => ({
+            ...email,
+            _index: index,
+            is_read: email.is_read ?? false,
+            is_starred: email.is_starred ?? false
+          }));
+          renderEmailList();
+          updateCounts();
         } else if (data.need_oauth) {
-          // User needs to authenticate with Gmail
           showOAuthRequired(data.oauth_url);
         } else {
-          displayEmailHistory([]);
-          updateStats([]);
+          showEmptyState();
         }
-
       } catch (error) {
-        console.error("Failed to fetch email history:", error);
-        // Try alternative endpoint (Mode 1 forwarded emails fallback)
-        await tryAlternativeEndpoint();
+        console.error('Fetch failed:', error);
+        showToast('Failed to load emails');
+        showEmptyState();
       } finally {
-        document.getElementById('loading-indicator').classList.add('hidden');
+        state.isLoading = false;
+        showLoading(false);
       }
     }
 
-    function showOAuthRequired(oauthUrl) {
-      const emailList = document.getElementById('email-list');
+    function showLoading(show) {
+      document.getElementById('loading-state').classList.toggle('hidden', !show);
+      document.getElementById('email-list').classList.toggle('hidden', show);
+      document.getElementById('empty-state').classList.add('hidden');
+    }
+
+    function showEmptyState() {
       document.getElementById('loading-state').classList.add('hidden');
-      emailList.innerHTML = `
-        <div class="p-8 text-center">
-          <span class="material-symbols-outlined text-4xl mb-4 text-primary">lock_open</span>
-          <h3 class="text-lg font-bold mb-2">Connect Your Gmail</h3>
-          <p class="text-slate-400 mb-4">To scan your inbox for phishing threats, please connect your Gmail account.</p>
-          <a href="${API_BASE}${oauthUrl}" class="inline-block bg-primary hover:bg-primary/80 text-background-dark px-6 py-3 rounded-lg font-bold transition-all">
+      document.getElementById('email-list').classList.add('hidden');
+      document.getElementById('empty-state').classList.remove('hidden');
+    }
+
+    function showOAuthRequired(oauthUrl) {
+      document.getElementById('loading-state').classList.add('hidden');
+      document.getElementById('email-list').innerHTML = `
+        <div class="flex flex-col items-center justify-center h-full p-8 text-center">
+          <span class="material-symbols-outlined text-6xl mb-4 text-primary">lock_open</span>
+          <h3 class="text-xl font-semibold mb-2">Connect Your Gmail</h3>
+          <p class="text-slate-400 mb-6">To scan your inbox for phishing threats, connect your Gmail account.</p>
+          <a href="${API_BASE}/auth/google" class="bg-primary hover:bg-primary/90 text-background-dark font-semibold px-6 py-3 rounded-lg">
             Connect Gmail
           </a>
         </div>
       `;
+      document.getElementById('email-list').classList.remove('hidden');
     }
 
-    async function tryAlternativeEndpoint() {
-      try {
-        const headers = {
-          'Content-Type': 'application/json'
-        };
-        
-        if (accessToken) {
-          headers['Authorization'] = `Bearer ${accessToken}`;
-        }
-
-        // Try Mode 1 forwarded email history as fallback
-        const response = await fetch(`${API_BASE}/api/v2/email-forward/history/${encodeURIComponent(userEmail)}?limit=50`, {
-          headers
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.history && data.history.length > 0) {
-            displayEmailHistory(data.history);
-            updateStats(data.history);
-            return;
-          }
-        }
-      } catch (e) {
-        console.error("Alternative endpoint failed:", e);
-      }
+    // ============================================================================
+    // Render Email List
+    // ============================================================================
+    function renderEmailList() {
+      const container = document.getElementById('email-list');
+      container.classList.remove('hidden');
       
-      // No data available
-      displayEmailHistory([]);
-      updateStats([]);
-    }
-
-    function displayEmailHistory(emails) {
-      const emailList = document.getElementById('email-list');
-      document.getElementById('loading-state').classList.add('hidden');
-
-      if (!emails || emails.length === 0) {
-        document.getElementById('empty-state').classList.remove('hidden');
+      if (state.emails.length === 0) {
+        showEmptyState();
         return;
       }
-
-      document.getElementById('empty-state').classList.add('hidden');
-      emailsData = emails; // Store for preview access
-
-      const emailsHtml = emails.map((email, index) => {
-        const verdict = (email.risk_level || email.verdict || 'UNKNOWN').toUpperCase();
-        const sender = email.original_sender || email.sender || 'Unknown';
-        const subject = email.original_subject || email.subject || 'No Subject';
-        const date = formatDate(email.created_at || email.timestamp);
-        const snippet = (email.snippet || email.body || '').substring(0, 80);
+      
+      const html = state.emails.map((email, index) => {
+        const isSelected = state.selectedEmails.has(index);
+        const isActive = state.currentEmailIndex === index;
+        const isUnread = !email.is_read;
+        const isStarred = email.is_starred;
         
-        const verdictIcon = getVerdictIcon(verdict);
-
+        const sender = email.sender || 'Unknown';
+        const senderName = sender.split('<')[0].trim() || sender.split('@')[0];
+        const subject = email.subject || 'No Subject';
+        const snippet = email.snippet || '';
+        const date = formatDate(email.received_at || email.timestamp);
+        const verdict = (email.risk_level || email.verdict || 'SAFE').toUpperCase();
+        
         return `
-          <div class="email-row p-3 cursor-pointer transition-colors hover:bg-white/5" onclick="showEmailPreview(${index})" data-index="${index}">
-            <div class="flex items-center gap-3">
-              <span class="material-symbols-outlined text-lg ${getVerdictColor(verdict)}">${verdictIcon}</span>
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center justify-between mb-1">
-                  <span class="font-medium text-white text-sm truncate">${escapeHtml(sender.split('<')[0].trim())}</span>
-                  <span class="text-xs text-slate-500 ml-2 flex-shrink-0">${date}</span>
-                </div>
-                <p class="text-sm text-white truncate font-medium">${escapeHtml(subject)}</p>
-                <p class="text-xs text-slate-500 truncate">${escapeHtml(snippet)}...</p>
+          <div class="email-row ${isActive ? 'selected' : ''} ${isUnread ? 'unread' : ''} flex items-center gap-2 px-4 py-3 cursor-pointer"
+               onclick="selectEmail(${index}, event)" data-index="${index}">
+            <input type="checkbox" class="email-checkbox w-4 h-4 rounded border-slate-600 bg-transparent text-primary focus:ring-primary/50"
+                   ${isSelected ? 'checked' : ''} onclick="toggleEmailSelection(${index}, event)">
+            <button class="star-btn ${isStarred ? 'starred' : ''} p-1" onclick="toggleEmailStar(${index}, event)">
+              <span class="material-symbols-outlined text-lg">${isStarred ? 'star' : 'star_outline'}</span>
+            </button>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-0.5">
+                <span class="email-subject text-sm truncate ${isUnread ? 'font-semibold text-white' : 'text-slate-300'}">${escapeHtml(senderName)}</span>
+                <span class="text-xs text-slate-500 flex-shrink-0">${date}</span>
               </div>
+              <div class="text-sm truncate ${isUnread ? 'text-slate-300' : 'text-slate-500'}">${escapeHtml(subject)}</div>
+              <div class="text-xs text-slate-600 truncate">${escapeHtml(snippet.substring(0, 80))}</div>
+            </div>
+            <div class="flex-shrink-0 flex items-center gap-2">
+              ${email.has_attachment ? '<span class="material-symbols-outlined text-slate-500 text-lg">attach_file</span>' : ''}
+              <span class="badge-${verdict.toLowerCase()} px-2 py-0.5 rounded text-xs font-medium">${getThreatLabel(verdict)}</span>
             </div>
           </div>
         `;
       }).join('');
-
-      emailList.innerHTML = emailsHtml;
       
-      // Auto-select first email
-      if (emails.length > 0) {
-        showEmailPreview(0);
+      container.innerHTML = html;
+      updatePaginationInfo();
+    }
+
+    function getThreatLabel(verdict) {
+      switch(verdict) {
+        case 'PHISHING': return '⚠️ Phishing';
+        case 'SUSPICIOUS': return '⚡ Suspicious';
+        default: return '✓ Safe';
       }
+    }
+
+    // ============================================================================
+    // Email Selection & Preview
+    // ============================================================================
+    function selectEmail(index, event) {
+      if (event?.target?.type === 'checkbox' || event?.target?.closest('.star-btn')) return;
+      
+      state.currentEmailIndex = index;
+      renderEmailList();
+      showEmailPreview(index);
+      
+      // Auto-mark as read after 2 seconds
+      setTimeout(() => markAsRead(index), 2000);
     }
 
     function showEmailPreview(index) {
-      const email = emailsData[index];
+      const email = state.emails[index];
       if (!email) return;
-
-      // Highlight selected email row
-      document.querySelectorAll('.email-row').forEach((row, i) => {
-        if (i === index) {
-          row.classList.add('bg-primary/10', 'border-l-2', 'border-primary');
-        } else {
-          row.classList.remove('bg-primary/10', 'border-l-2', 'border-primary');
-        }
-      });
-
-      // Show preview content
-      document.getElementById('preview-placeholder').classList.add('hidden');
+      
+      document.getElementById('preview-empty').classList.add('hidden');
       document.getElementById('preview-content').classList.remove('hidden');
-
-      const verdict = (email.risk_level || email.verdict || 'UNKNOWN').toUpperCase();
-      const score = email.threat_score !== undefined 
-        ? Math.round(email.threat_score * 100) 
-        : (email.score || 0);
-      const sender = email.original_sender || email.sender || 'Unknown';
+      
+      const sender = email.sender || 'Unknown';
       const senderName = sender.split('<')[0].trim() || sender.split('@')[0];
       const senderEmail = sender.match(/<(.+)>/) ? sender.match(/<(.+)>/)[1] : sender;
-      const subject = email.original_subject || email.subject || 'No Subject';
-      const date = formatDate(email.created_at || email.timestamp);
-      const body = email.body || email.snippet || 'No content available';
-
-      // Update preview header
-      document.getElementById('preview-subject').textContent = subject;
-      document.getElementById('preview-sender').textContent = senderName;
-      document.getElementById('preview-sender-email').textContent = senderEmail;
+      const verdict = (email.risk_level || email.verdict || 'SAFE').toUpperCase();
+      const score = Math.round((email.threat_score || 0) * 100);
+      
+      // Update header
+      document.getElementById('preview-subject').textContent = email.subject || 'No Subject';
       document.getElementById('preview-avatar').textContent = senderName.charAt(0).toUpperCase();
-      document.getElementById('preview-date').textContent = date;
-
+      document.getElementById('preview-sender-name').textContent = senderName;
+      document.getElementById('preview-sender-email').textContent = `<${senderEmail}>`;
+      document.getElementById('preview-date').textContent = formatDate(email.received_at || email.timestamp);
+      
       // Update threat badge
-      const badge = document.getElementById('preview-badge');
-      badge.textContent = getVerdictLabel(verdict);
-      badge.className = `px-3 py-1 rounded text-xs font-bold border ${getVerdictClass(verdict)}`;
-
+      const badge = document.getElementById('preview-threat-badge');
+      badge.textContent = getThreatLabel(verdict);
+      badge.className = `badge-${verdict.toLowerCase()} px-3 py-1 rounded-full text-xs font-bold`;
+      
       // Update threat banner
       const banner = document.getElementById('preview-threat-banner');
-      const threatIcon = document.getElementById('preview-threat-icon');
-      const threatTitle = document.getElementById('preview-threat-title');
-      const threatDesc = document.getElementById('preview-threat-desc');
+      const icon = document.getElementById('threat-icon');
+      const title = document.getElementById('threat-title');
+      const desc = document.getElementById('threat-description');
       
       if (verdict === 'PHISHING') {
-        banner.className = 'mb-4 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400';
-        threatIcon.textContent = 'gpp_bad';
-        threatTitle.textContent = '⚠️ Phishing Detected';
-        threatDesc.textContent = 'This email appears to be a phishing attempt. Do not click any links.';
+        banner.className = 'mb-6 p-4 rounded-xl border badge-phishing';
+        icon.textContent = 'gpp_bad';
+        title.textContent = '⚠️ Phishing Detected';
+        desc.textContent = 'This email appears to be a phishing attempt. Do not click any links.';
       } else if (verdict === 'SUSPICIOUS') {
-        banner.className = 'mb-4 p-4 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400';
-        threatIcon.textContent = 'warning';
-        threatTitle.textContent = '⚡ Suspicious Content';
-        threatDesc.textContent = 'This email contains suspicious elements. Proceed with caution.';
+        banner.className = 'mb-6 p-4 rounded-xl border badge-suspicious';
+        icon.textContent = 'warning';
+        title.textContent = '⚡ Suspicious Content';
+        desc.textContent = 'This email contains suspicious elements. Proceed with caution.';
       } else {
-        banner.className = 'mb-4 p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400';
-        threatIcon.textContent = 'verified_user';
-        threatTitle.textContent = '✓ Safe Email';
-        threatDesc.textContent = 'No threats detected in this email.';
+        banner.className = 'mb-6 p-4 rounded-xl border badge-safe';
+        icon.textContent = 'verified_user';
+        title.textContent = '✓ Safe Email';
+        desc.textContent = 'No threats detected in this email.';
       }
+      document.getElementById('threat-score').textContent = score;
       
-      document.getElementById('preview-score').textContent = score;
-
-      // Format the email body for display
-      // Clean any remaining HTML artifacts and format nicely
+      // Update star button
+      const starBtn = document.getElementById('preview-star-btn');
+      starBtn.classList.toggle('starred', email.is_starred);
+      starBtn.querySelector('span').textContent = email.is_starred ? 'star' : 'star_outline';
+      
+      // Update body
+      const body = email.body || email.snippet || 'No content available';
       let cleanBody = body;
       
-      // Check if body still contains HTML (shouldn't after backend fix, but safety check)
-      if (cleanBody.includes('<!DOCTYPE') || cleanBody.includes('<html') || cleanBody.includes('<head')) {
-        // Use snippet instead if body is still HTML
+      // Safety check for HTML
+      if (cleanBody.includes('<!DOCTYPE') || cleanBody.includes('<html')) {
         cleanBody = email.snippet || 'Email content not available in text format.';
       }
       
-      // Escape HTML for safe display
-      cleanBody = escapeHtml(cleanBody);
+      const formattedBody = escapeHtml(cleanBody)
+        .replace(/\n\n/g, '</p><p class="mb-4">')
+        .replace(/\n/g, '<br>')
+        .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" class="text-primary hover:underline" target="_blank">$1</a>');
       
-      // Format for display
-      const formattedBody = cleanBody
-        .replace(/\n\n/g, '</p><p class="mb-3">')  // Paragraphs
-        .replace(/\n/g, '<br>')  // Line breaks
-        .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" class="text-primary hover:underline" target="_blank" rel="noopener">$1</a>');  // Links
-      
-      document.getElementById('preview-body').innerHTML = `<p class="mb-3">${formattedBody}</p>`;
+      document.getElementById('preview-body').innerHTML = `<p class="mb-4">${formattedBody}</p>`;
     }
 
-    function updateStats(emails) {
-      const total = emails.length;
-      const threats = emails.filter(e => {
-        const verdict = (e.risk_level || e.verdict || '').toUpperCase();
-        return verdict === 'PHISHING' || verdict === 'SUSPICIOUS';
-      }).length;
-      
-      const phishing = emails.filter(e => {
-        const verdict = (e.risk_level || e.verdict || '').toUpperCase();
-        return verdict === 'PHISHING';
-      }).length;
-
-      document.getElementById('emails-scanned').textContent = total;
-      document.getElementById('threats-detected').textContent = threats;
-      
-      // Inbox status
-      if (phishing > 0) {
-        document.getElementById('inbox-status').textContent = 'At Risk';
-        document.getElementById('inbox-status').classList.remove('text-emerald-500');
-        document.getElementById('inbox-status').classList.add('text-red-400');
-      } else if (threats > 0) {
-        document.getElementById('inbox-status').textContent = 'Caution';
-        document.getElementById('inbox-status').classList.remove('text-emerald-500');
-        document.getElementById('inbox-status').classList.add('text-amber-400');
+    // ============================================================================
+    // Email Actions
+    // ============================================================================
+    function toggleEmailSelection(index, event) {
+      event.stopPropagation();
+      if (state.selectedEmails.has(index)) {
+        state.selectedEmails.delete(index);
       } else {
-        document.getElementById('inbox-status').textContent = 'Secure';
-        document.getElementById('inbox-status').classList.add('text-emerald-500');
+        state.selectedEmails.add(index);
       }
+      updateBulkActionsVisibility();
+      renderEmailList();
+    }
 
-      // Last scan
-      if (emails.length > 0) {
-        const latestDate = emails[0].created_at || emails[0].timestamp;
-        document.getElementById('last-scan').textContent = formatRelativeTime(latestDate);
+    function toggleSelectAll() {
+      const checkbox = document.getElementById('select-all');
+      if (checkbox.checked) {
+        state.emails.forEach((_, index) => state.selectedEmails.add(index));
       } else {
-        document.getElementById('last-scan').textContent = 'Never';
+        state.selectedEmails.clear();
+      }
+      updateBulkActionsVisibility();
+      renderEmailList();
+    }
+
+    function updateBulkActionsVisibility() {
+      const hasSeletion = state.selectedEmails.size > 0;
+      document.getElementById('bulk-actions').classList.toggle('hidden', !hasSeletion);
+      document.getElementById('default-actions').classList.toggle('hidden', hasSeletion);
+    }
+
+    function toggleEmailStar(index, event) {
+      event.stopPropagation();
+      state.emails[index].is_starred = !state.emails[index].is_starred;
+      renderEmailList();
+      if (state.currentEmailIndex === index) {
+        showEmailPreview(index);
+      }
+      showToast(state.emails[index].is_starred ? 'Email starred' : 'Star removed');
+    }
+
+    function toggleStar() {
+      if (state.currentEmailIndex >= 0) {
+        toggleEmailStar(state.currentEmailIndex, { stopPropagation: () => {} });
       }
     }
 
-    function getVerdictClass(verdict) {
-      switch (verdict) {
-        case 'PHISHING': return 'verdict-phishing';
-        case 'SUSPICIOUS': return 'verdict-suspicious';
-        case 'SAFE': return 'verdict-safe';
-        default: return 'border-slate-600 text-slate-400';
+    function markAsRead(index) {
+      if (state.emails[index] && !state.emails[index].is_read) {
+        state.emails[index].is_read = true;
+        renderEmailList();
+        updateCounts();
       }
     }
 
-    function getVerdictIcon(verdict) {
-      switch (verdict) {
-        case 'PHISHING': return 'gpp_bad';
-        case 'SUSPICIOUS': return 'warning';
-        case 'SAFE': return 'verified_user';
-        default: return 'help';
+    function deleteEmail() {
+      if (state.currentEmailIndex >= 0) {
+        const email = state.emails[state.currentEmailIndex];
+        state.lastAction = { type: 'delete', email, index: state.currentEmailIndex };
+        state.emails.splice(state.currentEmailIndex, 1);
+        state.currentEmailIndex = -1;
+        document.getElementById('preview-empty').classList.remove('hidden');
+        document.getElementById('preview-content').classList.add('hidden');
+        renderEmailList();
+        showToast('Email moved to Trash', true);
       }
     }
 
-    function getVerdictLabel(verdict) {
-      switch (verdict) {
-        case 'PHISHING': return '🚨 PHISHING';
-        case 'SUSPICIOUS': return '⚠️ SUSPICIOUS';
-        case 'SAFE': return '✅ SAFE';
-        default: return verdict;
+    function archiveEmail() {
+      if (state.currentEmailIndex >= 0) {
+        const email = state.emails[state.currentEmailIndex];
+        state.lastAction = { type: 'archive', email, index: state.currentEmailIndex };
+        state.emails.splice(state.currentEmailIndex, 1);
+        state.currentEmailIndex = -1;
+        document.getElementById('preview-empty').classList.remove('hidden');
+        document.getElementById('preview-content').classList.add('hidden');
+        renderEmailList();
+        showToast('Email archived', true);
       }
     }
 
-    function getVerdictColor(verdict) {
-      switch (verdict) {
-        case 'PHISHING': return 'text-red-500';
-        case 'SUSPICIOUS': return 'text-amber-500';
-        case 'SAFE': return 'text-emerald-500';
-        default: return 'text-slate-400';
+    // Bulk Actions
+    function bulkDelete() {
+      const indices = Array.from(state.selectedEmails).sort((a, b) => b - a);
+      state.lastAction = { type: 'bulk-delete', emails: indices.map(i => ({ email: state.emails[i], index: i })) };
+      indices.forEach(i => state.emails.splice(i, 1));
+      state.selectedEmails.clear();
+      state.currentEmailIndex = -1;
+      document.getElementById('preview-empty').classList.remove('hidden');
+      document.getElementById('preview-content').classList.add('hidden');
+      updateBulkActionsVisibility();
+      renderEmailList();
+      showToast(`${indices.length} emails deleted`, true);
+    }
+
+    function bulkArchive() {
+      const count = state.selectedEmails.size;
+      bulkDelete();
+      showToast(`${count} emails archived`, true);
+    }
+
+    function bulkMarkRead() {
+      state.selectedEmails.forEach(i => { state.emails[i].is_read = true; });
+      state.selectedEmails.clear();
+      updateBulkActionsVisibility();
+      renderEmailList();
+      updateCounts();
+      showToast('Marked as read');
+    }
+
+    function bulkMarkUnread() {
+      state.selectedEmails.forEach(i => { state.emails[i].is_read = false; });
+      state.selectedEmails.clear();
+      updateBulkActionsVisibility();
+      renderEmailList();
+      updateCounts();
+      showToast('Marked as unread');
+    }
+
+    function bulkSpam() {
+      const count = state.selectedEmails.size;
+      bulkDelete();
+      showToast(`${count} emails marked as spam`, true);
+    }
+
+    function undoAction() {
+      if (!state.lastAction) return;
+      
+      if (state.lastAction.type === 'delete' || state.lastAction.type === 'archive') {
+        state.emails.splice(state.lastAction.index, 0, state.lastAction.email);
+        renderEmailList();
+      } else if (state.lastAction.type === 'bulk-delete') {
+        state.lastAction.emails.reverse().forEach(({ email, index }) => {
+          state.emails.splice(index, 0, email);
+        });
+        renderEmailList();
+      }
+      
+      state.lastAction = null;
+      hideToast();
+      showToast('Action undone');
+    }
+
+    // ============================================================================
+    // Folder Navigation
+    // ============================================================================
+    function changeFolder(folder) {
+      state.currentFolder = folder;
+      state.currentEmailIndex = -1;
+      state.selectedEmails.clear();
+      
+      // Update active folder styling
+      document.querySelectorAll('.folder-item').forEach(item => {
+        item.classList.remove('active');
+        item.classList.add('text-slate-400');
+      });
+      document.querySelector(`[data-folder="${folder}"]`).classList.add('active');
+      document.querySelector(`[data-folder="${folder}"]`).classList.remove('text-slate-400');
+      
+      // Reset preview
+      document.getElementById('preview-empty').classList.remove('hidden');
+      document.getElementById('preview-content').classList.add('hidden');
+      
+      // For now, show empty for non-inbox folders
+      if (folder !== 'inbox') {
+        showEmptyState();
+      } else {
+        fetchEmails();
       }
     }
 
-    function getScoreColor(score) {
-      if (score <= 30) return 'text-red-400';
-      if (score <= 60) return 'text-amber-400';
-      return 'text-emerald-400';
+    // ============================================================================
+    // Search
+    // ============================================================================
+    function handleSearch(event) {
+      if (event.key === 'Enter') {
+        const query = event.target.value.trim().toLowerCase();
+        state.searchQuery = query;
+        
+        if (!query) {
+          renderEmailList();
+          return;
+        }
+        
+        const filtered = state.emails.filter(email => {
+          const subject = (email.subject || '').toLowerCase();
+          const sender = (email.sender || '').toLowerCase();
+          const body = (email.body || email.snippet || '').toLowerCase();
+          return subject.includes(query) || sender.includes(query) || body.includes(query);
+        });
+        
+        const container = document.getElementById('email-list');
+        if (filtered.length === 0) {
+          container.innerHTML = `
+            <div class="flex flex-col items-center justify-center h-64 text-slate-500">
+              <span class="material-symbols-outlined text-4xl mb-4">search_off</span>
+              <p>No emails match "${escapeHtml(query)}"</p>
+            </div>
+          `;
+        } else {
+          // Temporarily swap emails array and render
+          const originalEmails = state.emails;
+          state.emails = filtered;
+          renderEmailList();
+          state.emails = originalEmails;
+        }
+      }
+    }
+
+    // ============================================================================
+    // Compose Modal
+    // ============================================================================
+    function openCompose() {
+      document.getElementById('compose-modal').classList.remove('hidden');
+    }
+
+    function closeCompose() {
+      document.getElementById('compose-modal').classList.add('hidden');
+    }
+
+    function replyEmail() {
+      openCompose();
+      // Would pre-fill To, Subject with "Re: ..."
+    }
+
+    function replyAllEmail() {
+      openCompose();
+    }
+
+    function forwardEmail() {
+      openCompose();
+      // Would pre-fill Subject with "Fwd: ..."
+    }
+
+    // ============================================================================
+    // UI Helpers
+    // ============================================================================
+    function updateCounts() {
+      const unreadCount = state.emails.filter(e => !e.is_read).length;
+      document.getElementById('inbox-count').textContent = unreadCount;
+      document.getElementById('total-scanned').textContent = state.emails.length;
+    }
+
+    function updatePaginationInfo() {
+      const info = document.getElementById('pagination-info');
+      if (state.emails.length === 0) {
+        info.textContent = 'No emails';
+      } else {
+        info.textContent = `1-${state.emails.length} of ${state.emails.length}`;
+      }
     }
 
     function formatDate(dateStr) {
-      if (!dateStr) return '-';
-      try {
-        const date = new Date(dateStr);
-        return date.toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        });
-      } catch (e) {
-        return '-';
-      }
-    }
-
-    function formatRelativeTime(dateStr) {
-      if (!dateStr) return '-';
+      if (!dateStr) return '';
       try {
         const date = new Date(dateStr);
         const now = new Date();
-        const diffMs = now - date;
-        const diffMins = Math.floor(diffMs / 60000);
-        const diffHours = Math.floor(diffMs / 3600000);
-        const diffDays = Math.floor(diffMs / 86400000);
-
-        if (diffMins < 1) return 'Just now';
-        if (diffMins < 60) return `${diffMins}m ago`;
-        if (diffHours < 24) return `${diffHours}h ago`;
-        if (diffDays < 7) return `${diffDays}d ago`;
-        return formatDate(dateStr);
-      } catch (e) {
-        return '-';
+        const diff = now - date;
+        
+        if (diff < 86400000 && date.getDate() === now.getDate()) {
+          return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        } else if (diff < 604800000) {
+          return date.toLocaleDateString('en-US', { weekday: 'short' });
+        } else {
+          return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }
+      } catch {
+        return '';
       }
     }
 
-    function escapeHtml(text) {
+    function escapeHtml(str) {
+      if (!str) return '';
       const div = document.createElement('div');
-      div.textContent = text || '';
+      div.textContent = str;
       return div.innerHTML;
     }
 
+    function showToast(message, showUndo = false) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toast-message').textContent = message;
+      document.getElementById('toast-undo').classList.toggle('hidden', !showUndo);
+      toast.classList.add('show');
+      
+      clearTimeout(window.toastTimeout);
+      window.toastTimeout = setTimeout(hideToast, showUndo ? 5000 : 3000);
+    }
+
+    function hideToast() {
+      document.getElementById('toast').classList.remove('show');
+    }
+
+    // ============================================================================
+    // Keyboard Shortcuts
+    // ============================================================================
+    function setupKeyboardShortcuts() {
+      document.addEventListener('keydown', (e) => {
+        // Don't trigger shortcuts when typing in inputs
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        
+        switch(e.key) {
+          case '/':
+            e.preventDefault();
+            document.getElementById('search-input').focus();
+            break;
+          case 'j':
+            if (state.currentEmailIndex < state.emails.length - 1) {
+              selectEmail(state.currentEmailIndex + 1);
+            }
+            break;
+          case 'k':
+            if (state.currentEmailIndex > 0) {
+              selectEmail(state.currentEmailIndex - 1);
+            }
+            break;
+          case 's':
+            if (state.currentEmailIndex >= 0) toggleStar();
+            break;
+          case 'e':
+            if (state.currentEmailIndex >= 0) archiveEmail();
+            break;
+          case '#':
+          case 'Delete':
+            if (state.currentEmailIndex >= 0) deleteEmail();
+            break;
+          case 'r':
+            if (state.currentEmailIndex >= 0) replyEmail();
+            break;
+          case 'c':
+            openCompose();
+            break;
+          case 'Escape':
+            closeCompose();
+            document.getElementById('search-input').blur();
+            break;
+        }
+      });
+    }
+
+    // ============================================================================
+    // Auth & Refresh
+    // ============================================================================
     async function refreshData() {
-      await fetchEmailHistory();
+      await fetchEmails();
+      showToast('Inbox refreshed');
     }
 
     function logout() {
-      if (confirm("Are you sure you want to logout?")) {
-        localStorage.removeItem(USER_KEY);
-        localStorage.removeItem('phishnet_access_token');
-        window.location.href = '/';
-      }
+      localStorage.removeItem(USER_KEY);
+      localStorage.removeItem('phishnet_access_token');
+      localStorage.removeItem('gmail_access_token');
+      window.location.href = 'index.html';
+    }
+
+    function prevPage() {
+      // Pagination implementation
+    }
+
+    function nextPage() {
+      // Pagination implementation
+    }
+
+    function loadMoreEmails() {
+      // Infinite scroll implementation
     }
   </script>
 </body>
-
 </html>
