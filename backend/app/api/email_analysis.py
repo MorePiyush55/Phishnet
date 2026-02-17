@@ -193,7 +193,7 @@ async def get_detection(
         confidence_score=detection.confidence_score,
         risk_level=detection.risk_level,
         model_version=detection.model_version,
-        model_type=detection.model_type,
+        detection_model_type=detection.model_type,
         features=detection.features,
         risk_factors=detection.risk_factors,
         processing_time_ms=detection.processing_time_ms,
@@ -239,6 +239,6 @@ def _generate_threat_indicators(detection_result: DetectionResult) -> dict:
         "is_phishing": detection_result.is_phishing,
         "risk_factors_count": len(detection_result.risk_factors or []),
         "processing_time": detection_result.processing_time_ms,
-        "model_type": detection_result.model_type,
+        "model_type": detection_result.detection_model_type,
         "threat_score": detection_result.confidence_score * 100
     }
