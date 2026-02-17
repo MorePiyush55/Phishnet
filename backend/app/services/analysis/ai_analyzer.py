@@ -7,6 +7,9 @@ from typing import Dict, List, Any, Optional
 import re
 
 import google.generativeai as genai
+import warnings
+# Suppress Google GenAI deprecation warning for now
+warnings.filterwarnings("ignore", category=FutureWarning, module="google.generativeai")
 from pydantic import BaseModel, Field, validator
 
 from app.config.logging import get_logger
