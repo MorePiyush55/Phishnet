@@ -32,12 +32,15 @@ from app.config.settings import get_settings
 from app.models.tenant import Tenant, PolicyAction
 from app.services.policy_engine import get_policy_engine
 
-# Check if MongoDB is available
+# Check if MongoDB + Beanie are fully available
 try:
     from app.db.mongodb import MongoDBManager
     def is_mongodb_ready():
-        """Check if MongoDB connection is ready"""
-        return MongoDBManager.client is not None
+        """Check if MongoDB connection AND Beanie ODM are fully ready"""
+        return (
+            MongoDBManager.client is not None
+            and MongoDBManager.beanie_initialized
+        )
 except ImportError:
     def is_mongodb_ready():
         return False
@@ -695,7 +698,7 @@ For questions, contact your IT/Security team.
         if not recent_emails:
             return []
             
-        logger.info(f"Checking {len(recent_emails)} recent emails for new submissions... (Version: 766fcd4-FORCE-DEPLOY)")
+        logger.info(f"Checking {len(recent_emails)} recent emails for new submissions... (Version: a1a1c80-BEANIE-FIX)")
         
         # Check MongoDB availability once before processing
         mongodb_available = is_mongodb_ready()
@@ -787,13 +790,8 @@ For questions, contact your IT/Security team.
                         await self.redis.delete(f"lock:analysis:{message_id}")
                 
             except Exception as e:
-                import traceback
-                error_msg = str(e) if str(e) else type(e).__name__
-                error_trace = traceback.format_exc()
                 logger.error(
-                    f"Failed to process email {email_info.get('uid')}: {error_msg}",
-                    exc_info=True,
-                    extra={"traceback": error_trace}
+                    f"Failed to process email {email_info.get('uid')}: {type(e).__name__}: {repr(e)}"
                 )
                 continue
         

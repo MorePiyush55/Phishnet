@@ -31,8 +31,12 @@ except ImportError:
 try:
     from app.db.mongodb import MongoDBManager
     def is_mongodb_ready():
-        """Check if MongoDB connection is ready"""
-        return MongoDBManager.client is not None and MONGODB_MODELS_AVAILABLE
+        """Check if MongoDB connection AND Beanie ODM are fully ready"""
+        return (
+            MongoDBManager.client is not None
+            and MongoDBManager.beanie_initialized
+            and MONGODB_MODELS_AVAILABLE
+        )
 except ImportError:
     def is_mongodb_ready():
         return False
@@ -275,10 +279,7 @@ class RealTimeMonitor:
                 await asyncio.sleep(5)  # Check every 5 seconds
                 
             except Exception as e:
-                import traceback
-                error_msg = str(e) if str(e) else type(e).__name__
-                tb = traceback.format_exc()
-                logger.error(f"Error monitoring threat detections: {error_msg}", exc_info=True)
+                logger.error(f"Error monitoring threat detections: {type(e).__name__}: {repr(e)}")
                 await asyncio.sleep(10)
                 
     async def _monitor_incidents(self):
@@ -324,9 +325,7 @@ class RealTimeMonitor:
                 await asyncio.sleep(10)  # Check every 10 seconds
                 
             except Exception as e:
-                import traceback
-                error_msg = str(e) if str(e) else type(e).__name__
-                logger.error(f"Error monitoring incidents: {error_msg}", exc_info=True)
+                logger.error(f"Error monitoring incidents: {type(e).__name__}: {repr(e)}")
                 await asyncio.sleep(15)
                 
     async def _monitor_threat_intelligence(self):
@@ -391,9 +390,7 @@ class RealTimeMonitor:
                 await asyncio.sleep(30)  # Check every 30 seconds
                 
             except Exception as e:
-                import traceback
-                error_msg = str(e) if str(e) else type(e).__name__
-                logger.error(f"Error monitoring threat intelligence: {error_msg}", exc_info=True)
+                logger.error(f"Error monitoring threat intelligence: {type(e).__name__}: {repr(e)}")
                 await asyncio.sleep(30)
                 
     async def _monitor_system_health(self):
