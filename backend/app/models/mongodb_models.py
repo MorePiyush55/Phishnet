@@ -244,7 +244,6 @@ class Detection(Document):
     processing_time_ms: int
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
-    model_config = {"protected_namespaces": ()}  # Allow model_ fields if needed
     
     class Settings:
         name = "detections"
@@ -484,6 +483,5 @@ DOCUMENT_MODELS = [
     OnDemandAnalysis,
     ForwardedEmailAnalysis,
     Tenant,
-    PolicyRule,
     PolicyEvaluationResult,
 ] + MODE1_MODELS
