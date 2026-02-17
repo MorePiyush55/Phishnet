@@ -251,7 +251,8 @@ class RealTimeMonitor:
                 await asyncio.sleep(5)  # Check every 5 seconds
                 
             except Exception as e:
-                logger.error(f"Error monitoring threat detections: {e}")
+                import traceback
+                logger.error(f"Error monitoring threat detections: {e}\n{traceback.format_exc()}")
                 await asyncio.sleep(10)
                 
     async def _monitor_incidents(self):
@@ -292,7 +293,8 @@ class RealTimeMonitor:
                 await asyncio.sleep(10)  # Check every 10 seconds
                 
             except Exception as e:
-                logger.error(f"Error monitoring incidents: {e}")
+                import traceback
+                logger.error(f"Error monitoring incidents: {e}\n{traceback.format_exc()}")
                 await asyncio.sleep(15)
                 
     async def _monitor_threat_intelligence(self):
@@ -352,7 +354,8 @@ class RealTimeMonitor:
                 await asyncio.sleep(30)  # Check every 30 seconds
                 
             except Exception as e:
-                logger.error(f"Error monitoring threat intelligence: {e}")
+                import traceback
+                logger.error(f"Error monitoring threat intelligence: {e}\n{traceback.format_exc()}")
                 await asyncio.sleep(30)
                 
     async def _monitor_system_health(self):

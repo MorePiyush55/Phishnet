@@ -766,7 +766,9 @@ For questions, contact your IT/Security team.
                         await self.redis.delete(f"lock:analysis:{message_id}")
                 
             except Exception as e:
-                logger.error(f"Failed to process email {email_info.get('uid')}: {e}")
+                import traceback
+                error_trace = traceback.format_exc()
+                logger.error(f"Failed to process email {email_info.get('uid')}: {e}\nTraceback:\n{error_trace}")
                 continue
         
         logger.info(f"Poll summary: {len(completed_jobs)} new, {skipped_count} already processed, {len(recent_emails)} total checked")
