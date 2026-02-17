@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 
-from pydantic import BaseModel, Field, EmailStr, validator
+from pydantic import BaseModel, Field, EmailStr, validator, ConfigDict
 
 from app.models.core.email import EmailStatus
 from src.common.constants import ThreatLevel
@@ -147,7 +147,8 @@ class DetectionResult(BaseModel):
     
     # Model information
     model_version: str
-    model_type: str = Field(..., pattern="^(ensemble|neural|federated)$")
+    detection_model_type: str = Field(..., alias="model_type", serialization_alias="model_type", pattern="^(ensemble|neural|federated)$")
+
     
     # Analysis details
     features: Optional[Dict[str, Any]] = None
@@ -158,11 +159,8 @@ class DetectionResult(BaseModel):
     
     # Timestamps
     created_at: datetime
-    
-    model_config = {"protected_namespaces": ()}
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True, protected_namespaces=())
 
 
 class EmailAnalysisResponse(BaseModel):

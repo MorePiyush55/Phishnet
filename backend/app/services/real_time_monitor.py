@@ -16,7 +16,30 @@ from websockets.exceptions import ConnectionClosed
 from app.config.logging import get_logger
 from app.intelligence.threat_intel import threat_intelligence_manager
 from app.workflows.incident_manager import incident_manager
-from app.models.mongodb_models import Detection, Incident, ThreatIntelligence
+
+# Import models with error handling for when MongoDB isn't available
+try:
+    from app.models.mongodb_models import Detection, Incident, ThreatIntelligence
+    MONGODB_MODELS_AVAILABLE = True
+except ImportError:
+    Detection = None
+    Incident = None
+    ThreatIntelligence = None
+    MONGODB_MODELS_AVAILABLE = False
+
+# Check if Beanie is initialized
+try:
+    from app.db.mongodb import MongoDBManager
+    def is_mongodb_ready():
+        """Check if MongoDB connection AND Beanie ODM are fully ready"""
+        return (
+            MongoDBManager.client is not None
+            and MongoDBManager.beanie_initialized
+            and MONGODB_MODELS_AVAILABLE
+        )
+except ImportError:
+    def is_mongodb_ready():
+        return False
 
 logger = get_logger(__name__)
 
@@ -218,6 +241,11 @@ class RealTimeMonitor:
         
         while self.monitoring_active:
             try:
+                # Skip if MongoDB is not ready
+                if not is_mongodb_ready() or Detection is None:
+                    await asyncio.sleep(10)
+                    continue
+                    
                 current_time = datetime.utcnow()
                 
                 # Query for new detections since last check
@@ -251,7 +279,7 @@ class RealTimeMonitor:
                 await asyncio.sleep(5)  # Check every 5 seconds
                 
             except Exception as e:
-                logger.error(f"Error monitoring threat detections: {e}")
+                logger.error(f"Error monitoring threat detections: {type(e).__name__}: {repr(e)}")
                 await asyncio.sleep(10)
                 
     async def _monitor_incidents(self):
@@ -260,6 +288,11 @@ class RealTimeMonitor:
         
         while self.monitoring_active:
             try:
+                # Skip if MongoDB is not ready
+                if not is_mongodb_ready() or Incident is None:
+                    await asyncio.sleep(15)
+                    continue
+                    
                 current_time = datetime.utcnow()
                 
                 # Query for new incidents
@@ -292,7 +325,7 @@ class RealTimeMonitor:
                 await asyncio.sleep(10)  # Check every 10 seconds
                 
             except Exception as e:
-                logger.error(f"Error monitoring incidents: {e}")
+                logger.error(f"Error monitoring incidents: {type(e).__name__}: {repr(e)}")
                 await asyncio.sleep(15)
                 
     async def _monitor_threat_intelligence(self):
@@ -301,6 +334,11 @@ class RealTimeMonitor:
         
         while self.monitoring_active:
             try:
+                # Skip if MongoDB is not ready
+                if not is_mongodb_ready() or ThreatIntelligence is None:
+                    await asyncio.sleep(30)
+                    continue
+                    
                 current_time = datetime.utcnow()
                 
                 # Query for new threat intelligence
@@ -352,7 +390,7 @@ class RealTimeMonitor:
                 await asyncio.sleep(30)  # Check every 30 seconds
                 
             except Exception as e:
-                logger.error(f"Error monitoring threat intelligence: {e}")
+                logger.error(f"Error monitoring threat intelligence: {type(e).__name__}: {repr(e)}")
                 await asyncio.sleep(30)
                 
     async def _monitor_system_health(self):

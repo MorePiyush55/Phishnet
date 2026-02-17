@@ -15,6 +15,7 @@ class MongoDBManager:
     
     client: Optional[AsyncIOMotorClient] = None
     database: Optional[AsyncIOMotorDatabase] = None
+    beanie_initialized: bool = False
     
     @classmethod
     async def connect_to_mongo(cls) -> None:
@@ -52,8 +53,10 @@ class MongoDBManager:
         
         try:
             await init_beanie(database=cls.database, document_models=document_models)
+            cls.beanie_initialized = True
             logger.info("Beanie ODM initialized successfully")
         except Exception as e:
+            cls.beanie_initialized = False
             logger.error(f"Failed to initialize Beanie: {e}")
             raise
     

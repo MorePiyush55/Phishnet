@@ -145,15 +145,23 @@ async def lifespan(app: FastAPI):
         logger.warning(f"Redis connection skipped: {e}")
         app.state.redis = None
     
-    # Initialize real-time monitoring
+    # Initialize real-time monitoring (with MongoDB availability check)
     try:
-        from app.services.real_time_monitor import real_time_monitor
+        from app.services.real_time_monitor import real_time_monitor, is_mongodb_ready
         import asyncio
-        # Start monitoring in background
-        asyncio.create_task(real_time_monitor.start_monitoring())
-        logger.info("Real-time monitoring started")
+        
+        if is_mongodb_ready():
+            # Start monitoring in background
+            asyncio.create_task(real_time_monitor.start_monitoring())
+            logger.info("Real-time monitoring started (MongoDB available)")
+        else:
+            logger.warning("Real-time monitoring skipped - MongoDB not available. Monitoring tasks will wait for DB.")
+            # Still start monitoring - it will wait for MongoDB internally
+            asyncio.create_task(real_time_monitor.start_monitoring())
     except Exception as e:
-        logger.warning(f"Real-time monitoring initialization failed: {e}")
+        import traceback
+        error_msg = str(e) if str(e) else type(e).__name__
+        logger.warning(f"Real-time monitoring initialization failed: {error_msg}", exc_info=True)
 
     # Initialize Email Polling Worker (The more robust one)
     try:
@@ -162,7 +170,9 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(worker.start())
         logger.info("On-demand email polling worker started automatically")
     except Exception as e:
-        logger.warning(f"On-demand email polling worker failed to start: {e}")
+        import traceback
+        error_msg = str(e) if str(e) else type(e).__name__
+        logger.warning(f"On-demand email polling worker failed to start: {error_msg}", exc_info=True)
     
     # Initialize Mode 1 Enterprise Orchestrator (Automatic IMAP Processing)
     mode1_orchestrator = None
