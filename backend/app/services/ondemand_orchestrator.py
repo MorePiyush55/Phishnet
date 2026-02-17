@@ -32,6 +32,16 @@ from app.config.settings import get_settings
 from app.models.tenant import Tenant, PolicyAction
 from app.services.policy_engine import get_policy_engine
 
+# Check if MongoDB is available
+try:
+    from app.db.mongodb import MongoDBManager
+    def is_mongodb_ready():
+        """Check if MongoDB connection is ready"""
+        return MongoDBManager.client is not None
+except ImportError:
+    def is_mongodb_ready():
+        return False
+
 settings = get_settings()
 
 logger = get_logger(__name__)
@@ -687,6 +697,11 @@ For questions, contact your IT/Security team.
             
         logger.info(f"Checking {len(recent_emails)} recent emails for new submissions... (Version: 766fcd4-FORCE-DEPLOY)")
         
+        # Check MongoDB availability once before processing
+        mongodb_available = is_mongodb_ready()
+        if not mongodb_available:
+            logger.warning("MongoDB is not available - skipping deduplication checks (emails will be processed but not stored)")
+        
         completed_jobs = []
         skipped_count = 0
         
@@ -703,40 +718,46 @@ For questions, contact your IT/Security team.
                     logger.warning(f"Email missing UID, skipping: {subject}")
                     continue
                 
-                # DEDUPLICATION CHECK
+                # DEDUPLICATION CHECK (only if MongoDB is available)
                 exists = None
                 
-                # DEDUPLICATION CHECK
-                exists = None
-                
-                # 1. Check by Message-ID (Priority)
-                if message_id:
-                    exists = await ForwardedEmailAnalysis.find_one({"email_metadata.message_id": message_id})
-                    if exists:
-                        logger.info(f"✅ Found duplicate by Message-ID: {message_id[:30]}... (Job {exists.id})")
-                
-                # 2. Check by UID (Fallback if Message-ID missing OR yielded no result)
-                if not exists and mail_uid:
-                    query_uid = str(mail_uid).strip()
-                    logger.info(f"🔍 Checking duplicate by UID: '{query_uid}' (Type: {type(query_uid)})")
-                    
-                    # Primary Check: String
-                    exists = await ForwardedEmailAnalysis.find_one({"email_metadata.uid": query_uid})
-                    
-                    # Secondary Check: Integer
-                    if not exists and query_uid.isdigit():
-                        logger.info(f"   String match failed. Checking INT: {int(query_uid)}")
-                        exists = await ForwardedEmailAnalysis.find_one({"email_metadata.uid": int(query_uid)})
-                    
-                    if exists:
-                        logger.info(f"✅ Found duplicate by UID: {query_uid} (Job {exists.id})")
-                    else:
-                        logger.info(f"❌ UID {query_uid} (Str/Int) not found in DB")
+                if mongodb_available:
+                    try:
+                        # 1. Check by Message-ID (Priority)
+                        if message_id:
+                            exists = await ForwardedEmailAnalysis.find_one({"email_metadata.message_id": message_id})
+                            if exists:
+                                logger.info(f"✅ Found duplicate by Message-ID: {message_id[:30]}... (Job {exists.id})")
                         
-                        # SUPER DIAGNOSTIC: Ground Truth
-                        recent = await ForwardedEmailAnalysis.find_all().sort("-created_at").limit(3).to_list()
-                        debug_meta = [f"UID:{r.email_metadata.get('uid')} MID:{str(r.email_metadata.get('message_id'))[:10]}" for r in recent]
-                        logger.info(f"   Recent DB Docs: {debug_meta}")
+                        # 2. Check by UID (Fallback if Message-ID missing OR yielded no result)
+                        if not exists and mail_uid:
+                            query_uid = str(mail_uid).strip()
+                            logger.info(f"🔍 Checking duplicate by UID: '{query_uid}' (Type: {type(query_uid)})")
+                            
+                            # Primary Check: String
+                            exists = await ForwardedEmailAnalysis.find_one({"email_metadata.uid": query_uid})
+                            
+                            # Secondary Check: Integer
+                            if not exists and query_uid.isdigit():
+                                logger.info(f"   String match failed. Checking INT: {int(query_uid)}")
+                                exists = await ForwardedEmailAnalysis.find_one({"email_metadata.uid": int(query_uid)})
+                            
+                            if exists:
+                                logger.info(f"✅ Found duplicate by UID: {query_uid} (Job {exists.id})")
+                            else:
+                                logger.info(f"❌ UID {query_uid} (Str/Int) not found in DB")
+                                
+                                # SUPER DIAGNOSTIC: Ground Truth
+                                try:
+                                    recent = await ForwardedEmailAnalysis.find_all().sort("-created_at").limit(3).to_list()
+                                    debug_meta = [f"UID:{r.email_metadata.get('uid')} MID:{str(r.email_metadata.get('message_id'))[:10]}" for r in recent]
+                                    logger.info(f"   Recent DB Docs: {debug_meta}")
+                                except Exception as db_err:
+                                    logger.warning(f"Could not fetch recent docs: {db_err}")
+                    except Exception as dedup_err:
+                        error_msg = str(dedup_err) if str(dedup_err) else type(dedup_err).__name__
+                        logger.warning(f"Deduplication check failed for UID {mail_uid}: {error_msg} - will process email anyway")
+                        exists = None
                 
                 if exists:
                     # Already analyzed - Skip
@@ -767,8 +788,13 @@ For questions, contact your IT/Security team.
                 
             except Exception as e:
                 import traceback
+                error_msg = str(e) if str(e) else type(e).__name__
                 error_trace = traceback.format_exc()
-                logger.error(f"Failed to process email {email_info.get('uid')}: {e}\nTraceback:\n{error_trace}")
+                logger.error(
+                    f"Failed to process email {email_info.get('uid')}: {error_msg}",
+                    exc_info=True,
+                    extra={"traceback": error_trace}
+                )
                 continue
         
         logger.info(f"Poll summary: {len(completed_jobs)} new, {skipped_count} already processed, {len(recent_emails)} total checked")
