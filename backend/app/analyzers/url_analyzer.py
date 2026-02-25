@@ -252,6 +252,21 @@ class URLAnalyzer:
             path = ''
         checks["has_dangerous_extension"] = any(path.endswith(ext) for ext in DANGEROUS_FILE_EXTENSIONS)
         
+        # Check for malware distribution paths
+        malware_paths = ['/bins/', '/bin/', '/payload/', '/exploit/', '/exec/',
+                        '/download/', '/dropper/', '/loader/', '/bot/', '/malware/',
+                        '/tmp/', '/shell/', '/backdoor/', '/trojan/', '/rat/',
+                        '/c2/', '/cnc/', '/gate/', '/panel/']
+        checks["has_malware_path"] = any(mp in path for mp in malware_paths)
+        
+        # Check for malware binary names (IoT botnets like Mirai)
+        path_filename = path.split('/')[-1] if '/' in path else ''
+        malware_binaries = ['x86_64', 'x86', 'i686', 'i586', 'arm', 'arm5', 'arm6', 'arm7',
+                           'aarch64', 'mips', 'mipsel', 'mips64', 'powerpc', 'ppc', 'sparc',
+                           'sh4', 'm68k', 'arc', 'xtensa', 'riscv64']
+        checks["has_malware_binary_name"] = any(bn == path_filename or path.endswith(f'/{bn}')
+                                                 for bn in malware_binaries)
+        
         # Check for typosquatting of popular domains
         popular_domains = [
             'google.com', 'microsoft.com', 'amazon.com', 'paypal.com',
@@ -453,6 +468,10 @@ class URLAnalyzer:
             risk_score += 0.35
         if basic_checks.get("has_dangerous_extension"):
             risk_score += 0.5  # Direct payload download
+        if basic_checks.get("has_malware_path"):
+            risk_score += 0.5  # Malware distribution path (e.g., /bins/)
+        if basic_checks.get("has_malware_binary_name"):
+            risk_score += 0.45  # Architecture-specific binary (e.g., x86_64)
         if basic_checks.get("typosquatting_indicators"):
             risk_score += 0.5
         
@@ -462,6 +481,13 @@ class URLAnalyzer:
             risk_score += 0.3  # Extra boost for IP:port combo
         if ip_and_port and basic_checks.get("has_dangerous_extension"):
             risk_score = max(risk_score, 0.95)  # Near-certain malware
+        
+        # Malware path + binary name = definite malware distribution
+        if basic_checks.get("has_malware_path") and basic_checks.get("has_malware_binary_name"):
+            risk_score = max(risk_score, 0.95)
+        if basic_checks.get("has_malware_path") or basic_checks.get("has_malware_binary_name"):
+            if basic_checks.get("is_ip_address") or basic_checks.get("has_non_standard_port"):
+                risk_score = max(risk_score, 0.90)
         
         # Domain reputation scoring (now includes VirusTotal)
         rep_score = domain_reputation.get("score", 0.0)

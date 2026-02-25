@@ -664,7 +664,7 @@ async def analyze_email_for_phishing(sender: str, subject: str, snippet: str) ->
     """
     Perform phishing analysis on email metadata and content.
     
-    Uses heuristics, URL analysis, and pattern matching.
+    Uses heuristics, URL analysis, sender reputation, and pattern matching.
     """
     import re
     from urllib.parse import urlparse
@@ -672,45 +672,129 @@ async def analyze_email_for_phishing(sender: str, subject: str, snippet: str) ->
     threat_indicators = []
     threat_score = 0.0
     
-    # Check sender patterns
+    # Track signal categories for compound scoring
+    has_urgency = False
+    has_payment_request = False
+    has_credential_request = False
+    has_suspicious_url = False
+    has_suspicious_sender = False
+    
+    # ========== SENDER ANALYSIS ==========
     sender_lower = sender.lower()
+    
+    # Extract sender domain
+    sender_domain_match = re.search(r'@([\w.-]+)', sender_lower)
+    sender_domain = sender_domain_match.group(1) if sender_domain_match else ""
     
     # Suspicious sender patterns
     if any(term in sender_lower for term in ["noreply", "no-reply", "donotreply"]):
         threat_score += 0.1
     
     # Check for spoofed domains (homoglyphs)
-    suspicious_domains = ["paypa1", "amaz0n", "goog1e", "micr0soft", "app1e", "faceb00k", "netf1ix"]
-    if any(domain in sender_lower for domain in suspicious_domains):
+    spoofed_domains = ["paypa1", "amaz0n", "goog1e", "micr0soft", "app1e", "faceb00k", "netf1ix",
+                       "paypaI", "arnazon", "go0gle", "mlcrosoft", "llnkedin"]
+    if any(domain in sender_lower for domain in spoofed_domains):
         threat_indicators.append("Suspicious sender domain (possible spoofing)")
         threat_score += 0.4
+        has_suspicious_sender = True
     
-    # Check subject patterns
+    # Privacy-focused email providers sending business/payment emails = suspicious
+    privacy_domains = ["proton.me", "protonmail.com", "protonmail.ch", "tutanota.com", 
+                       "tutamail.com", "guerrillamail.com", "tempmail.com", "throwaway.email",
+                       "yopmail.com", "mailinator.com", "10minutemail.com", "sharklasers.com"]
+    if any(pd in sender_domain for pd in privacy_domains):
+        threat_indicators.append(f"Privacy/disposable email sender: {sender_domain}")
+        threat_score += 0.15
+        has_suspicious_sender = True
+    
+    # Misspelled sender names (common in phishing)
+    sender_name = sender.split('<')[0].strip().lower()
+    misspell_patterns = ["recomnd", "securty", "verific", "notific", "paymt", "accont", "confrim"]
+    if any(mp in sender_name for mp in misspell_patterns):
+        threat_indicators.append(f"Misspelled sender name: '{sender_name}'")
+        threat_score += 0.15
+        has_suspicious_sender = True
+    
+    # ========== SUBJECT ANALYSIS ==========
     subject_lower = subject.lower()
     
     urgency_keywords = ["urgent", "immediate", "action required", "suspended", "verify now", 
                        "account locked", "security alert", "unusual activity", "expire",
-                       "password reset", "confirm your", "update your payment"]
+                       "password reset", "confirm your", "update your payment", "final notice",
+                       "last warning", "account will be", "within 24 hours", "within 48 hours",
+                       "act now", "time sensitive", "response required"]
     
     for keyword in urgency_keywords:
         if keyword in subject_lower:
-            threat_indicators.append(f"Urgency language: '{keyword}'")
+            threat_indicators.append(f"Urgency language in subject: '{keyword}'")
             threat_score += 0.15
+            has_urgency = True
+            break  # Only count once from subject
     
-    # Check for suspicious patterns in snippet
+    # ========== BODY/CONTENT ANALYSIS ==========
     snippet_lower = snippet.lower()
+    all_text_lower = f"{subject_lower} {snippet_lower}"
     
-    phishing_patterns = ["click here", "verify your", "confirm your identity", 
-                        "log in immediately", "enter your password", "update payment",
-                        "wire transfer", "bitcoin", "gift card", "lottery winner",
-                        "inheritance", "prince", "million dollars"]
+    # Urgency patterns in body (check body too, not just subject)
+    body_urgency = ["urgent", "immediately", "right away", "as soon as possible", "asap",
+                    "without delay", "time is running out", "don't delay", "act fast",
+                    "limited time", "final reminder", "last chance"]
+    for pattern in body_urgency:
+        if pattern in snippet_lower and not has_urgency:
+            threat_indicators.append(f"Urgency language in body: '{pattern}'")
+            threat_score += 0.1
+            has_urgency = True
+            break
     
-    for pattern in phishing_patterns:
+    # Payment/financial phishing patterns
+    payment_patterns = ["pending payment", "complete payment", "complete the payment",
+                       "outstanding payment", "payment confirmation", "payment is due",
+                       "payment is still", "overdue payment", "make the payment",
+                       "service interruption", "further action", "avoid any",
+                       "wire transfer", "bitcoin", "gift card", "cryptocurrency",
+                       "bank transfer", "western union", "moneygram"]
+    for pattern in payment_patterns:
         if pattern in snippet_lower:
-            threat_indicators.append(f"Phishing phrase detected: '{pattern}'")
+            threat_indicators.append(f"Payment/financial pressure: '{pattern}'")
             threat_score += 0.2
+            has_payment_request = True
+            break  # Count category once
     
-    # ========== URL ANALYSIS (critical for detecting malicious links) ==========
+    # Credential harvesting patterns
+    credential_patterns = ["click here", "verify your", "confirm your identity",
+                          "log in immediately", "enter your password", "update payment",
+                          "click the link", "click the button", "click below",
+                          "secure link", "verify your account", "confirm your account",
+                          "reset your password", "update your information",
+                          "click here to complete", "submit your details"]
+    for pattern in credential_patterns:
+        if pattern in snippet_lower:
+            threat_indicators.append(f"Credential/click bait: '{pattern}'")
+            threat_score += 0.15
+            has_credential_request = True
+            break  # Count category once
+    
+    # Classic scam patterns (high confidence)
+    scam_patterns = ["lottery winner", "inheritance", "prince", "million dollars",
+                    "congratulations you have won", "unclaimed funds", "beneficiary",
+                    "nigerian", "gold bars", "diplomatic bag"]
+    for pattern in scam_patterns:
+        if pattern in snippet_lower:
+            threat_indicators.append(f"Classic scam phrase: '{pattern}'")
+            threat_score += 0.35
+            break
+    
+    # Impersonation patterns
+    impersonation_patterns = ["your company", "your bank", "your account has been",
+                             "we have detected", "unusual activity on your", 
+                             "we noticed a suspicious", "security team",
+                             "IT department", "tech support"]
+    for pattern in impersonation_patterns:
+        if pattern in snippet_lower:
+            threat_indicators.append(f"Impersonation attempt: '{pattern}'")
+            threat_score += 0.1
+    
+    # ========== URL ANALYSIS ==========
     url_pattern = re.compile(
         r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
     )
@@ -735,6 +819,21 @@ async def analyze_email_for_phishing(sender: str, subject: str, snippet: str) ->
         '.jar', '.docm', '.xlsm', '.pptm', '.hta', '.inf', '.reg', '.lnk'
     }
     
+    # Malware distribution paths (common in botnet/malware URLs)
+    malware_path_patterns = [
+        '/bins/', '/bin/', '/payload/', '/exploit/', '/exec/',
+        '/download/', '/dropper/', '/loader/', '/bot/', '/malware/',
+        '/tmp/', '/shell/', '/backdoor/', '/trojan/', '/rat/',
+        '/c2/', '/cnc/', '/gate/', '/panel/'
+    ]
+    
+    # Malware binary names (architecture-specific, common in IoT botnets like Mirai)
+    malware_binary_names = [
+        'x86_64', 'x86', 'i686', 'i586', 'arm', 'arm5', 'arm6', 'arm7',
+        'aarch64', 'mips', 'mipsel', 'mips64', 'powerpc', 'ppc', 'sparc',
+        'sh4', 'm68k', 'arc', 'xtensa', 'riscv64'
+    ]
+    
     for url in urls:
         url_clean = url.rstrip('.,;!?)')
         try:
@@ -742,6 +841,9 @@ async def analyze_email_for_phishing(sender: str, subject: str, snippet: str) ->
             domain = parsed.netloc.lower()
             domain_no_port = domain.split(':')[0]
             path = parsed.path.lower()
+            path_filename = path.split('/')[-1] if '/' in path else ''
+            
+            has_suspicious_url = True  # Any URL in a phishing-context email is notable
             
             # Check for IP-based URL
             ip_pattern_check = re.compile(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$')
@@ -766,8 +868,31 @@ async def analyze_email_for_phishing(sender: str, subject: str, snippet: str) ->
             
             # Check for dangerous file extension in path
             if any(path.endswith(ext) for ext in dangerous_extensions):
-                threat_indicators.append(f"Dangerous file download: {path.split('/')[-1]}")
+                threat_indicators.append(f"Dangerous file download: {path_filename}")
                 threat_score += 0.35
+            
+            # Check for malware distribution paths
+            for mp in malware_path_patterns:
+                if mp in path:
+                    threat_indicators.append(f"Malware distribution path: {mp.strip('/')}")
+                    threat_score += 0.35
+                    break
+            
+            # Check for malware binary names in path
+            for binary_name in malware_binary_names:
+                if binary_name in path_filename or path.endswith(f'/{binary_name}'):
+                    threat_indicators.append(f"Malware binary name in URL: {binary_name}")
+                    threat_score += 0.3
+                    break
+            
+            # Deeply nested subdomains (e.g., proxyzabc.zabc.net)
+            subdomain_parts = domain_no_port.split('.')
+            if len(subdomain_parts) >= 3:
+                # Random-looking subdomain
+                sub = subdomain_parts[0]
+                if len(sub) > 8 and any(c.isdigit() for c in sub):
+                    threat_indicators.append(f"Suspicious subdomain pattern: {domain_no_port}")
+                    threat_score += 0.15
             
             # HTTP (not HTTPS) for non-localhost
             if parsed.scheme == 'http' and domain_no_port not in ('localhost', '127.0.0.1'):
@@ -775,17 +900,42 @@ async def analyze_email_for_phishing(sender: str, subject: str, snippet: str) ->
                 threat_score += 0.1
             
             # URL shortener
-            shorteners = ['bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'short.link', 'ow.ly']
+            shorteners = ['bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'short.link', 'ow.ly',
+                         'is.gd', 'v.gd', 'tiny.cc', 'shorturl.at']
             if any(s in domain for s in shorteners):
                 threat_indicators.append(f"URL shortener: {domain}")
                 threat_score += 0.2
         except Exception:
             continue
     
-    # Compound: multiple malicious URL signals
-    url_indicator_count = sum(1 for i in threat_indicators if any(kw in i for kw in ['IP-based', 'Non-standard port', 'Dangerous file', 'Suspicious TLD']))
+    # ========== COMPOUND SCORING (multiple signal categories = much higher risk) ==========
+    signal_count = sum([has_urgency, has_payment_request, has_credential_request, 
+                       has_suspicious_url, has_suspicious_sender])
+    
+    if signal_count >= 4:
+        threat_indicators.append("Multiple high-risk signal categories detected")
+        threat_score += 0.3
+    elif signal_count >= 3:
+        threat_indicators.append("Multiple risk signals combined")
+        threat_score += 0.2
+    elif signal_count >= 2:
+        threat_score += 0.1
+    
+    # Specific dangerous combos
+    if has_urgency and has_payment_request and has_suspicious_url:
+        threat_indicators.append("Urgent payment request with external link")
+        threat_score += 0.15
+    
+    if has_credential_request and has_suspicious_url:
+        threat_score += 0.1
+    
+    # Multiple malicious URL signals
+    url_indicator_count = sum(1 for i in threat_indicators if any(kw in i for kw in 
+        ['IP-based', 'Non-standard port', 'Dangerous file', 'Suspicious TLD', 'Malware']))
     if url_indicator_count >= 3:
-        threat_score += 0.2  # Extra boost for multiple URL red flags
+        threat_score += 0.2
+    elif url_indicator_count >= 2:
+        threat_score += 0.1
     
     # Cap the score at 1.0
     threat_score = min(threat_score, 1.0)
@@ -808,6 +958,6 @@ async def analyze_email_for_phishing(sender: str, subject: str, snippet: str) ->
         "verdict": verdict,
         "risk_level": risk_level,
         "threat_score": threat_score,
-        "confidence": 0.85 if threat_indicators else 0.6,
-        "threat_indicators": threat_indicators[:8]  # Limit indicators
+        "confidence": 0.90 if signal_count >= 3 else (0.85 if threat_indicators else 0.6),
+        "threat_indicators": threat_indicators[:10]  # Limit indicators
     }
