@@ -435,6 +435,24 @@ except Exception as e:
     print(f"DEBUG: On-demand router failed: {e}")
     router_errors.append(f"On-Demand Check: {e}")
 
+# Explainable AI Analytics Router
+try:
+    from app.api.explainability_router import router as explainability_router
+    app.include_router(explainability_router, prefix="/api/v1")
+    logger.info("Explainability router loaded successfully")
+except Exception as e:
+    logger.warning(f"Explainability router failed to load: {e}")
+    router_errors.append(f"Explainability: {e}")
+
+# User Feedback Router
+try:
+    from app.api.feedback_router import router as feedback_router
+    app.include_router(feedback_router, prefix="/api/v1")
+    logger.info("Feedback router loaded successfully")
+except Exception as e:
+    logger.warning(f"Feedback router failed to load: {e}")
+    router_errors.append(f"Feedback: {e}")
+
 # ============================================================================
 # NEW MODE-SEPARATED ROUTERS (Refactored Architecture)
 # ============================================================================

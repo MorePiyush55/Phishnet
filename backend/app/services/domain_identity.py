@@ -116,6 +116,35 @@ class SenderLinkAlignment:
     Analyzes alignment between sender domain and link domains.
     """
     
+    # Well-known trusted platform domains whose links are inherently safe
+    # These platforms send legitimate notifications and their links should
+    # NOT be penalized even in forwarded emails where sender domain changes
+    TRUSTED_PLATFORM_DOMAINS: Set[str] = {
+        # Code / Dev platforms
+        "github.com", "gitlab.com", "bitbucket.org", "stackoverflow.com",
+        "npmjs.com", "pypi.org", "docker.com", "hub.docker.com",
+        
+        # Major tech companies
+        "google.com", "microsoft.com", "apple.com", "amazon.com",
+        "meta.com", "facebook.com", "x.com", "twitter.com",
+        
+        # Cloud / Hosting
+        "vercel.com", "netlify.com", "heroku.com", "render.com",
+        "digitalocean.com", "cloudflare.com", "aws.amazon.com",
+        
+        # Productivity / SaaS
+        "slack.com", "notion.so", "atlassian.com", "trello.com",
+        "asana.com", "monday.com", "figma.com", "canva.com",
+        "zoom.us", "dropbox.com", "stripe.com",
+        
+        # Social / Media
+        "linkedin.com", "youtube.com", "reddit.com", "medium.com",
+        "wikipedia.org", "twitch.tv", "spotify.com",
+        
+        # Email / Communication
+        "gmail.com", "outlook.com", "yahoo.com",
+    }
+    
     # Known email service provider / ATS / CDN domains that are expected in emails
     KNOWN_VENDOR_DOMAINS: Set[str] = {
         # Job/ATS platforms
@@ -125,6 +154,7 @@ class SenderLinkAlignment:
         # Email service providers
         "sendgrid.net", "mailchimp.com", "mailgun.org", "sparkpost.com",
         "amazonses.com", "mandrillapp.com", "postmarkapp.com",
+        "brevosend.com", "sendinblue.com",
         
         # CDN / Link tracking
         "cloudfront.net", "akamaized.net", "fastly.net",
@@ -132,6 +162,9 @@ class SenderLinkAlignment:
         
         # Analytics
         "google-analytics.com", "doubleclick.net",
+        
+        # GitHub-specific delivery domains
+        "github.net", "githubusercontent.com", "githubassets.com",
     }
     
     @classmethod
@@ -154,6 +187,12 @@ class SenderLinkAlignment:
         # Same organization
         if sender_reg == link_reg:
             return "same_org"
+        
+        # TRUSTED PLATFORM: Links to well-known platforms are inherently safe
+        # This handles forwarded emails where sender domain changes but links
+        # still point to the original trusted platform (e.g., github.com)
+        if link_reg in cls.TRUSTED_PLATFORM_DOMAINS:
+            return "known_vendor"
         
         # PHASE 0 FIX: If sender is a known vendor (e.g., jobs2web.com),
         # and link goes to a legitimate-looking org domain, treat as "same_org"
@@ -200,6 +239,7 @@ class SenderLinkAlignment:
         
         same_org = 0
         vendor = 0
+        trusted_platform = 0  # Links to well-known trusted platforms
         unrelated = 0
         classifications = []
         
@@ -210,11 +250,15 @@ class SenderLinkAlignment:
                     continue
                     
                 link_domain = parsed.netloc.lower()
+                link_reg = get_registrable_domain(link_domain)
                 classification = cls.classify_alignment(sender_domain, link_domain)
                 
                 if classification == "same_org":
                     same_org += 1
                 elif classification == "known_vendor":
+                    # Distinguish trusted platforms from generic vendors
+                    if link_reg in cls.TRUSTED_PLATFORM_DOMAINS:
+                        trusted_platform += 1
                     vendor += 1
                 else:
                     unrelated += 1
@@ -222,8 +266,9 @@ class SenderLinkAlignment:
                 classifications.append({
                     "url": link[:100],  # Truncate for safety
                     "domain": link_domain,
-                    "registrable_domain": get_registrable_domain(link_domain),
-                    "classification": classification
+                    "registrable_domain": link_reg,
+                    "classification": classification,
+                    "is_trusted_platform": link_reg in cls.TRUSTED_PLATFORM_DOMAINS
                 })
             except Exception:
                 continue
@@ -231,9 +276,12 @@ class SenderLinkAlignment:
         total = same_org + vendor + unrelated
         
         # Calculate alignment score
-        # same_org = 1.0, vendor = 0.8, unrelated = 0.0
+        # same_org = 1.0, trusted_platform = 0.95, vendor = 0.8, unrelated = 0.0
         if total > 0:
-            weighted_sum = (same_org * 1.0) + (vendor * 0.8) + (unrelated * 0.0)
+            # Trusted platform links get 0.95 credit (nearly same as same_org)
+            trusted_credit = trusted_platform * 0.95
+            regular_vendor_credit = (vendor - trusted_platform) * 0.8
+            weighted_sum = (same_org * 1.0) + trusted_credit + regular_vendor_credit + (unrelated * 0.0)
             alignment_score = weighted_sum / total
         else:
             alignment_score = 1.0  # No links = neutral
@@ -243,6 +291,7 @@ class SenderLinkAlignment:
             "sender_registrable": sender_reg,
             "same_org_count": same_org,
             "vendor_count": vendor,
+            "trusted_platform_count": trusted_platform,
             "unrelated_count": unrelated,
             "total_links": total,
             "alignment_score": round(alignment_score, 2),

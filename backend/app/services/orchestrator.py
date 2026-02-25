@@ -567,7 +567,9 @@ class EnhancedEmailOrchestrator:
         # Common legitimate domains to check against
         legitimate_domains = [
             "amazon.com", "google.com", "microsoft.com", "apple.com", 
-            "paypal.com", "ebay.com", "facebook.com", "twitter.com"
+            "paypal.com", "ebay.com", "facebook.com", "twitter.com",
+            "github.com", "gitlab.com", "linkedin.com", "stripe.com",
+            "slack.com", "dropbox.com", "zoom.us", "netflix.com",
         ]
         
         # Simple character substitution check

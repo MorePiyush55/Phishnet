@@ -317,7 +317,14 @@ class RulesEngine:
         # For now, implement basic logic for common safe domains
         safe_domains = [
             "google.com", "microsoft.com", "apple.com", "amazon.com",
-            "github.com", "stackoverflow.com", "wikipedia.org"
+            "github.com", "gitlab.com", "bitbucket.org",
+            "stackoverflow.com", "wikipedia.org",
+            "linkedin.com", "twitter.com", "x.com", "facebook.com",
+            "slack.com", "notion.so", "dropbox.com", "zoom.us",
+            "stripe.com", "paypal.com", "vercel.com", "netlify.com",
+            "cloudflare.com", "digitalocean.com", "render.com",
+            "npmjs.com", "pypi.org", "docker.com",
+            "youtube.com", "reddit.com", "medium.com",
         ]
         
         # Would need target URL to implement properly

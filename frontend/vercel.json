@@ -28,8 +28,16 @@
   ],
   "rewrites": [
     {
-      "source": "/dashboard",
-      "destination": "/dashboard.html"
+      "source": "/api/(.*)",
+      "destination": "https://phishnet-backend-iuoc.onrender.com/$1"
+    },
+    {
+      "source": "/auth/(.*)",
+      "destination": "https://phishnet-backend-iuoc.onrender.com/auth/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }

@@ -466,6 +466,13 @@ try:
 except ImportError:
     MODE1_MODELS = []
 
+# Import feedback model
+try:
+    from app.models.feedback import UserFeedback
+    FEEDBACK_MODELS = [UserFeedback]
+except ImportError:
+    FEEDBACK_MODELS = []
+
 
 # List of all document models for Beanie initialization
 DOCUMENT_MODELS = [
@@ -484,4 +491,4 @@ DOCUMENT_MODELS = [
     ForwardedEmailAnalysis,
     Tenant,
     PolicyEvaluationResult,
-] + MODE1_MODELS
+] + MODE1_MODELS + FEEDBACK_MODELS

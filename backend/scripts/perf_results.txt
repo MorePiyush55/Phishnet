@@ -1,0 +1,66 @@
+============================================================
+  PhishNet Adversarial Suite — Performance Test
+============================================================
+
+[1] Generated 45 adversarial samples
+
+    Attack Types:
+      ai_spear_phishing                   x3
+      base64_payload                      x3
+      bec_gift_card                       x3
+      brand_impersonation                 x3
+      domain_age_spoof                    x3
+      double_extension                    x3
+      encoded_redirect                    x3
+      grammar_perfect                     x3
+      homoglyph                           x3
+      internal_spoof                      x3
+      legit_with_malicious_link           x3
+      mixed_technique                     x3
+      polymorphic                         x3
+      url_shortener                       x3
+      zero_day_domain                     x3
+
+[2] Running through analyzer...
+    Analyzed 45, errors 0
+
+[3] Confusion Matrix:
+    TP=45  FN=0  FP=0  TN=0
+    Precision : 1.0000
+    Recall    : 1.0000
+    F1 Score  : 1.0000
+    FPR       : 0.0000
+    FNR       : 0.0000
+    Accuracy  : 1.0000
+
+[4] Node-Level Accuracy:
+    sender          64.4%
+    content         2.2%
+    link            6.7%
+    auth            66.7%
+    attachment      11.1%
+
+[5] Per-Attack Recall:
+    ai_spear_phishing                   1.00 (target>=0.90) [PASS]
+    base64_payload                      1.00 (target>=0.95) [PASS]
+    bec_gift_card                       1.00 (target>=0.90) [PASS]
+    brand_impersonation                 1.00 (target>=0.90) [PASS]
+    domain_age_spoof                    1.00 (target>=0.97) [PASS]
+    double_extension                    1.00 (target>=0.90) [PASS]
+    encoded_redirect                    1.00 (target>=0.90) [PASS]
+    grammar_perfect                     1.00 (target>=0.90) [PASS]
+    homoglyph                           1.00 (target>=0.90) [PASS]
+    internal_spoof                      1.00 (target>=0.90) [PASS]
+    legit_with_malicious_link           1.00 (target>=1.00) [PASS]
+    mixed_technique                     1.00 (target>=0.90) [PASS]
+    polymorphic                         1.00 (target>=0.90) [PASS]
+    url_shortener                       1.00 (target>=0.90) [PASS]
+    zero_day_domain                     1.00 (target>=0.90) [PASS]
+
+[6] Sample Details (misses only):
+
+============================================================
+  OVERALL: FNR=0.0000 PASS (target <0.07)
+  RECALL : 1.0000 PASS (target >0.93)
+  PER-ATK: ALL PASS
+============================================================

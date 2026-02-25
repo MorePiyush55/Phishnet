@@ -1,0 +1,31 @@
+{
+  "version": "v1.0.0_2026-02-18T02-02-37Z",
+  "timestamp": "2026-02-18T02:07:35Z",
+  "weights": {
+    "sender": 0.4031,
+    "content": 0.1625,
+    "link": 0.0758,
+    "auth": 0.3477,
+    "attachment": 0.0109
+  },
+  "metrics": {
+    "f1": 0.8801089918256131,
+    "recall": 0.7858880778588808,
+    "precision": 1.0,
+    "fnr": 0.2141119221411192,
+    "roc_auc": 0.9982029152707829
+  },
+  "node_accuracies": {
+    "sender": 89.5,
+    "content": 44.5,
+    "link": 44.5,
+    "auth": 83.8,
+    "attachment": 57.0
+  },
+  "targets_met": {
+    "precision_ge_95": true,
+    "recall_ge_97": false,
+    "fnr_lt_2": false,
+    "f1_ge_96": false
+  }
+}

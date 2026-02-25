@@ -106,3 +106,5 @@ credentials/
 # Brain/Artifacts (development only)
 .gemini/
 brain/
+.vercel
+.env*.local

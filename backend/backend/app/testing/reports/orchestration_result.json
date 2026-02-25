@@ -1,0 +1,878 @@
+{
+  "success": true,
+  "timestamp": "2026-02-18T12:43:53Z",
+  "duration_seconds": 244.12,
+  "convergence_rounds": 2,
+  "converged": true,
+  "safe_to_deploy": false,
+  "deployment_blockers": [
+    "Regression: Failed checks: Precision 0.555 below target 0.95"
+  ],
+  "model_version": "v1.0.0_2026-02-18T12-43-53Z",
+  "weights_locked": false,
+  "report_paths": [
+    "backend\\app\\testing\\reports\\report_20260218_124757.json",
+    "backend\\app\\testing\\reports\\report_20260218_124757.md",
+    "backend\\app\\testing\\reports\\ai_feedback_20260218_124757.json"
+  ],
+  "initial_metrics": {
+    "overall": {
+      "tp": 409,
+      "fp": 31,
+      "tn": 298,
+      "fn": 2,
+      "precision": 0.9295,
+      "recall": 0.9951,
+      "f1_score": 0.9612,
+      "accuracy": 0.9554,
+      "false_positive_rate": 0.0942,
+      "false_negative_rate": 0.0049,
+      "specificity": 0.9058
+    },
+    "roc_auc": 0.9754,
+    "node_accuracies": {
+      "sender": 89.5,
+      "content": 44.5,
+      "link": 44.5,
+      "auth": 83.8,
+      "attachment": 57.0
+    },
+    "category_metrics": {
+      "CLEAN_LEGITIMATE": {
+        "tp": 0,
+        "fp": 31,
+        "tn": 298,
+        "fn": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1_score": 0.0,
+        "accuracy": 0.9058,
+        "false_positive_rate": 0.0942,
+        "false_negative_rate": 0.0,
+        "specificity": 0.9058
+      },
+      "ADVERSARIAL_OBFUSCATED": {
+        "tp": 93,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1_score": 1.0,
+        "accuracy": 1.0,
+        "false_positive_rate": 0.0,
+        "false_negative_rate": 0.0,
+        "specificity": 0.0
+      },
+      "KNOWN_PHISHING": {
+        "tp": 201,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1_score": 1.0,
+        "accuracy": 1.0,
+        "false_positive_rate": 0.0,
+        "false_negative_rate": 0.0,
+        "specificity": 0.0
+      },
+      "SPEAR_PHISHING": {
+        "tp": 115,
+        "fp": 0,
+        "tn": 0,
+        "fn": 2,
+        "precision": 1.0,
+        "recall": 0.9829,
+        "f1_score": 0.9914,
+        "accuracy": 0.9829,
+        "false_positive_rate": 0.0,
+        "false_negative_rate": 0.0171,
+        "specificity": 0.0
+      }
+    },
+    "difficulty_metrics": {
+      "easy": {
+        "tp": 125,
+        "fp": 12,
+        "tn": 152,
+        "fn": 0,
+        "precision": 0.9124,
+        "recall": 1.0,
+        "f1_score": 0.9542,
+        "accuracy": 0.9585,
+        "false_positive_rate": 0.0732,
+        "false_negative_rate": 0.0,
+        "specificity": 0.9268
+      },
+      "hard": {
+        "tp": 92,
+        "fp": 10,
+        "tn": 37,
+        "fn": 1,
+        "precision": 0.902,
+        "recall": 0.9892,
+        "f1_score": 0.9436,
+        "accuracy": 0.9214,
+        "false_positive_rate": 0.2128,
+        "false_negative_rate": 0.0108,
+        "specificity": 0.7872
+      },
+      "medium": {
+        "tp": 59,
+        "fp": 9,
+        "tn": 109,
+        "fn": 0,
+        "precision": 0.8676,
+        "recall": 1.0,
+        "f1_score": 0.9291,
+        "accuracy": 0.9492,
+        "false_positive_rate": 0.0763,
+        "false_negative_rate": 0.0,
+        "specificity": 0.9237
+      },
+      "adversarial": {
+        "tp": 133,
+        "fp": 0,
+        "tn": 0,
+        "fn": 1,
+        "precision": 1.0,
+        "recall": 0.9925,
+        "f1_score": 0.9963,
+        "accuracy": 0.9925,
+        "false_positive_rate": 0.0,
+        "false_negative_rate": 0.0075,
+        "specificity": 0.0
+      }
+    },
+    "misclassified_count": 33,
+    "targets_met": {
+      "precision_ge_95": false,
+      "recall_ge_97": true,
+      "fnr_lt_2": true,
+      "f1_ge_96": true
+    },
+    "node_confusion_matrices": {
+      "sender": {
+        "tp": 361,
+        "fp": 28,
+        "tn": 301,
+        "fn": 50,
+        "precision": 0.928,
+        "recall": 0.8783,
+        "f1_score": 0.9025,
+        "accuracy": 0.8946,
+        "false_positive_rate": 0.0851,
+        "false_negative_rate": 0.1217,
+        "specificity": 0.9149
+      },
+      "content": {
+        "tp": 0,
+        "fp": 0,
+        "tn": 329,
+        "fn": 411,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1_score": 0.0,
+        "accuracy": 0.4446,
+        "false_positive_rate": 0.0,
+        "false_negative_rate": 1.0,
+        "specificity": 1.0
+      },
+      "link": {
+        "tp": 0,
+        "fp": 0,
+        "tn": 329,
+        "fn": 411,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1_score": 0.0,
+        "accuracy": 0.4446,
+        "false_positive_rate": 0.0,
+        "false_negative_rate": 1.0,
+        "specificity": 1.0
+      },
+      "auth": {
+        "tp": 294,
+        "fp": 3,
+        "tn": 326,
+        "fn": 117,
+        "precision": 0.9899,
+        "recall": 0.7153,
+        "f1_score": 0.8305,
+        "accuracy": 0.8378,
+        "false_positive_rate": 0.0091,
+        "false_negative_rate": 0.2847,
+        "specificity": 0.9909
+      },
+      "attachment": {
+        "tp": 93,
+        "fp": 0,
+        "tn": 329,
+        "fn": 318,
+        "precision": 1.0,
+        "recall": 0.2263,
+        "f1_score": 0.369,
+        "accuracy": 0.5703,
+        "false_positive_rate": 0.0,
+        "false_negative_rate": 0.7737,
+        "specificity": 1.0
+      }
+    },
+    "fn_distribution": {
+      "sender": 2,
+      "content": 2,
+      "link": 2,
+      "auth": 2,
+      "attachment": 2
+    },
+    "node_importance": {
+      "sender": 0.3115,
+      "content": 0.0636,
+      "link": 0.0364,
+      "auth": 0.4794,
+      "attachment": 0.1091
+    }
+  },
+  "optimization_result": {
+    "best_weights": {
+      "sender": 0.2582,
+      "content": 0.1307,
+      "link": 0.2245,
+      "auth": 0.1439,
+      "attachment": 0.2427
+    },
+    "best_f1": 0.7142,
+    "best_recall": 1.0,
+    "best_precision": 0.5554,
+    "best_fnr": 0.0,
+    "iterations_run": 50,
+    "total_time_seconds": 108.12,
+    "method": "bayesian_optimization",
+    "convergence_history_length": 1
+  },
+  "optimized_metrics": {
+    "overall": {
+      "tp": 411,
+      "fp": 329,
+      "tn": 0,
+      "fn": 0,
+      "precision": 0.5554,
+      "recall": 1.0,
+      "f1_score": 0.7142,
+      "accuracy": 0.5554,
+      "false_positive_rate": 1.0,
+      "false_negative_rate": 0.0,
+      "specificity": 0.0
+    },
+    "roc_auc": 0.9963,
+    "node_accuracies": {
+      "sender": 89.5,
+      "content": 44.5,
+      "link": 44.5,
+      "auth": 83.8,
+      "attachment": 57.0
+    },
+    "category_metrics": {
+      "CLEAN_LEGITIMATE": {
+        "tp": 0,
+        "fp": 329,
+        "tn": 0,
+        "fn": 0,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1_score": 0.0,
+        "accuracy": 0.0,
+        "false_positive_rate": 1.0,
+        "false_negative_rate": 0.0,
+        "specificity": 0.0
+      },
+      "ADVERSARIAL_OBFUSCATED": {
+        "tp": 93,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1_score": 1.0,
+        "accuracy": 1.0,
+        "false_positive_rate": 0.0,
+        "false_negative_rate": 0.0,
+        "specificity": 0.0
+      },
+      "KNOWN_PHISHING": {
+        "tp": 201,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1_score": 1.0,
+        "accuracy": 1.0,
+        "false_positive_rate": 0.0,
+        "false_negative_rate": 0.0,
+        "specificity": 0.0
+      },
+      "SPEAR_PHISHING": {
+        "tp": 117,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1_score": 1.0,
+        "accuracy": 1.0,
+        "false_positive_rate": 0.0,
+        "false_negative_rate": 0.0,
+        "specificity": 0.0
+      }
+    },
+    "difficulty_metrics": {
+      "easy": {
+        "tp": 125,
+        "fp": 164,
+        "tn": 0,
+        "fn": 0,
+        "precision": 0.4325,
+        "recall": 1.0,
+        "f1_score": 0.6039,
+        "accuracy": 0.4325,
+        "false_positive_rate": 1.0,
+        "false_negative_rate": 0.0,
+        "specificity": 0.0
+      },
+      "hard": {
+        "tp": 93,
+        "fp": 47,
+        "tn": 0,
+        "fn": 0,
+        "precision": 0.6643,
+        "recall": 1.0,
+        "f1_score": 0.7983,
+        "accuracy": 0.6643,
+        "false_positive_rate": 1.0,
+        "false_negative_rate": 0.0,
+        "specificity": 0.0
+      },
+      "medium": {
+        "tp": 59,
+        "fp": 118,
+        "tn": 0,
+        "fn": 0,
+        "precision": 0.3333,
+        "recall": 1.0,
+        "f1_score": 0.5,
+        "accuracy": 0.3333,
+        "false_positive_rate": 1.0,
+        "false_negative_rate": 0.0,
+        "specificity": 0.0
+      },
+      "adversarial": {
+        "tp": 134,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1_score": 1.0,
+        "accuracy": 1.0,
+        "false_positive_rate": 0.0,
+        "false_negative_rate": 0.0,
+        "specificity": 0.0
+      }
+    },
+    "misclassified_count": 329,
+    "targets_met": {
+      "precision_ge_95": false,
+      "recall_ge_97": true,
+      "fnr_lt_2": true,
+      "f1_ge_96": false
+    },
+    "node_confusion_matrices": {
+      "sender": {
+        "tp": 361,
+        "fp": 28,
+        "tn": 301,
+        "fn": 50,
+        "precision": 0.928,
+        "recall": 0.8783,
+        "f1_score": 0.9025,
+        "accuracy": 0.8946,
+        "false_positive_rate": 0.0851,
+        "false_negative_rate": 0.1217,
+        "specificity": 0.9149
+      },
+      "content": {
+        "tp": 0,
+        "fp": 0,
+        "tn": 329,
+        "fn": 411,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1_score": 0.0,
+        "accuracy": 0.4446,
+        "false_positive_rate": 0.0,
+        "false_negative_rate": 1.0,
+        "specificity": 1.0
+      },
+      "link": {
+        "tp": 0,
+        "fp": 0,
+        "tn": 329,
+        "fn": 411,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1_score": 0.0,
+        "accuracy": 0.4446,
+        "false_positive_rate": 0.0,
+        "false_negative_rate": 1.0,
+        "specificity": 1.0
+      },
+      "auth": {
+        "tp": 294,
+        "fp": 3,
+        "tn": 326,
+        "fn": 117,
+        "precision": 0.9899,
+        "recall": 0.7153,
+        "f1_score": 0.8305,
+        "accuracy": 0.8378,
+        "false_positive_rate": 0.0091,
+        "false_negative_rate": 0.2847,
+        "specificity": 0.9909
+      },
+      "attachment": {
+        "tp": 93,
+        "fp": 0,
+        "tn": 329,
+        "fn": 318,
+        "precision": 1.0,
+        "recall": 0.2263,
+        "f1_score": 0.369,
+        "accuracy": 0.5703,
+        "false_positive_rate": 0.0,
+        "false_negative_rate": 0.7737,
+        "specificity": 1.0
+      }
+    },
+    "fn_distribution": {
+      "sender": 0,
+      "content": 0,
+      "link": 0,
+      "auth": 0,
+      "attachment": 0
+    },
+    "node_importance": {
+      "sender": 0.4055,
+      "content": 0.0373,
+      "link": 0.0299,
+      "auth": 0.4437,
+      "attachment": 0.0836
+    }
+  },
+  "adversarial_metrics": {
+    "overall": {
+      "tp": 44,
+      "fp": 0,
+      "tn": 0,
+      "fn": 1,
+      "precision": 1.0,
+      "recall": 0.9778,
+      "f1_score": 0.9888,
+      "accuracy": 0.9778,
+      "false_positive_rate": 0.0,
+      "false_negative_rate": 0.0222,
+      "specificity": 0.0
+    },
+    "roc_auc": 0.0,
+    "node_accuracies": {
+      "sender": 64.4,
+      "content": 2.2,
+      "link": 6.7,
+      "auth": 66.7,
+      "attachment": 11.1
+    },
+    "category_metrics": {
+      "ADVERSARIAL_OBFUSCATED": {
+        "tp": 35,
+        "fp": 0,
+        "tn": 0,
+        "fn": 1,
+        "precision": 1.0,
+        "recall": 0.9722,
+        "f1_score": 0.9859,
+        "accuracy": 0.9722,
+        "false_positive_rate": 0.0,
+        "false_negative_rate": 0.0278,
+        "specificity": 0.0
+      },
+      "SPEAR_PHISHING": {
+        "tp": 9,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1_score": 1.0,
+        "accuracy": 1.0,
+        "false_positive_rate": 0.0,
+        "false_negative_rate": 0.0,
+        "specificity": 0.0
+      }
+    },
+    "difficulty_metrics": {
+      "adversarial": {
+        "tp": 41,
+        "fp": 0,
+        "tn": 0,
+        "fn": 1,
+        "precision": 1.0,
+        "recall": 0.9762,
+        "f1_score": 0.988,
+        "accuracy": 0.9762,
+        "false_positive_rate": 0.0,
+        "false_negative_rate": 0.0238,
+        "specificity": 0.0
+      },
+      "hard": {
+        "tp": 3,
+        "fp": 0,
+        "tn": 0,
+        "fn": 0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1_score": 1.0,
+        "accuracy": 1.0,
+        "false_positive_rate": 0.0,
+        "false_negative_rate": 0.0,
+        "specificity": 0.0
+      }
+    },
+    "misclassified_count": 1,
+    "targets_met": {
+      "precision_ge_95": true,
+      "recall_ge_97": true,
+      "fnr_lt_2": false,
+      "f1_ge_96": true
+    },
+    "node_confusion_matrices": {
+      "sender": {
+        "tp": 29,
+        "fp": 0,
+        "tn": 0,
+        "fn": 16,
+        "precision": 1.0,
+        "recall": 0.6444,
+        "f1_score": 0.7838,
+        "accuracy": 0.6444,
+        "false_positive_rate": 0.0,
+        "false_negative_rate": 0.3556,
+        "specificity": 0.0
+      },
+      "content": {
+        "tp": 1,
+        "fp": 0,
+        "tn": 0,
+        "fn": 44,
+        "precision": 1.0,
+        "recall": 0.0222,
+        "f1_score": 0.0435,
+        "accuracy": 0.0222,
+        "false_positive_rate": 0.0,
+        "false_negative_rate": 0.9778,
+        "specificity": 0.0
+      },
+      "link": {
+        "tp": 3,
+        "fp": 0,
+        "tn": 0,
+        "fn": 42,
+        "precision": 1.0,
+        "recall": 0.0667,
+        "f1_score": 0.125,
+        "accuracy": 0.0667,
+        "false_positive_rate": 0.0,
+        "false_negative_rate": 0.9333,
+        "specificity": 0.0
+      },
+      "auth": {
+        "tp": 30,
+        "fp": 0,
+        "tn": 0,
+        "fn": 15,
+        "precision": 1.0,
+        "recall": 0.6667,
+        "f1_score": 0.8,
+        "accuracy": 0.6667,
+        "false_positive_rate": 0.0,
+        "false_negative_rate": 0.3333,
+        "specificity": 0.0
+      },
+      "attachment": {
+        "tp": 5,
+        "fp": 0,
+        "tn": 0,
+        "fn": 40,
+        "precision": 1.0,
+        "recall": 0.1111,
+        "f1_score": 0.2,
+        "accuracy": 0.1111,
+        "false_positive_rate": 0.0,
+        "false_negative_rate": 0.8889,
+        "specificity": 0.0
+      }
+    },
+    "fn_distribution": {
+      "sender": 0,
+      "content": 1,
+      "link": 1,
+      "auth": 0,
+      "attachment": 0
+    },
+    "node_importance": {
+      "sender": 0.2049,
+      "content": 0.2394,
+      "link": 0.0551,
+      "auth": 0.1867,
+      "attachment": 0.3138
+    }
+  },
+  "regression_result": {
+    "verdict": "FAIL",
+    "timestamp": "2026-02-18T12:47:55Z",
+    "safe_to_deploy": false,
+    "blocking_reason": "Failed checks: Precision 0.555 below target 0.95",
+    "duration_seconds": 2.44,
+    "failed_checks": [
+      "Precision 0.555 below target 0.95"
+    ],
+    "warnings": [],
+    "deltas": [],
+    "node_diagnostics": {
+      "sender": 90.6,
+      "content": 44.5,
+      "link": 44.5,
+      "auth": 80.6,
+      "attachment": 58.1
+    },
+    "current_metrics": {
+      "overall": {
+        "tp": 412,
+        "fp": 331,
+        "tn": 0,
+        "fn": 0,
+        "precision": 0.5545,
+        "recall": 1.0,
+        "f1_score": 0.7134,
+        "accuracy": 0.5545,
+        "false_positive_rate": 1.0,
+        "false_negative_rate": 0.0,
+        "specificity": 0.0
+      },
+      "roc_auc": 0.9983,
+      "node_accuracies": {
+        "sender": 90.6,
+        "content": 44.5,
+        "link": 44.5,
+        "auth": 80.6,
+        "attachment": 58.1
+      },
+      "category_metrics": {
+        "CLEAN_LEGITIMATE": {
+          "tp": 0,
+          "fp": 331,
+          "tn": 0,
+          "fn": 0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1_score": 0.0,
+          "accuracy": 0.0,
+          "false_positive_rate": 1.0,
+          "false_negative_rate": 0.0,
+          "specificity": 0.0
+        },
+        "SPEAR_PHISHING": {
+          "tp": 115,
+          "fp": 0,
+          "tn": 0,
+          "fn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1_score": 1.0,
+          "accuracy": 1.0,
+          "false_positive_rate": 0.0,
+          "false_negative_rate": 0.0,
+          "specificity": 0.0
+        },
+        "ADVERSARIAL_OBFUSCATED": {
+          "tp": 94,
+          "fp": 0,
+          "tn": 0,
+          "fn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1_score": 1.0,
+          "accuracy": 1.0,
+          "false_positive_rate": 0.0,
+          "false_negative_rate": 0.0,
+          "specificity": 0.0
+        },
+        "KNOWN_PHISHING": {
+          "tp": 203,
+          "fp": 0,
+          "tn": 0,
+          "fn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1_score": 1.0,
+          "accuracy": 1.0,
+          "false_positive_rate": 0.0,
+          "false_negative_rate": 0.0,
+          "specificity": 0.0
+        }
+      },
+      "difficulty_metrics": {
+        "medium": {
+          "tp": 56,
+          "fp": 110,
+          "tn": 0,
+          "fn": 0,
+          "precision": 0.3373,
+          "recall": 1.0,
+          "f1_score": 0.5045,
+          "accuracy": 0.3373,
+          "false_positive_rate": 1.0,
+          "false_negative_rate": 0.0,
+          "specificity": 0.0
+        },
+        "easy": {
+          "tp": 130,
+          "fp": 169,
+          "tn": 0,
+          "fn": 0,
+          "precision": 0.4348,
+          "recall": 1.0,
+          "f1_score": 0.6061,
+          "accuracy": 0.4348,
+          "false_positive_rate": 1.0,
+          "false_negative_rate": 0.0,
+          "specificity": 0.0
+        },
+        "hard": {
+          "tp": 105,
+          "fp": 52,
+          "tn": 0,
+          "fn": 0,
+          "precision": 0.6688,
+          "recall": 1.0,
+          "f1_score": 0.8015,
+          "accuracy": 0.6688,
+          "false_positive_rate": 1.0,
+          "false_negative_rate": 0.0,
+          "specificity": 0.0
+        },
+        "adversarial": {
+          "tp": 121,
+          "fp": 0,
+          "tn": 0,
+          "fn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1_score": 1.0,
+          "accuracy": 1.0,
+          "false_positive_rate": 0.0,
+          "false_negative_rate": 0.0,
+          "specificity": 0.0
+        }
+      },
+      "misclassified_count": 331,
+      "targets_met": {
+        "precision_ge_95": false,
+        "recall_ge_97": true,
+        "fnr_lt_2": true,
+        "f1_ge_96": false
+      },
+      "node_confusion_matrices": {
+        "sender": {
+          "tp": 364,
+          "fp": 22,
+          "tn": 309,
+          "fn": 48,
+          "precision": 0.943,
+          "recall": 0.8835,
+          "f1_score": 0.9123,
+          "accuracy": 0.9058,
+          "false_positive_rate": 0.0665,
+          "false_negative_rate": 0.1165,
+          "specificity": 0.9335
+        },
+        "content": {
+          "tp": 0,
+          "fp": 0,
+          "tn": 331,
+          "fn": 412,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1_score": 0.0,
+          "accuracy": 0.4455,
+          "false_positive_rate": 0.0,
+          "false_negative_rate": 1.0,
+          "specificity": 1.0
+        },
+        "link": {
+          "tp": 0,
+          "fp": 0,
+          "tn": 331,
+          "fn": 412,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1_score": 0.0,
+          "accuracy": 0.4455,
+          "false_positive_rate": 0.0,
+          "false_negative_rate": 1.0,
+          "specificity": 1.0
+        },
+        "auth": {
+          "tp": 282,
+          "fp": 14,
+          "tn": 317,
+          "fn": 130,
+          "precision": 0.9527,
+          "recall": 0.6845,
+          "f1_score": 0.7966,
+          "accuracy": 0.8062,
+          "false_positive_rate": 0.0423,
+          "false_negative_rate": 0.3155,
+          "specificity": 0.9577
+        },
+        "attachment": {
+          "tp": 101,
+          "fp": 0,
+          "tn": 331,
+          "fn": 311,
+          "precision": 1.0,
+          "recall": 0.2451,
+          "f1_score": 0.3938,
+          "accuracy": 0.5814,
+          "false_positive_rate": 0.0,
+          "false_negative_rate": 0.7549,
+          "specificity": 1.0
+        }
+      },
+      "fn_distribution": {
+        "sender": 0,
+        "content": 0,
+        "link": 0,
+        "auth": 0,
+        "attachment": 0
+      },
+      "node_importance": {
+        "sender": 0.4186,
+        "content": 0.0314,
+        "link": 0.0318,
+        "auth": 0.4274,
+        "attachment": 0.0908
+      }
+    }
+  }
+}

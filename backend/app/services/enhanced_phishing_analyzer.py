@@ -164,6 +164,42 @@ class EnhancedPhishingAnalyzer:
         '.biz', '.top', '.xyz', '.club', '.work', '.click', '.link'
     ]
     
+    # Well-known platforms that send legitimate automated notifications
+    # When sender domain matches AND authentication passes, boost trust
+    TRUSTED_NOTIFICATION_DOMAINS = {
+        # Code / Dev platforms
+        'github.com', 'gitlab.com', 'bitbucket.org', 'stackoverflow.com',
+        'npmjs.com', 'pypi.org', 'docker.com',
+        
+        # Major tech companies
+        'google.com', 'microsoft.com', 'apple.com', 'amazon.com',
+        'meta.com', 'facebook.com', 'x.com', 'twitter.com',
+        
+        # Cloud / Hosting
+        'vercel.com', 'netlify.com', 'heroku.com', 'render.com',
+        'digitalocean.com', 'cloudflare.com',
+        
+        # Productivity / SaaS
+        'slack.com', 'notion.so', 'atlassian.com', 'trello.com',
+        'asana.com', 'monday.com', 'figma.com', 'canva.com',
+        'zoom.us', 'dropbox.com', 'stripe.com', 'paypal.com',
+        
+        # Social / Media
+        'linkedin.com', 'youtube.com', 'reddit.com', 'medium.com',
+        'twitch.tv', 'spotify.com',
+    }
+    
+    # Common automated sender prefixes (noreply@, notifications@, etc.)
+    AUTOMATED_SENDER_PREFIXES = {
+        'noreply', 'no-reply', 'no_reply', 'donotreply', 'do-not-reply',
+        'notifications', 'notification', 'notify',
+        'mailer', 'mailer-daemon', 'postmaster',
+        'updates', 'update', 'alert', 'alerts',
+        'info', 'support', 'team', 'service', 'system',
+        'mail', 'admin', 'contact', 'hello', 'news',
+        'digest', 'bot', 'automation', 'builds', 'ci',
+    }
+    
     def analyze_email(self, email_content: bytes) -> ComprehensivePhishingAnalysis:
         """
         Perform comprehensive phishing analysis on email (synchronous wrapper).
@@ -197,7 +233,7 @@ class EnhancedPhishingAnalyzer:
             auth_analysis = futures['auth'].result()
             attachment_analysis = futures['attachments'].result()
         
-        # Calculate total score (weighted average)
+        # Calculate total score (weighted average with dynamic trust)
         total_score = self._calculate_total_score(
             sender_analysis.score,
             content_analysis.score,
@@ -206,7 +242,37 @@ class EnhancedPhishingAnalyzer:
             attachment_analysis.score
         )
         
-        # Determine final verdict
+        # ── Adversarial penalty layer ──
+        # Detect evasion patterns that individual nodes miss
+        from app.services.adversarial_risk_engine import AdversarialRiskEngine
+        adv_engine = AdversarialRiskEngine()
+        
+        # Extract body text for adversarial checks
+        body_text = content_analysis.body_text or ""
+        body_html = content_analysis.body_html or ""
+        subject = str(msg.get("Subject", ""))
+        urls = []
+        if link_analysis.total_links > 0:
+            import re as _re
+            urls = _re.findall(r'https?://[^\s<>"]+', body_text + " " + body_html)
+        
+        adv_assessment = adv_engine.assess(
+            body_text=body_text,
+            body_html=body_html,
+            urls=urls,
+            sender_email=sender_analysis.email_address,
+            display_name=sender_analysis.display_name,
+            subject=subject,
+            spf_result=auth_analysis.spf_result,
+            dkim_result=auth_analysis.dkim_result,
+            attachment_names=attachment_analysis.attachment_names,
+            sender_score=sender_analysis.score,
+        )
+        
+        # Apply adversarial penalty (reduces score → pushes toward PHISHING)
+        total_score = max(0, total_score - adv_assessment.penalty)
+        
+        # Determine final verdict (includes hard risk overrides)
         final_verdict, confidence = self._determine_verdict(
             total_score,
             sender_analysis,
@@ -224,6 +290,8 @@ class EnhancedPhishingAnalyzer:
             auth_analysis,
             attachment_analysis
         )
+        # Add adversarial signals to risk factors
+        risk_factors.extend(adv_assessment.signals)
         
         return ComprehensivePhishingAnalysis(
             sender=sender_analysis,
@@ -240,7 +308,8 @@ class EnhancedPhishingAnalyzer:
     def analyze_sender(self, msg: email.message.Message) -> SenderAnalysis:
         """
         Analyze sender information
-        Checks: display name vs email similarity, IP address extraction
+        Checks: display name vs email similarity, IP address extraction,
+                trusted notification domain recognition
         """
         # Extract sender info
         from_header = msg.get('From', '')
@@ -248,6 +317,16 @@ class EnhancedPhishingAnalyzer:
         
         # Extract sender IP from Received headers
         sender_ip = self._extract_sender_ip(msg)
+        
+        # Extract sender domain for trust checks
+        sender_domain = email_address.split('@')[-1].lower() if '@' in email_address else ''
+        sender_local = email_address.split('@')[0].lower() if '@' in email_address else ''
+        from app.services.domain_identity import get_registrable_domain
+        sender_reg_domain = get_registrable_domain(sender_domain)
+        
+        # Check if sender is a known trusted notification domain
+        is_trusted_sender = sender_reg_domain in self.TRUSTED_NOTIFICATION_DOMAINS
+        is_automated_prefix = sender_local in self.AUTOMATED_SENDER_PREFIXES
         
         # Calculate name-email similarity
         similarity, description = self._calculate_name_email_similarity(
@@ -257,16 +336,38 @@ class EnhancedPhishingAnalyzer:
         # Calculate score (0-100)
         score = int(similarity * 100)
         
+        # TRUST BOOST: For known trusted notification senders
+        # noreply@github.com, notifications@google.com, etc.
+        # These have low name-email similarity by design (e.g., "GitHub" vs "noreply")
+        if is_trusted_sender:
+            if is_automated_prefix:
+                # Automated sender from trusted platform - expected pattern
+                # Boost to high score since this is normal behavior
+                score = max(score, 95)
+                description = f"Trusted notification sender ({sender_reg_domain})"
+            else:
+                # Non-automated prefix but from trusted domain - still boost
+                score = max(score, 85)
+                description = f"Known platform sender ({sender_reg_domain})"
+        elif is_automated_prefix and not is_trusted_sender:
+            # Automated prefix from unknown domain - slightly more trustworthy
+            # than random display name mismatch but not a full boost
+            score = max(score, int(similarity * 100) + 10)
+        
         # Identify indicators
         indicators = []
-        if similarity < 0.3:
+        if similarity < 0.3 and not is_trusted_sender:
             indicators.append("Low similarity between display name and email")
-        if self._check_suspicious_display_name(display_name):
+        if self._check_suspicious_display_name(display_name, sender_reg_domain):
             indicators.append("Suspicious display name detected")
             score = max(0, score - 20)
         if self._check_free_email_domain(email_address):
             indicators.append("Free email domain used")
-            score = max(0, score - 10)
+            # Only penalize free email if sender is NOT forwarding a trusted email
+            if not is_trusted_sender:
+                score = max(0, score - 10)
+        if is_trusted_sender:
+            indicators.append(f"✓ Known trusted platform: {sender_reg_domain}")
         
         return SenderAnalysis(
             display_name=display_name,
@@ -377,6 +478,7 @@ class EnhancedPhishingAnalyzer:
         sender_alignment_score = alignment_result.get('alignment_score', 1.0)
         aligned_links = alignment_result.get('same_org_count', 0) + alignment_result.get('vendor_count', 0)
         unrelated_links = alignment_result.get('unrelated_count', 0)
+        trusted_platform_links = alignment_result.get('trusted_platform_count', 0)
         
         for link in links:
             parsed = urlparse(link)
@@ -437,6 +539,20 @@ class EnhancedPhishingAnalyzer:
         # Overall link score (now includes alignment)
         overall_score = int((https_score + encoding_score + redirect_score + duplication_score + alignment_score_weighted) / 5)
         
+        # TRUSTED DOMAIN BOOST: When most links go to trusted platforms,
+        # boost the overall score since these are inherently safe destinations
+        if total_links > 0 and trusted_platform_links > 0:
+            trusted_ratio = trusted_platform_links / total_links
+            if trusted_ratio >= 0.8:
+                # 80%+ links to trusted platforms → strong boost
+                overall_score = max(overall_score, 95)
+            elif trusted_ratio >= 0.5:
+                # 50%+ links to trusted platforms → moderate boost
+                overall_score = max(overall_score, 85)
+            elif trusted_ratio >= 0.3:
+                # 30%+ links to trusted platforms → small boost
+                overall_score = max(overall_score, int(overall_score * 1.1))
+        
         # Identify indicators (PHASE 0: improved messaging)
         indicators = []
         if http_links > 0:
@@ -456,6 +572,8 @@ class EnhancedPhishingAnalyzer:
             indicators.append(f"{duplicate_links} duplicate links")
         if unrelated_links > 0:
             indicators.append(f"{unrelated_links} link(s) to unrelated domains")
+        if trusted_platform_links > 0:
+            indicators.append(f"✓ {trusted_platform_links} link(s) to trusted platforms")
         
         return LinkAnalysis(
             total_links=total_links,
@@ -623,8 +741,13 @@ class EnhancedPhishingAnalyzer:
         
         return similarity, description
     
-    def _check_suspicious_display_name(self, display_name: str) -> bool:
-        """Check if display name contains suspicious patterns"""
+    def _check_suspicious_display_name(self, display_name: str, sender_reg_domain: str = '') -> bool:
+        """
+        Check if display name contains suspicious patterns.
+        
+        IMPORTANT: If the display name matches the actual sender domain,
+        it's NOT suspicious (e.g., "Google" from google.com is expected).
+        """
         suspicious_patterns = [
             r'paypal',
             r'amazon',
@@ -640,7 +763,17 @@ class EnhancedPhishingAnalyzer:
         ]
         
         name_lower = display_name.lower()
-        return any(re.search(pattern, name_lower) for pattern in suspicious_patterns)
+        
+        for pattern in suspicious_patterns:
+            if re.search(pattern, name_lower):
+                # If the display name matches the actual sender domain,
+                # it's EXPECTED, not suspicious
+                # e.g., "Google" from google.com, "Amazon" from amazon.com
+                if sender_reg_domain and pattern in sender_reg_domain.lower():
+                    continue  # This is legitimate, skip this pattern
+                return True
+        
+        return False
     
     def _check_free_email_domain(self, email_address: str) -> bool:
         """Check if email uses free email domain"""
@@ -767,33 +900,141 @@ class EnhancedPhishingAnalyzer:
         
         return 'unknown', 50, "DMARC result unknown"
     
+    # Dynamic node trust: reliability factors derived from adversarial testing.
+    # Nodes with low accuracy get reduced influence; strong nodes get boosted.
+    _NODE_RELIABILITY = {
+        'sender': 0.95,       # Measured 64.4% accuracy — relatively strong
+        'content': 0.30,      # Measured 2.2% accuracy — very weak
+        'links': 0.35,        # Measured 6.7% accuracy — weak
+        'auth': 0.95,         # Measured 66.7% accuracy — strong
+        'attachments': 0.40,  # Measured 11.1% accuracy — weak
+    }
+
     def _calculate_total_score(self, sender_score: int, content_score: int, 
                                link_score: int, auth_score: int, attachment_score: int) -> int:
-        """Calculate weighted total score"""
-        # Weighted average (authentication is most important)
-        weights = {
+        """Calculate weighted total score with dynamic node trust.
+
+        Uses effective_weight = base_weight * node_reliability so that
+        weak nodes (content, links) cannot mask strong signals from
+        reliable nodes (sender, auth).
+        """
+        base_weights = {
             'sender': 0.15,
             'content': 0.20,
             'links': 0.20,
             'auth': 0.30,
-            'attachments': 0.15
+            'attachments': 0.15,
         }
-        
-        total = (
-            sender_score * weights['sender'] +
-            content_score * weights['content'] +
-            link_score * weights['links'] +
-            auth_score * weights['auth'] +
-            attachment_score * weights['attachments']
-        )
-        
+
+        # Apply reliability scaling
+        effective = {}
+        for node, bw in base_weights.items():
+            effective[node] = bw * self._NODE_RELIABILITY.get(node, 1.0)
+
+        # Normalise so effective weights still sum to 1.0
+        total_ew = sum(effective.values()) or 1.0
+        for node in effective:
+            effective[node] /= total_ew
+
+        scores = {
+            'sender': sender_score,
+            'content': content_score,
+            'links': link_score,
+            'auth': auth_score,
+            'attachments': attachment_score,
+        }
+
+        total = sum(scores[n] * effective[n] for n in scores)
+
+        # TRUST BOOST: Fully authenticated + all nodes strong
+        if auth_score == 100:
+            min_other = min(sender_score, content_score, link_score, attachment_score)
+            if min_other >= 80:
+                total = max(total, 95)
+            elif min_other >= 60:
+                total = max(total, 85)
+
+        # SINGLE-NODE FLOOR OVERRIDE:
+        # If ANY reliable node scores critically low (< 30), that is a
+        # strong adversarial signal.  Cap the total so it cannot stay
+        # in the SAFE zone.  This prevents 4 clean nodes from masking
+        # 1 node that clearly detected an attack.
+        min_score = min(sender_score, content_score, link_score,
+                        auth_score, attachment_score)
+        if min_score < 30:
+            total = min(total, 55)  # Forces at least SUSPICIOUS verdict
+        elif min_score < 50:
+            total = min(total, 70)  # Prevents SAFE verdict
+
         return int(total)
     
     def _determine_verdict(self, total_score: int, sender: SenderAnalysis,
                           content: ContentAnalysis, links: LinkAnalysis,
                           auth: AuthenticationAnalysis, attachments: AttachmentAnalysis) -> Tuple[str, float]:
-        """Determine final verdict and confidence level"""
-        # Critical red flags
+        """Determine final verdict with hard risk overrides.
+
+        Pipeline:
+            1. Hard kill-switch overrides (deterministic → PHISHING)
+            2. Link-risk dominance (malicious link overrides safe content)
+            3. Score-based thresholds (<60 PHISHING, <75 SUSPICIOUS)
+        """
+        # ── STEP 1: HARD RISK OVERRIDES (kill-switches) ──────────────
+        # These fire regardless of weighted average.
+        auth_fail = auth.spf_result == 'fail' or auth.dkim_result == 'fail'
+
+        # 1a. Sender critically low + authentication failure
+        if sender.score < 20 and auth_fail:
+            return "PHISHING", 0.95
+
+        # 1b. Double-extension attachment detected
+        if attachments.dangerous_extensions:
+            for name in attachments.attachment_names:
+                parts = name.rsplit('.', 2)
+                if len(parts) >= 3 and parts[-1].lower() in (
+                    'exe', 'scr', 'bat', 'cmd', 'com', 'pif', 'vbs', 'js',
+                    'wsf', 'msi', 'ps1',
+                ):
+                    return "PHISHING", 0.95
+
+        # 1c. SPF fail + display name doesn't match sender domain
+        if auth.spf_result == 'fail':
+            domain = sender.email_address.split('@')[1].lower() if '@' in sender.email_address else ''
+            domain_root = domain.split('.')[0] if domain else ''
+            if domain_root and domain_root not in sender.display_name.lower():
+                return "PHISHING", 0.90
+
+        # 1d. Dangerous attachments + any auth failure
+        if len(attachments.dangerous_extensions) > 0 and auth_fail:
+            return "PHISHING", 0.92
+
+        # ── STEP 2: LINK-RISK DOMINANCE ──────────────────────────────
+        # If link analysis flags significant risk, safe content cannot
+        # dilute the verdict.
+        if links.overall_score < 40 and content.score >= 70:
+            return "PHISHING", 0.85
+        # Broader link-risk: even moderate link risk with safe content
+        if links.overall_score < 70 and content.score >= 80:
+            return "SUSPICIOUS", 0.70
+
+        # ── STEP 2a: UNRELATED-LINK OVERRIDE ─────────────────────────
+        # If links go to domains unrelated to the sender, that is a
+        # strong phishing signal even when individual node scores are
+        # high.  Adversarial "legit_with_malicious_link" attacks
+        # specifically exploit node independence here.
+        if links.unrelated_links > 0:
+            # Check for suspicious TLDs in unrelated links
+            if links.suspicious_tlds:
+                return "PHISHING", 0.88
+            # Any unrelated link with imperfect alignment is suspicious
+            if links.sender_alignment_score < 0.9:
+                return "SUSPICIOUS", 0.75
+
+        # ── STEP 2b: SENDER-FLOOR OVERRIDE ──────────────────────────
+        # A very suspicious sender alone warrants at least SUSPICIOUS
+        if sender.score < 30:
+            return "PHISHING", 0.85
+
+        # ── STEP 3: STANDARD CRITICAL FLAGS ──────────────────────────
         critical_flags = 0
         if len(attachments.dangerous_extensions) > 0:
             critical_flags += 1
@@ -801,35 +1042,25 @@ class EnhancedPhishingAnalyzer:
             critical_flags += 1
         if auth.dkim_result == 'fail':
             critical_flags += 1
-        
-        # PHASE 0 FIX: HTTP-only is NO LONGER a critical flag on its own
-        # Instead, only flag if HTTP links go to UNRELATED domains
-        # AND authentication is not fully passing
         if links.unrelated_links > 0 and links.https_links == 0:
-            # Only critical if auth is also failing
             if auth.overall_score < 80:
                 critical_flags += 1
-        
-        # VERDICT ARBITRATION: If fully authenticated + aligned, don't flag
+
+        # ── STEP 4: VERDICT ARBITRATION ──────────────────────────────
         is_fully_authenticated = (
-            auth.spf_result == 'pass' and 
-            auth.dkim_result == 'pass' and 
+            auth.spf_result == 'pass' and
+            auth.dkim_result == 'pass' and
             auth.dmarc_result == 'pass'
         )
         is_well_aligned = links.sender_alignment_score >= 0.7
-        
-        # Determine verdict
-        if critical_flags >= 2 or total_score < 30:
+
+        # Updated thresholds: stricter boundaries
+        if critical_flags >= 2 or total_score < 60:
             return "PHISHING", 0.9
-        elif total_score < 50 or critical_flags >= 1:
-            # GUARDRAIL: Authenticated + aligned emails can't be SUSPICIOUS from links alone
-            if is_fully_authenticated and is_well_aligned and critical_flags == 0:
+        elif total_score < 75 or critical_flags >= 1:
+            if is_fully_authenticated and is_well_aligned and critical_flags == 0 and sender.score >= 50:
                 return "SAFE", 0.75
             return "SUSPICIOUS", 0.7
-        elif total_score < 70:
-            if is_fully_authenticated and is_well_aligned:
-                return "SAFE", 0.7
-            return "SUSPICIOUS", 0.5
         else:
             return "SAFE", min(0.95, total_score / 100)
     
