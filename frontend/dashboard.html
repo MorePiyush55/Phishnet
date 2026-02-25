@@ -57,6 +57,7 @@
     
     /* Threat badges */
     .badge-safe { background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981; }
+    .badge-caution { background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.3); color: #fbbf24; }
     .badge-suspicious { background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); color: #f59e0b; }
     .badge-phishing { background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #ef4444; }
     
@@ -469,6 +470,7 @@
         state.user = JSON.parse(userStr);
         updateUserDisplay();
         await fetchEmails();
+        startAutoRefresh(); // Start 30s auto-polling
       } catch (e) {
         console.error('Init failed:', e);
         showToast('Failed to load dashboard');
@@ -577,7 +579,7 @@
         const subject = email.subject || 'No Subject';
         const snippet = email.snippet || '';
         const date = formatDate(email.received_at || email.timestamp);
-        const verdict = (email.risk_level || email.verdict || 'SAFE').toUpperCase();
+        const verdict = normalizeVerdict(email);
         
         return `
           <div class="email-row ${isActive ? 'selected' : ''} ${isUnread ? 'unread' : ''} flex items-center gap-2 px-4 py-3 cursor-pointer"
@@ -597,7 +599,7 @@
             </div>
             <div class="flex-shrink-0 flex items-center gap-2">
               ${email.has_attachment ? '<span class="material-symbols-outlined text-slate-500 text-lg">attach_file</span>' : ''}
-              <span class="badge-${verdict.toLowerCase()} px-2 py-0.5 rounded text-xs font-medium">${getThreatLabel(verdict)}</span>
+              <span class="badge-${getBadgeClass(verdict)} px-2 py-0.5 rounded text-xs font-medium">${getThreatLabel(verdict)}</span>
             </div>
           </div>
         `;
@@ -607,10 +609,39 @@
       updatePaginationInfo();
     }
 
+    // Normalize verdict from backend (handles risk_level, verdict, and threat_score)
+    function normalizeVerdict(email) {
+      const v = (email.verdict || '').toUpperCase();
+      const rl = (email.risk_level || '').toUpperCase();
+      const score = email.threat_score || 0;
+      
+      // Check verdict first (explicit labels from backend)
+      if (v === 'PHISHING' || rl === 'HIGH') return 'PHISHING';
+      if (v === 'SUSPICIOUS' || rl === 'MEDIUM') return 'SUSPICIOUS';
+      if (v === 'CAUTION' || rl === 'LOW') return 'CAUTION';
+      
+      // Fallback: use threat_score thresholds
+      if (score >= 0.7) return 'PHISHING';
+      if (score >= 0.4) return 'SUSPICIOUS';
+      if (score >= 0.2) return 'CAUTION';
+      
+      return 'SAFE';
+    }
+
+    function getBadgeClass(verdict) {
+      switch(verdict) {
+        case 'PHISHING': return 'phishing';
+        case 'SUSPICIOUS': return 'suspicious';
+        case 'CAUTION': return 'caution';
+        default: return 'safe';
+      }
+    }
+
     function getThreatLabel(verdict) {
       switch(verdict) {
         case 'PHISHING': return '⚠️ Phishing';
         case 'SUSPICIOUS': return '⚡ Suspicious';
+        case 'CAUTION': return '⚡ Caution';
         default: return '✓ Safe';
       }
     }
@@ -639,7 +670,7 @@
       const sender = email.sender || 'Unknown';
       const senderName = sender.split('<')[0].trim() || sender.split('@')[0];
       const senderEmail = sender.match(/<(.+)>/) ? sender.match(/<(.+)>/)[1] : sender;
-      const verdict = (email.risk_level || email.verdict || 'SAFE').toUpperCase();
+      const verdict = normalizeVerdict(email);
       const score = Math.round((email.threat_score || 0) * 100);
       
       // Update header
@@ -652,31 +683,41 @@
       // Update threat badge
       const badge = document.getElementById('preview-threat-badge');
       badge.textContent = getThreatLabel(verdict);
-      badge.className = `badge-${verdict.toLowerCase()} px-3 py-1 rounded-full text-xs font-bold`;
+      badge.className = `badge-${getBadgeClass(verdict)} px-3 py-1 rounded-full text-xs font-bold`;
       
       // Update threat banner
       const banner = document.getElementById('preview-threat-banner');
       const icon = document.getElementById('threat-icon');
       const title = document.getElementById('threat-title');
       const desc = document.getElementById('threat-description');
+      const scoreEl = document.getElementById('threat-score');
       
       if (verdict === 'PHISHING') {
         banner.className = 'mb-6 p-4 rounded-xl border badge-phishing';
         icon.textContent = 'gpp_bad';
         title.textContent = '⚠️ Phishing Detected';
         desc.textContent = 'This email appears to be a phishing attempt. Do not click any links.';
+        scoreEl.className = 'text-2xl font-bold text-red-500';
       } else if (verdict === 'SUSPICIOUS') {
         banner.className = 'mb-6 p-4 rounded-xl border badge-suspicious';
         icon.textContent = 'warning';
         title.textContent = '⚡ Suspicious Content';
         desc.textContent = 'This email contains suspicious elements. Proceed with caution.';
+        scoreEl.className = 'text-2xl font-bold text-amber-500';
+      } else if (verdict === 'CAUTION') {
+        banner.className = 'mb-6 p-4 rounded-xl border badge-caution';
+        icon.textContent = 'info';
+        title.textContent = '⚡ Caution';
+        desc.textContent = 'This email has some unusual elements. Review carefully.';
+        scoreEl.className = 'text-2xl font-bold text-yellow-400';
       } else {
         banner.className = 'mb-6 p-4 rounded-xl border badge-safe';
         icon.textContent = 'verified_user';
         title.textContent = '✓ Safe Email';
         desc.textContent = 'No threats detected in this email.';
+        scoreEl.className = 'text-2xl font-bold text-emerald-400';
       }
-      document.getElementById('threat-score').textContent = score;
+      scoreEl.textContent = score;
       
       // Update star button
       const starBtn = document.getElementById('preview-star-btn');
@@ -1037,6 +1078,21 @@
             break;
         }
       });
+    }
+
+    // ============================================================================
+    // Auto-Polling (30 seconds)
+    // ============================================================================
+    let autoRefreshInterval = null;
+    
+    function startAutoRefresh() {
+      if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+      autoRefreshInterval = setInterval(async () => {
+        if (!state.isLoading) {
+          console.log('[PhishNet] Auto-refreshing inbox...');
+          await fetchEmails();
+        }
+      }, 30000); // 30 seconds
     }
 
     // ============================================================================
