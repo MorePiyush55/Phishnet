@@ -317,6 +317,7 @@ async def parse_gmail_message(message_data: Dict[str, Any]) -> Optional[Dict[str
             "sender": "",
             "received_at": "",
             "snippet": message_data.get("snippet", ""),
+            "body": "",
             "phishing_analysis": {
                 "risk_score": 0,
                 "risk_level": "SAFE",
@@ -343,6 +344,9 @@ async def parse_gmail_message(message_data: Dict[str, Any]) -> Optional[Dict[str
                 except:
                     email_info["received_at"] = value
         
+        # Extract the full email body from Gmail payload
+        email_info["body"] = _extract_body_from_payload(payload)
+        
         # Real phishing analysis using advanced threat detection
         email_info["phishing_analysis"] = await analyze_email_for_phishing(email_info)
         
@@ -351,6 +355,61 @@ async def parse_gmail_message(message_data: Dict[str, Any]) -> Optional[Dict[str
     except Exception as e:
         print(f"Error parsing Gmail message: {e}")
         return None
+
+
+def _extract_body_from_payload(payload: Dict[str, Any]) -> str:
+    """Extract plain text body from Gmail API message payload."""
+    import base64
+    
+    plain_text = ""
+    html_text = ""
+    
+    def extract_from_part(part: dict):
+        nonlocal plain_text, html_text
+        mime_type = part.get("mimeType", "")
+        body_data = part.get("body", {}).get("data", "")
+        
+        if body_data:
+            try:
+                decoded = base64.urlsafe_b64decode(body_data).decode("utf-8", errors="ignore")
+                if mime_type == "text/plain" and not plain_text:
+                    plain_text = decoded
+                elif mime_type == "text/html" and not html_text:
+                    html_text = decoded
+            except Exception:
+                pass
+        
+        if "parts" in part:
+            for nested_part in part["parts"]:
+                extract_from_part(nested_part)
+    
+    # Check direct body
+    if "body" in payload and payload["body"].get("data"):
+        try:
+            decoded = base64.urlsafe_b64decode(payload["body"]["data"]).decode("utf-8", errors="ignore")
+            mime_type = payload.get("mimeType", "")
+            if "html" in mime_type.lower():
+                html_text = decoded
+            else:
+                plain_text = decoded
+        except Exception:
+            pass
+    
+    # Check multipart
+    if "parts" in payload:
+        for part in payload["parts"]:
+            extract_from_part(part)
+    
+    # Return plain text preferably, or extract text from HTML
+    if plain_text and len(plain_text.strip()) > 20:
+        return plain_text.strip()
+    elif html_text:
+        # Basic HTML to text: strip tags
+        import re
+        text = re.sub(r'<[^>]+>', ' ', html_text)
+        text = re.sub(r'\s+', ' ', text).strip()
+        return text
+    return plain_text.strip()
 
 
 async def analyze_email_for_phishing(email_info: Dict[str, Any]) -> Dict[str, Any]:
@@ -366,7 +425,7 @@ async def analyze_email_for_phishing(email_info: Dict[str, Any]) -> Dict[str, An
         analysis_result = await real_threat_analyzer.analyze_email_threat(
             subject=subject,
             sender=sender,
-            body="",  # Gmail API provides snippet instead of full body
+            body=email_info.get("body", ""),  # Pass actual email body for URL extraction
             headers=headers,
             snippet=snippet
         )

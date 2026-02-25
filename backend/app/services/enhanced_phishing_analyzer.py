@@ -161,7 +161,10 @@ class EnhancedPhishingAnalyzer:
     # Suspicious TLDs
     SUSPICIOUS_TLDS = [
         '.tk', '.ml', '.ga', '.cf', '.gq', '.pw', '.cc', '.ws', '.info',
-        '.biz', '.top', '.xyz', '.club', '.work', '.click', '.link'
+        '.biz', '.top', '.xyz', '.club', '.work', '.click', '.link',
+        '.sbs', '.cfd', '.cyou', '.lol', '.fun', '.buzz', '.surf',
+        '.rest', '.icu', '.store', '.site', '.online', '.live',
+        '.su', '.to', '.cm', '.monster', '.digital', '.network'
     ]
     
     # Well-known platforms that send legitimate automated notifications
@@ -903,11 +906,11 @@ class EnhancedPhishingAnalyzer:
     # Dynamic node trust: reliability factors derived from adversarial testing.
     # Nodes with low accuracy get reduced influence; strong nodes get boosted.
     _NODE_RELIABILITY = {
-        'sender': 0.95,       # Measured 64.4% accuracy — relatively strong
-        'content': 0.30,      # Measured 2.2% accuracy — very weak
-        'links': 0.35,        # Measured 6.7% accuracy — weak
-        'auth': 0.95,         # Measured 66.7% accuracy — strong
-        'attachments': 0.40,  # Measured 11.1% accuracy — weak
+        'sender': 0.90,       # Measured 64.4% accuracy — strong
+        'content': 0.40,      # Measured 2.2% accuracy — boosted for keyword detection
+        'links': 0.80,        # Boosted: URL analysis is critical for phishing detection
+        'auth': 0.90,         # Measured 66.7% accuracy — strong
+        'attachments': 0.50,  # Measured 11.1% accuracy — slightly boosted
     }
 
     def _calculate_total_score(self, sender_score: int, content_score: int, 

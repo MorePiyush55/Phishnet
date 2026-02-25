@@ -3,6 +3,7 @@
 import re
 import httpx
 import asyncio
+import os
 from typing import Dict, List, Any, Optional, Tuple
 from urllib.parse import urlparse, unquote
 from datetime import datetime
@@ -12,6 +13,31 @@ import base64
 from app.config.logging import get_logger
 
 logger = get_logger(__name__)
+
+# Dangerous file extensions in URL paths (malware/payload indicators)
+DANGEROUS_FILE_EXTENSIONS = {
+    '.exe', '.msi', '.bat', '.cmd', '.com', '.scr', '.pif', '.vbs', '.vbe',
+    '.js', '.jse', '.wsf', '.wsh', '.ps1', '.psm1',
+    '.sh', '.bash', '.bin', '.elf', '.run',
+    '.dll', '.sys', '.drv', '.cpl',
+    '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz',
+    '.iso', '.img', '.dmg', '.pkg', '.deb', '.rpm', '.apk',
+    '.jar', '.war', '.class',
+    '.docm', '.xlsm', '.pptm', '.dotm',
+    '.hta', '.inf', '.reg', '.lnk',
+}
+
+# Comprehensive suspicious TLDs (commonly abused for phishing/malware)
+SUSPICIOUS_TLDS = {
+    '.tk', '.ml', '.ga', '.cf', '.gq',          # Free TLDs (heavy abuse)
+    '.pw', '.cc', '.ws', '.info', '.biz',       # Historically abused
+    '.top', '.xyz', '.club', '.work', '.click',  # Cheap bulk-registered
+    '.link', '.buzz', '.surf', '.rest', '.icu',   # Newer abused
+    '.sbs', '.cfd', '.cyou', '.lol', '.fun',     # Very high abuse rate
+    '.store', '.site', '.online', '.live',        # Moderate abuse
+    '.su', '.to', '.cm', '.cn',                   # Country codes w/ abuse
+    '.monster', '.digital', '.network',
+}
 
 
 class URLAnalyzer:
@@ -186,9 +212,19 @@ class URLAnalyzer:
         suspicious_chars = ['%', '@', '..', '--']
         checks["has_suspicious_chars"] = any(char in url for char in suspicious_chars)
         
-        # Check if domain is IP address
+        # Check if domain is IP address (strip port first)
+        domain_no_port = domain.split(':')[0]
         ip_pattern = re.compile(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$')
-        checks["is_ip_address"] = bool(ip_pattern.match(domain))
+        checks["is_ip_address"] = bool(ip_pattern.match(domain_no_port))
+        
+        # Check for non-standard ports (strong malware indicator)
+        if ':' in domain:
+            try:
+                port = int(domain.split(':')[1])
+                if port not in (80, 443, 8080, 8443):
+                    checks["has_non_standard_port"] = True
+            except (ValueError, IndexError):
+                pass
         
         # Check for suspicious subdomains
         suspicious_subdomains = [
@@ -199,9 +235,22 @@ class URLAnalyzer:
             subdomain in domain for subdomain in suspicious_subdomains
         )
         
-        # Check for suspicious TLDs
-        suspicious_tlds = ['.tk', '.ml', '.ga', '.cf', '.info', '.biz']
-        checks["suspicious_tld"] = any(domain.endswith(tld) for tld in suspicious_tlds)
+        # Check for suspicious TLDs (comprehensive list)
+        checks["suspicious_tld"] = any(domain_no_port.endswith(tld) for tld in SUSPICIOUS_TLDS)
+        
+        # Check for dangerous file extensions in URL path
+        try:
+            parsed = urlparse(f"http://{domain}" if '://' not in domain else domain)
+            path = urlparse(f"http://{domain}").path if '://' not in domain else ''
+        except Exception:
+            path = ''
+        # Re-parse the original URL for path
+        try:
+            full_parsed = urlparse(url)
+            path = full_parsed.path.lower()
+        except Exception:
+            path = ''
+        checks["has_dangerous_extension"] = any(path.endswith(ext) for ext in DANGEROUS_FILE_EXTENSIONS)
         
         # Check for typosquatting of popular domains
         popular_domains = [
@@ -235,34 +284,92 @@ class URLAnalyzer:
         return len(common_chars) / len(total_chars)
     
     async def _check_domain_reputation(self, domain: str) -> Dict[str, Any]:
-        """Check domain reputation using threat intelligence."""
-        # For now, implement basic checks
-        # TODO: Integrate with VirusTotal, URLVoid, etc.
-        
+        """Check domain reputation using VirusTotal + heuristics."""
         reputation = {
-            "score": 0.5,  # Neutral by default
+            "score": 0.0,  # Start clean, accumulate risk
             "sources": {},
             "categories": [],
             "last_seen": None,
             "threat_types": []
         }
         
-        # Basic blacklist check
-        known_malicious = [
-            'evil.com', 'malicious.org', 'phishing.net', 'scam.info'
-        ]
+        domain_no_port = domain.split(':')[0]
         
-        if any(bad_domain in domain for bad_domain in known_malicious):
-            reputation["score"] = 0.9
-            reputation["threat_types"].append("known_malicious")
-            reputation["categories"].append("phishing")
+        # === VirusTotal API check (if key available) ===
+        try:
+            vt_api_key = os.getenv('VIRUSTOTAL_API_KEY', '')
+            if vt_api_key:
+                vt_result = await self._check_virustotal(domain_no_port, vt_api_key)
+                if vt_result:
+                    reputation["sources"]["virustotal"] = vt_result
+                    positives = vt_result.get("positives", 0)
+                    total = vt_result.get("total", 0)
+                    if positives > 0:
+                        # Scale: 1 detection = 0.4, 3+ = 0.7, 5+ = 0.9
+                        vt_score = min(0.9, 0.3 + (positives * 0.15))
+                        reputation["score"] = max(reputation["score"], vt_score)
+                        reputation["threat_types"].append(f"virustotal_{positives}_detections")
+                        reputation["categories"].append("malware" if positives >= 3 else "suspicious")
+        except Exception as e:
+            logger.warning(f"VirusTotal check failed for {domain_no_port}: {e}")
         
-        # Check for suspicious patterns
-        if re.search(r'\d+', domain) and len(domain) > 20:
-            reputation["score"] += 0.2
+        # === Heuristic reputation checks ===
+        # IP-based domains are inherently suspicious
+        ip_pattern = re.compile(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$')
+        if ip_pattern.match(domain_no_port):
+            reputation["score"] = max(reputation["score"], 0.5)
+            reputation["threat_types"].append("ip_based_domain")
+        
+        # Non-standard port
+        if ':' in domain:
+            try:
+                port = int(domain.split(':')[1])
+                if port not in (80, 443, 8080, 8443):
+                    reputation["score"] = max(reputation["score"], 0.6)
+                    reputation["threat_types"].append("non_standard_port")
+            except (ValueError, IndexError):
+                pass
+        
+        # Very new/suspicious TLD
+        if any(domain_no_port.endswith(tld) for tld in SUSPICIOUS_TLDS):
+            reputation["score"] = max(reputation["score"], 0.4)
+            reputation["threat_types"].append("suspicious_tld")
+        
+        # Random-looking domain (high entropy)
+        base_domain = domain_no_port.split('.')[0] if '.' in domain_no_port else domain_no_port
+        if len(base_domain) > 15 and re.search(r'\d+', base_domain):
+            reputation["score"] = max(reputation["score"], 0.3)
             reputation["threat_types"].append("suspicious_pattern")
         
         return reputation
+    
+    async def _check_virustotal(self, domain: str, api_key: str) -> Optional[Dict[str, Any]]:
+        """Query VirusTotal URL report API for a domain."""
+        try:
+            url_to_check = f"http://{domain}" if not domain.startswith('http') else domain
+            async with httpx.AsyncClient(timeout=15) as client:
+                # Try URL report endpoint
+                response = await client.get(
+                    "https://www.virustotal.com/vtapi/v2/url/report",
+                    params={
+                        "apikey": api_key,
+                        "resource": url_to_check
+                    }
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get("response_code") == 1:  # Result found
+                        return {
+                            "positives": data.get("positives", 0),
+                            "total": data.get("total", 0),
+                            "scan_date": data.get("scan_date"),
+                            "permalink": data.get("permalink")
+                        }
+                elif response.status_code == 204:
+                    logger.warning("VirusTotal rate limit hit")
+        except Exception as e:
+            logger.warning(f"VirusTotal API error: {e}")
+        return None
     
     async def _analyze_redirects(self, url: str) -> Dict[str, Any]:
         """Analyze URL redirect chains."""
@@ -333,22 +440,37 @@ class URLAnalyzer:
         
         # Basic checks scoring
         if basic_checks.get("is_shortened"):
-            risk_score += 0.2
+            risk_score += 0.3
         if basic_checks.get("has_suspicious_chars"):
             risk_score += 0.3
         if basic_checks.get("is_ip_address"):
-            risk_score += 0.4
+            risk_score += 0.5  # IP-based URLs are very suspicious
+        if basic_checks.get("has_non_standard_port"):
+            risk_score += 0.4  # Non-standard port = strong malware signal
         if basic_checks.get("has_suspicious_subdomain"):
             risk_score += 0.3
         if basic_checks.get("suspicious_tld"):
-            risk_score += 0.2
+            risk_score += 0.35
+        if basic_checks.get("has_dangerous_extension"):
+            risk_score += 0.5  # Direct payload download
         if basic_checks.get("typosquatting_indicators"):
             risk_score += 0.5
         
-        # Domain reputation scoring
-        rep_score = domain_reputation.get("score", 0.5)
+        # Compound risk: IP + non-standard port + dangerous extension = almost certain malware
+        ip_and_port = basic_checks.get("is_ip_address") and basic_checks.get("has_non_standard_port")
+        if ip_and_port:
+            risk_score += 0.3  # Extra boost for IP:port combo
+        if ip_and_port and basic_checks.get("has_dangerous_extension"):
+            risk_score = max(risk_score, 0.95)  # Near-certain malware
+        
+        # Domain reputation scoring (now includes VirusTotal)
+        rep_score = domain_reputation.get("score", 0.0)
         if rep_score > 0.7:
-            risk_score += 0.4
+            risk_score += 0.5
+        elif rep_score > 0.4:
+            risk_score += 0.3
+        elif rep_score > 0.2:
+            risk_score += 0.15
         
         # Redirect analysis scoring
         if redirect_analysis.get("suspicious_redirects"):

@@ -662,10 +662,13 @@ async def scan_inbox(
 
 async def analyze_email_for_phishing(sender: str, subject: str, snippet: str) -> Dict[str, Any]:
     """
-    Perform quick phishing analysis on email metadata.
+    Perform phishing analysis on email metadata and content.
     
-    Uses heuristics and pattern matching for fast analysis.
+    Uses heuristics, URL analysis, and pattern matching.
     """
+    import re
+    from urllib.parse import urlparse
+    
     threat_indicators = []
     threat_score = 0.0
     
@@ -707,6 +710,83 @@ async def analyze_email_for_phishing(sender: str, subject: str, snippet: str) ->
             threat_indicators.append(f"Phishing phrase detected: '{pattern}'")
             threat_score += 0.2
     
+    # ========== URL ANALYSIS (critical for detecting malicious links) ==========
+    url_pattern = re.compile(
+        r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
+    )
+    all_text = f"{subject} {snippet}"
+    urls = url_pattern.findall(all_text)
+    urls = [u.rstrip('.,;!?)') for u in urls]  # Clean trailing punctuation
+    
+    # Suspicious TLDs
+    suspicious_tlds = {
+        '.tk', '.ml', '.ga', '.cf', '.gq', '.pw', '.cc', '.ws', '.info', '.biz',
+        '.top', '.xyz', '.club', '.work', '.click', '.link', '.buzz', '.surf',
+        '.rest', '.icu', '.sbs', '.cfd', '.cyou', '.lol', '.fun', '.store',
+        '.site', '.online', '.live', '.su', '.monster'
+    }
+    
+    # Dangerous file extensions
+    dangerous_extensions = {
+        '.exe', '.msi', '.bat', '.cmd', '.com', '.scr', '.pif', '.vbs',
+        '.js', '.ps1', '.sh', '.bash', '.bin', '.elf',
+        '.dll', '.sys', '.zip', '.rar', '.7z', '.tar', '.gz',
+        '.iso', '.img', '.dmg', '.pkg', '.deb', '.rpm', '.apk',
+        '.jar', '.docm', '.xlsm', '.pptm', '.hta', '.inf', '.reg', '.lnk'
+    }
+    
+    for url in urls:
+        url_clean = url.rstrip('.,;!?)')
+        try:
+            parsed = urlparse(url_clean)
+            domain = parsed.netloc.lower()
+            domain_no_port = domain.split(':')[0]
+            path = parsed.path.lower()
+            
+            # Check for IP-based URL
+            ip_pattern_check = re.compile(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$')
+            if ip_pattern_check.match(domain_no_port):
+                threat_indicators.append(f"IP-based URL: {domain_no_port}")
+                threat_score += 0.35
+                
+                # IP + non-standard port = very dangerous
+                if ':' in domain:
+                    try:
+                        port = int(domain.split(':')[1])
+                        if port not in (80, 443, 8080, 8443):
+                            threat_indicators.append(f"Non-standard port: {port}")
+                            threat_score += 0.25
+                    except (ValueError, IndexError):
+                        pass
+            
+            # Check for suspicious TLD
+            if any(domain_no_port.endswith(tld) for tld in suspicious_tlds):
+                threat_indicators.append(f"Suspicious TLD in URL: {domain}")
+                threat_score += 0.25
+            
+            # Check for dangerous file extension in path
+            if any(path.endswith(ext) for ext in dangerous_extensions):
+                threat_indicators.append(f"Dangerous file download: {path.split('/')[-1]}")
+                threat_score += 0.35
+            
+            # HTTP (not HTTPS) for non-localhost
+            if parsed.scheme == 'http' and domain_no_port not in ('localhost', '127.0.0.1'):
+                threat_indicators.append(f"Insecure HTTP link: {domain}")
+                threat_score += 0.1
+            
+            # URL shortener
+            shorteners = ['bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'short.link', 'ow.ly']
+            if any(s in domain for s in shorteners):
+                threat_indicators.append(f"URL shortener: {domain}")
+                threat_score += 0.2
+        except Exception:
+            continue
+    
+    # Compound: multiple malicious URL signals
+    url_indicator_count = sum(1 for i in threat_indicators if any(kw in i for kw in ['IP-based', 'Non-standard port', 'Dangerous file', 'Suspicious TLD']))
+    if url_indicator_count >= 3:
+        threat_score += 0.2  # Extra boost for multiple URL red flags
+    
     # Cap the score at 1.0
     threat_score = min(threat_score, 1.0)
     
@@ -728,6 +808,6 @@ async def analyze_email_for_phishing(sender: str, subject: str, snippet: str) ->
         "verdict": verdict,
         "risk_level": risk_level,
         "threat_score": threat_score,
-        "confidence": 0.75 if threat_indicators else 0.6,
-        "threat_indicators": threat_indicators[:5]  # Limit indicators
+        "confidence": 0.85 if threat_indicators else 0.6,
+        "threat_indicators": threat_indicators[:8]  # Limit indicators
     }
