@@ -12,8 +12,9 @@ from datetime import datetime, timezone
 
 from app.main import app
 from app.models.inbox_models import InboxEmail, EmailLabel
-from app.core.config import settings
+from app.core.config import get_settings
 
+settings = get_settings()
 
 # ==================== Pytest Configuration ====================
 
