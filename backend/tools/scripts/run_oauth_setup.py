@@ -22,10 +22,11 @@ BACKEND_URL = f"http://{BACKEND_HOST}:{BACKEND_PORT}"
 FRONTEND_URL = f"http://{FRONTEND_HOST}:{FRONTEND_PORT}"
 
 def run_command(command, description, check=True):
-    """Run a shell command with description."""
+    """Run a command with description."""
     print(f"🔄 {description}")
     try:
-        result = subprocess.run(command, shell=True, check=check, capture_output=True, text=True)
+        # Use shell=False for security, command should be a list
+        result = subprocess.run(command, shell=False, check=check, capture_output=True, text=True)
         if result.returncode == 0:
             print(f"✅ {description} - SUCCESS")
             if result.stdout.strip():
@@ -44,11 +45,11 @@ def check_prerequisites():
     print("🔍 Checking prerequisites...")
     
     checks = [
-        ("python --version", "Python installation"),
-        ("pip --version", "Pip package manager"),
-        ("gcloud --version", "Google Cloud CLI"),
-        ("node --version", "Node.js (for frontend)"),
-        ("npm --version", "NPM package manager")
+        ([sys.executable, "--version"], "Python installation"),
+        ([sys.executable, "-m", "pip", "--version"], "Pip package manager"),
+        (["gcloud", "--version"], "Google Cloud CLI"),
+        (["node", "--version"], "Node.js (for frontend)"),
+        (["npm", "--version"], "NPM package manager")
     ]
     
     all_good = True
@@ -63,9 +64,9 @@ def setup_backend_dependencies():
     print("\n📦 Setting up backend dependencies...")
     
     commands = [
-        ("pip install -r requirements.txt", "Installing main requirements"),
-        ("pip install -r requirements-oauth.txt", "Installing OAuth requirements"),
-        ("alembic upgrade head", "Running database migrations")
+        ([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], "Installing main requirements"),
+        ([sys.executable, "-m", "pip", "install", "-r", "requirements-oauth.txt"], "Installing OAuth requirements"),
+        (["alembic", "upgrade", "head"], "Running database migrations")
     ]
     
     for command, description in commands:
@@ -78,29 +79,38 @@ def setup_frontend_dependencies():
     """Install frontend dependencies."""
     print("\n🎨 Setting up frontend dependencies...")
     
-    os.chdir("frontend")
-    
-    commands = [
-        ("npm install", "Installing frontend packages"),
-        ("npm run build", "Building frontend")
-    ]
-    
-    for command, description in commands:
-        if not run_command(command, description):
-            os.chdir("..")
-            return False
-    
-    os.chdir("..")
-    return True
+    # Save original directory
+    original_dir = os.getcwd()
+    try:
+        os.chdir("frontend")
+
+        commands = [
+            (["npm", "install"], "Installing frontend packages"),
+            (["npm", "run", "build"], "Building frontend")
+        ]
+
+        for command, description in commands:
+            if not run_command(command, description):
+                return False
+
+        return True
+    finally:
+        os.chdir(original_dir)
 
 def run_google_cloud_setup(project_id, domain, backend_url):
     """Run Google Cloud setup script."""
     print(f"\n☁️ Setting up Google Cloud resources...")
     
     if os.name == 'nt':  # Windows
-        command = f'powershell -ExecutionPolicy Bypass -File scripts/Setup-GoogleCloud.ps1 -ProjectId "{project_id}" -Domain "{domain}" -BackendUrl "{backend_url}"'
+        command = [
+            "powershell", "-ExecutionPolicy", "Bypass", "-File", "scripts/Setup-GoogleCloud.ps1",
+            "-ProjectId", project_id, "-Domain", domain, "-BackendUrl", backend_url
+        ]
     else:  # Linux/Mac
-        command = f'python scripts/setup_google_cloud.py --project-id "{project_id}" --domain "{domain}" --backend-url "{backend_url}"'
+        command = [
+            sys.executable, "scripts/setup_google_cloud.py",
+            "--project-id", project_id, "--domain", domain, "--backend-url", backend_url
+        ]
     
     return run_command(command, "Setting up Google Cloud resources")
 
