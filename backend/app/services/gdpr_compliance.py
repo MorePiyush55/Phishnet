@@ -11,7 +11,8 @@ from app.config.logging import get_logger
 from app.core.database import get_db
 from app.core.redis_client import redis_client
 from app.models.email_scan import (
-    EmailScanRequest, ThreatResult, AuditLog, UserConsent, DataRetention
+    EmailScanRequest, ThreatResult, AuditLog, UserConsent, DataRetention,
+    AnalysisComponentResult
 )
 from app.models.user import User, OAuthToken
 from app.services.gmail_secure import gmail_service
@@ -267,30 +268,42 @@ class GDPRComplianceManager:
         try:
             async with get_db() as db:
                 if data_type == "email_scan_requests":
-                    records = db.query(EmailScanRequest).filter(EmailScanRequest.user_id == user_id).all()
-                    for record in records:
-                        db.delete(record)
-                    deleted_count = len(records)
+                    # Bulk delete scan requests
+                    deleted_count = db.query(EmailScanRequest).filter(
+                        EmailScanRequest.user_id == user_id
+                    ).delete(synchronize_session=False)
                 
                 elif data_type == "threat_results":
-                    # Get threat results through scan requests
-                    scan_requests = db.query(EmailScanRequest).filter(EmailScanRequest.user_id == user_id).all()
-                    for scan_request in scan_requests:
-                        if scan_request.threat_result:
-                            db.delete(scan_request.threat_result)
-                            deleted_count += 1
+                    # Bulk delete threat results using a subquery to avoid N+1 and loop
+                    deleted_count = db.query(ThreatResult).filter(
+                        ThreatResult.scan_request_id.in_(
+                            db.query(EmailScanRequest.id).filter(EmailScanRequest.user_id == user_id)
+                        )
+                    ).delete(synchronize_session=False)
                 
                 elif data_type == "oauth_tokens":
-                    records = db.query(OAuthToken).filter(OAuthToken.user_id == user_id).all()
-                    for record in records:
-                        db.delete(record)
-                    deleted_count = len(records)
+                    # Bulk delete OAuth tokens
+                    deleted_count = db.query(OAuthToken).filter(
+                        OAuthToken.user_id == user_id
+                    ).delete(synchronize_session=False)
                 
                 elif data_type == "user_consents":
-                    records = db.query(UserConsent).filter(UserConsent.user_id == user_id).all()
-                    for record in records:
-                        db.delete(record)
-                    deleted_count = len(records)
+                    # Bulk delete user consents
+                    deleted_count = db.query(UserConsent).filter(
+                        UserConsent.user_id == user_id
+                    ).delete(synchronize_session=False)
+
+                elif data_type == "analysis_component_results":
+                    # Bulk delete analysis component results using nested subqueries
+                    deleted_count = db.query(AnalysisComponentResult).filter(
+                        AnalysisComponentResult.threat_result_id.in_(
+                            db.query(ThreatResult.id).filter(
+                                ThreatResult.scan_request_id.in_(
+                                    db.query(EmailScanRequest.id).filter(EmailScanRequest.user_id == user_id)
+                                )
+                            )
+                        )
+                    ).delete(synchronize_session=False)
                 
                 # Don't delete audit logs - legal requirement to keep them
                 
